@@ -258,3 +258,9 @@ label.btn:focus-within{outline:3px solid var(--ring);outline-offset:2px}
 .opt{font-size:18px;font-weight:700}
 .qwrap{display:inline-flex;align-items:center;gap:10px}
 .qu{font-size:20px;font-weight:800;color:var(--pr)}
+
+/* โลโก้ + เบอร์โทร */
+.logo-img{width:46px;height:46px;border-radius:50%;flex:none;display:block;background:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.6)}
+.tel{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--pr);text-decoration:none}
+.tel.hchip{background:rgba(255,255,255,.85);color:var(--pr);padding:5px 12px;border-radius:99px;margin-left:4px}
+.adminlink .tel{font-size:17px;margin-bottom:6px}
