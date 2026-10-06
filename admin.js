@@ -21,7 +21,7 @@ function lists(){
 document.addEventListener('input',()=>{if(aview==='edit')dirty=true});
 document.addEventListener('change',()=>{if(aview==='edit')dirty=true});
 function loginView(){
- return `<main class="login"><section class="sec"><div class="logo" style="margin-bottom:12px">${ic('box',22)}</div><h1 class="h2" style="margin:0 0 2px">เข้าสู่ระบบผู้ดูแล</h1><p class="sub">บริษัท แม่ดอนรุ่งเรืองฟู้ดส์ จำกัด</p>
+ return `<main class="login"><section class="sec"><img class="logo-img" src="logo.png" alt="" style="width:72px;height:72px;margin-bottom:12px"><h1 class="h2" style="margin:0 0 2px">เข้าสู่ระบบผู้ดูแล</h1><p class="sub">บริษัท แม่ดอนรุ่งเรืองฟู้ดส์ จำกัด</p>
  <form onsubmit="return doLogin(event)"><div class="fld"><label class="lbl" for="lu">ชื่อผู้ใช้</label><input id="lu" class="inp" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" value="${esc(lu)}"></div>
  <div class="fld"><label class="lbl" for="lp">รหัสผ่าน</label><input id="lp" class="inp" type="password" autocomplete="current-password"></div>
  ${lerr?`<div class="err" role="alert">${lerr}</div>`:''}<button class="btn pri lg w" style="margin-top:16px" type="submit"${logging?' disabled':''}>${logging?'กำลังตรวจสอบ…':'เข้าสู่ระบบ'}</button></form></section>
@@ -53,7 +53,7 @@ function render(){
  if(!D){$('#app').innerHTML=loadErr
   ?`<div class="awrap" style="padding-top:20px"><div class="empty">${ic('info',44)}<p>${esc(loadErr)}</p><button class="btn pri lg" onclick="loadAdmin()">ลองใหม่</button><button class="btn" onclick="logout()">ออกจากระบบ</button></div></div>`
   :`<div class="awrap" style="padding-top:20px"><div class="sk" style="aspect-ratio:auto;height:220px"></div></div>`;return}
- $('#app').innerHTML=`<header class="top"><div class="bar"><div class="logo">${ic('box',22)}</div><h1 class="brand"><b>จัดการสินค้า</b></h1><a class="btn sm" href="index.html">ดูหน้าร้าน</a><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ">${ic('logout')}</button></div></header>
+ $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.png" alt=""><h1 class="brand"><b>จัดการสินค้า</b></h1><a class="btn sm" href="index.html">ดูหน้าร้าน</a><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ">${ic('logout')}</button></div></header>
  <main class="awrap">${tabs()}${aview==='edit'?editView():aview==='set'?setView():aview==='ord'?ordView():listView()}</main>`;
  if(aview==='list')drawList();
 }
