@@ -5,4 +5,4 @@ const API_URL='https://script.google.com/macros/s/AKfycbxSxOinDy_n3dPlTYWMwE0x6M
 
 // ใช้เฉพาะโหมดทดลอง (API_URL ว่าง) — เมื่อเชื่อม Google Sheets แล้ว รหัสแอดมินจริงอยู่ใน Code.gs
 // หลังเชื่อมแล้วให้ลบสองบรรทัดนี้ทิ้งได้
-const LOCAL_ADMIN_USER='admin',LOCAL_ADMIN_PASS='1234';
+
