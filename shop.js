@@ -1,5 +1,7 @@
 // shop.js — หน้าลูกค้า (ไม่แสดงราคา — คุยราคาในแชต Facebook)
 const PAGE=24;
+const SHOP_TEL='091-383-0459'; // เบอร์โทรเพจ/ร้าน (แก้ได้ที่นี่)
+const telLink=(c='')=>`<a class="tel ${c}" href="tel:${SHOP_TEL.replace(/\D/g,'')}">${ic('phone',18)} โทร ${SHOP_TEL}</a>`;
 let ord={id:'',st:'',err:''},ag={name:'',phone:'',busy:false,res:null,err:''},loadErr='',cart=[],q='',view='shop',pv=null,shopY=0,errs={},msg='',limit=PAGE,cust={name:'',phone:'',prov:'',amp:'',tam:'',zip:'',addr:'',note:''};
 try{cart=JSON.parse(localStorage.getItem(CKEY))||[]}catch(e){}
 try{const u=JSON.parse(localStorage.getItem(UKEY));if(u)Object.assign(cust,{name:u.name||'',phone:u.phone||'',prov:u.prov||'',amp:u.amp||'',tam:u.tam||'',zip:u.zip||'',addr:u.addr||''})}catch(e){}
@@ -26,7 +28,7 @@ const BACK={product:'shop',again:'shop',cart:'shop',info:'cart',review:'info'};
 
 function head(){
  const n=count();
- return `<header class="top"><div class="bar"><div class="logo">${ic('box',22)}</div><h1 class="brand"><b>บริษัท แม่ดอนรุ่งเรืองฟู้ดส์ จำกัด</b></h1>
+ return `<header class="top"><div class="bar"><img class="logo-img" src="logo.png" alt="โลโก้ บริษัท แม่ดอนรุ่งเรืองฟู้ดส์"><h1 class="brand"><b>บริษัท แม่ดอนรุ่งเรืองฟู้ดส์ จำกัด</b></h1>
  <button class="cartbtn" onclick="go('cart')" aria-label="รายการสั่งซื้อ ${n} รายการ">${ic('cart')}<span class="hide-s">รายการสั่งซื้อ</span>${n?`<span class="badge">${n}</span>`:''}</button></div></header>`;
 }
 function fabHtml(){
@@ -36,7 +38,7 @@ function fabHtml(){
 }
 const chrome=()=>{$('#hdr').innerHTML=head();$('#fab').innerHTML=fabHtml()};
 const prog=()=>{const i=SI[view];return `<div class="prog"><div class="segs">${STEPS.map((s,k)=>`<i class="${k<i?'d':k===i?'c':''}"></i>`).join('')}</div><div class="plabel">ขั้นที่ ${i+1} จาก 5 · <b>${STEPS[i]}</b></div></div>`};
-const hero=()=>`<section class="hero"><h2>สั่งซื้อสินค้าได้ง่ายๆ</h2><p>เลือกสินค้า เพิ่มลงรายการ แล้วส่งให้เราทาง Facebook</p><span class="hchip">${ic('info',16)} ราคาและยอดรวม คุยกันต่อในแชต</span><button class="btn" style="margin-top:12px;display:flex" onclick="go('again')">${ic('copy',18)} เคยสั่งแล้ว? สั่งซ้ำ / ดึงข้อมูลเดิม</button></section>`;
+const hero=()=>`<section class="hero"><h2>สั่งซื้อสินค้าได้ง่ายๆ</h2><p>เลือกสินค้า เพิ่มลงรายการ แล้วส่งให้เราทาง Facebook</p><span class="hchip">${ic('info',16)} ราคาและยอดรวม คุยกันต่อในแชต</span> ${telLink('hchip')}<button class="btn" style="margin-top:12px;display:flex" onclick="go('again')">${ic('copy',18)} เคยสั่งแล้ว? สั่งซ้ำ / ดึงข้อมูลเดิม</button></section>`;
 
 function render(){
  chrome();
@@ -55,7 +57,7 @@ function go(v){
 
 /* ---------- หน้าสินค้า ---------- */
 function shopBody(){
- return `<div class="search">${ic('search')}<input id="q" class="inp" type="search" enterkeyhint="search" autocomplete="off" aria-label="ค้นหาสินค้า" placeholder="ค้นหาสินค้า..." value="${esc(q)}" oninput="q=this.value;limit=PAGE;grid()"></div><div id="gmeta" class="gmeta"></div><div id="grid" class="grid"></div><div id="gmore"></div><p class="adminlink"><a href="admin.html">สำหรับร้านค้า (จัดการสินค้า)</a></p>`;
+ return `<div class="search">${ic('search')}<input id="q" class="inp" type="search" enterkeyhint="search" autocomplete="off" aria-label="ค้นหาสินค้า" placeholder="ค้นหาสินค้า..." value="${esc(q)}" oninput="q=this.value;limit=PAGE;grid()"></div><div id="gmeta" class="gmeta"></div><div id="grid" class="grid"></div><div id="gmore"></div><p class="adminlink">${telLink()}<br><a href="admin.html">สำหรับร้านค้า (จัดการสินค้า)</a></p>`;
 }
 function card(p){
  return `<article class="card"><button class="cimg" onclick="openP('${p.id}')" tabindex="-1" aria-hidden="true">${p.image?`<img referrerpolicy="no-referrer" loading="lazy" decoding="async" src="${p.image}" alt="">`:`<span class="ph">${ic('box',26)}</span>`}</button>
@@ -252,7 +254,8 @@ function doneView(){
  ${ordHtml()}<section class="sec"><h3>วิธีส่ง</h3><ol class="how"><li>กด “คัดลอกข้อความ”</li><li>กด “เปิด Facebook” เพื่อเข้าแชตของเพจ</li><li>วางข้อความ แล้วกดส่ง</li></ol><pre id="msgbox">${esc(msg)}</pre></section>
  <div class="stack"><button class="btn pri lg" onclick="copyMsg()">${ic('copy')} คัดลอกข้อความ</button>
  <a class="btn lg" href="${esc(D.fbUrl)}" target="_blank" rel="noopener" onclick="copyMsg(1)">${ic('send')} เปิด Facebook</a>
- <button class="btn" onclick="cart=[];saveCart();msg='';view='shop';render();scrollTo(0,0)">กลับไปเลือกสินค้า</button></div>`;
+ <button class="btn" onclick="cart=[];saveCart();msg='';view='shop';render();scrollTo(0,0)">กลับไปเลือกสินค้า</button></div>
+ <p class="adminlink">สอบถามเพิ่มเติม ${telLink()}</p>`;
 }
 /* ---------- บันทึกคำสั่งซื้อ ---------- */
 function ordHtml(){
