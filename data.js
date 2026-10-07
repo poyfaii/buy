@@ -29,6 +29,9 @@ const _I={
  ext:'<path d="M7 17 17 7M8 7h9v9"/>',
  logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>',
  phone:'<path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/>',
+ user:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+ store:'<path d="M3 9l1.5-5h15L21 9"/><path d="M4 9v11h16V9"/><path d="M9 20v-6h6v6"/>',
+ star:'<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
  dots:'<circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/>'
 };
 const ic=(n,s=20)=>`<svg class="ic" viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${_I[n]||''}</svg>`;
@@ -127,6 +130,9 @@ const ORDKEY='mdr_orders_v1';
 const normPhone=s=>{let x=String(s??'').replace(/\D/g,'');if(x.length===11&&x.startsWith('66'))x='0'+x.slice(2);return x};
 const nameKey=s=>String(s??'').replace(/\s+/g,'').toLowerCase().replace(/^(คุณ|นางสาว|น\.ส\.|นาย|นาง)/,'');
 const localOrders=()=>{try{const a=JSON.parse(localStorage.getItem(ORDKEY));return Array.isArray(a)?a:[]}catch(e){return[]}};
+// สินค้าขายดี: นับจำนวนออเดอร์ที่มีสินค้านั้น (เท่ากันดูจำนวนรวม) เอา 6 อันดับแรก
+const topFrom=orders=>{const m={};orders.slice(-500).forEach(o=>(o.items||[]).forEach(i=>{if(!i.pid)return;const x=m[i.pid]||(m[i.pid]={n:0,q:0});x.n++;x.q+=Number(i.qty)||0}));
+ const seen=new Set();return Object.keys(m).sort((a,b)=>m[b].n-m[a].n||m[b].q-m[a].q).slice(0,6)};
 let CRED=null;
 try{CRED=JSON.parse(sessionStorage.getItem(CREDKEY))}catch(e){}
 const Service={
@@ -134,8 +140,8 @@ const Service={
  async load(){
   if(!REMOTE){
    await new Promise(r=>setTimeout(r,200));
-   try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.products))return norm(Object.assign(seed(),d))}catch(e){}
-   return seed();
+   try{const d=JSON.parse(localStorage.getItem(KEY));if(d&&Array.isArray(d.products)){const r=norm(Object.assign(seed(),d));r.top=topFrom(localOrders());return r}}catch(e){}
+   {const r=seed();r.top=topFrom(localOrders());return r}
   }
   try{
    const j=await net(API_URL+(API_URL.includes('?')?'&':'?')+'action=list');
