@@ -1,16 +1,8 @@
 /* style.css — ใช้ร่วมกันทั้งหน้าร้านและหน้าผู้ดูแล (โทนเบา สีน้อย) */
-:root{color-scheme:light dark;
---bg:#fbf9f3;--surface:#fff;--soft:#f3efe4;--tx:#262a26;--mu:#625f55;--line:#e8e3d3;
---pr:#2a7a4b;--pr2:#216339;--prt:#fff;--acc:#2a7a4b;--acct:#fff;--accs:#eef4ec;--hd1:#2a7a4b;--hd2:#256d43;--hr1:#f6ead0;--hr2:#fbf3df;--hrt:#4a3a1a;
---ok:#168a4a;--er:#c0261a;--ers:#fdecea;--ring:#2a7a4b;--sh:0 1px 3px rgba(60,50,20,.07)}
-@media(prefers-color-scheme:dark){:root:not([data-theme=light]){
---bg:#121413;--surface:#1a1d1b;--soft:#222623;--tx:#ecefed;--mu:#a3aaa6;--line:#2c312e;
---pr:#7fc596;--pr2:#a3d8b3;--prt:#0d1f14;--acc:#7fc596;--acct:#0d1f14;--accs:#1e2621;
---ok:#7fc596;--er:#f4857b;--ers:#3a1613;--ring:#a3d8b3;--sh:none;--hd1:#1a5a36;--hd2:#12422a;--hr1:#8a4b00;--hr2:#6b5400;--hrt:#fff4d6}}
-:root[data-theme=dark]{
---bg:#121413;--surface:#1a1d1b;--soft:#222623;--tx:#ecefed;--mu:#a3aaa6;--line:#2c312e;
---pr:#7fc596;--pr2:#a3d8b3;--prt:#0d1f14;--acc:#7fc596;--acct:#0d1f14;--accs:#1e2621;
---ok:#7fc596;--er:#f4857b;--ers:#3a1613;--ring:#a3d8b3;--sh:none;--hd1:#1a5a36;--hd2:#12422a;--hr1:#8a4b00;--hr2:#6b5400;--hrt:#fff4d6}
+:root{color-scheme:light;
+--bg:#fffdf8;--surface:#fff;--soft:#f7f2e4;--tx:#262a26;--mu:#625f55;--line:#e8e3d3;
+--pr:#2f9457;--pr2:#257a47;--prt:#fff;--acc:#2a7a4b;--acct:#fff;--accs:#eef7ef;--hd1:#2a7a4b;--hd2:#256d43;--hr1:#fdeec8;--hr2:#fff8e3;--hrt:#4a3a1a;
+--ok:#168a4a;--er:#c0261a;--ers:#fdecea;--ring:#2f9457;--sh:0 1px 3px rgba(60,50,20,.07)}
 
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -264,3 +256,27 @@ label.btn:focus-within{outline:3px solid var(--ring);outline-offset:2px}
 .tel{display:inline-flex;align-items:center;gap:6px;font-weight:700;color:var(--pr);text-decoration:none}
 .tel.hchip{background:rgba(255,255,255,.85);color:var(--pr);padding:5px 12px;border-radius:99px;margin-left:4px}
 .adminlink .tel{font-size:17px;margin-bottom:6px}
+
+/* ================= v8: โทนสว่าง (บังคับโหมดสว่างเสมอ) ================= */
+.top{background:#fff;box-shadow:0 1px 0 var(--line),0 2px 8px rgba(60,50,20,.05)}
+.top .brand,.top .cartbtn{color:#1f6a3d}
+.top .cartbtn{background:var(--accs);border-color:#cfe6d4}
+.top .cartbtn:hover{background:#e0f0e4}
+.top .btn,.top .iconbtn{background:var(--accs);color:#1f6a3d;border-color:#cfe6d4}
+.top .badge{background:var(--pr);color:#fff}
+.logo-img{box-shadow:0 0 0 2px #cfe6d4}
+.hero{box-shadow:none}
+.inp:focus{box-shadow:0 0 0 3px rgba(47,148,87,.18)}
+/* ปุ่มสลับหน้าร้าน/แอดมิน */
+.swbtn{display:inline-flex;align-items:center;gap:6px;min-height:46px;padding:0 12px;border-radius:14px;border:1.5px solid #f0c868;background:#fff6dc;color:#6b4a00;font-weight:700;font-size:15px;text-decoration:none;white-space:nowrap}
+.top .swbtn{background:#fff6dc;color:#6b4a00;border-color:#f0c868}
+.swbtn:hover{background:#ffefc2}
+@media(max-width:360px){.swbtn .t{display:none}}
+/* รายการขายดี */
+.topsec{margin:4px 0 14px}
+.topsec h3{font-size:18px;font-weight:800;margin:0 2px 8px;display:flex;align-items:center;gap:6px}
+.topsec h3 small{font-weight:500;color:var(--mu);font-size:14px}
+.card.hot{border-color:#f0c868;background:#fffaf0}
+.rank{flex:none;width:28px;height:28px;border-radius:50%;background:#ffe39a;color:#5b3d00;font-weight:800;display:grid;place-items:center;font-size:14px}
+.h3b{font-size:18px;font-weight:800;margin:6px 2px 4px}
+.hide-s{}
