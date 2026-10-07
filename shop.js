@@ -29,6 +29,7 @@ const BACK={product:'shop',again:'shop',cart:'shop',info:'cart',review:'info'};
 function head(){
  const n=count();
  return `<header class="top"><div class="bar"><img class="logo-img" src="logo.png" alt="โลโก้ บริษัท แม่ดอนรุ่งเรืองฟู้ดส์"><h1 class="brand"><b>บริษัท แม่ดอนรุ่งเรืองฟู้ดส์ จำกัด</b></h1>
+ <a class="swbtn" href="admin.html" aria-label="เข้าสู่ระบบแอดมิน (สำหรับร้านค้า)">${ic('user',18)}<span class="t">แอดมิน</span></a>
  <button class="cartbtn" onclick="go('cart')" aria-label="รายการสั่งซื้อ ${n} รายการ">${ic('cart')}<span class="hide-s">รายการสั่งซื้อ</span>${n?`<span class="badge">${n}</span>`:''}</button></div></header>`;
 }
 function fabHtml(){
@@ -57,15 +58,17 @@ function go(v){
 
 /* ---------- หน้าสินค้า ---------- */
 function shopBody(){
- return `<div class="search">${ic('search')}<input id="q" class="inp" type="search" enterkeyhint="search" autocomplete="off" aria-label="ค้นหาสินค้า" placeholder="ค้นหาสินค้า..." value="${esc(q)}" oninput="q=this.value;limit=PAGE;grid()"></div><div id="gmeta" class="gmeta"></div><div id="grid" class="grid"></div><div id="gmore"></div><p class="adminlink">${telLink()}<br><a href="admin.html">สำหรับร้านค้า (จัดการสินค้า)</a></p>`;
+ return `<div class="search">${ic('search')}<input id="q" class="inp" type="search" enterkeyhint="search" autocomplete="off" aria-label="ค้นหาสินค้า" placeholder="ค้นหาสินค้า..." value="${esc(q)}" oninput="q=this.value;limit=PAGE;grid()"></div><div id="top"></div><div id="gmeta" class="gmeta"></div><div id="grid" class="grid"></div><div id="gmore"></div><p class="adminlink">${telLink()}<br><a href="admin.html">สำหรับร้านค้า (จัดการสินค้า)</a></p>`;
 }
-function card(p){
- return `<article class="card"><button class="cimg" onclick="openP('${p.id}')" tabindex="-1" aria-hidden="true">${p.image?`<img referrerpolicy="no-referrer" loading="lazy" decoding="async" src="${p.image}" alt="">`:`<span class="ph">${ic('box',26)}</span>`}</button>
+function card(p,rk){
+ return `<article class="card${rk?' hot':''}">${rk?`<span class="rank" aria-label="อันดับ ${rk}">${rk}</span>`:''}<button class="cimg" onclick="openP('${p.id}')" tabindex="-1" aria-hidden="true">${p.image?`<img referrerpolicy="no-referrer" loading="lazy" decoding="async" src="${p.image}" alt="">`:`<span class="ph">${ic('box',26)}</span>`}</button>
  <div class="cbody"><h3><a href="#" onclick="openP('${p.id}');return false">${esc(p.name)}</a></h3>${p.description?`<p class="desc">${esc(p.description)}</p>`:''}</div><button class="btn pri go" onclick="openP('${p.id}')" aria-label="เลือก ${esc(p.name)}">เลือก${ic('chev',18)}</button></article>`;
 }
 function grid(){
  const g=$('#grid');if(!g)return;
  const k=q.trim().toLowerCase();
+ const tops=(D.top||[]).map(prod).filter(p=>p&&avail(p)).slice(0,5);
+ $('#top').innerHTML=!k&&tops.length?`<section class="topsec"><h3>${ic('star',20)} ขายดี / สั่งบ่อย</h3><div class="grid">${tops.map((p,i)=>card(p,i+1)).join('')}</div></section><h3 class="h3b">สินค้าทั้งหมด</h3>`:'';
  const all=D.products.filter(avail).sort(bySort),l=k?all.filter(p=>String(p.name).toLowerCase().includes(k)):all,vis=l.slice(0,limit);
  $('#gmeta').textContent=all.length?(k?`พบ ${l.length} จาก ${all.length} รายการ`:`สินค้าทั้งหมด ${all.length} รายการ`):'';
  if(!l.length){
@@ -107,7 +110,7 @@ function addCart(){
  if(vs.length&&!pv.vid){pv.err='กรุณาเลือกขนาดสินค้า';render();return}
  const vid=vs.length?pv.vid:null,e=cart.find(c=>c.pid===pv.pid&&(c.vid||null)===vid);
  if(e)e.qty=Math.min(999,e.qty+pv.qty);else cart.push({pid:pv.pid,vid,qty:pv.qty});
- saveCart();pv.added=true;pv.qty=1;render();
+ saveCart();toast(`เพิ่ม “${p.name}” ลงรายการแล้ว`);backShop();
 }
 
 /* ---------- รายการสั่งซื้อ ---------- */
