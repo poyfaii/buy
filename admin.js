@@ -53,7 +53,7 @@ function render(){
  if(!D){$('#app').innerHTML=loadErr
   ?`<div class="awrap" style="padding-top:20px"><div class="empty">${ic('info',44)}<p>${esc(loadErr)}</p><button class="btn pri lg" onclick="loadAdmin()">ลองใหม่</button><button class="btn" onclick="logout()">ออกจากระบบ</button></div></div>`
   :`<div class="awrap" style="padding-top:20px"><div class="sk" style="aspect-ratio:auto;height:220px"></div></div>`;return}
- $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.png" alt=""><h1 class="brand"><b>จัดการสินค้า</b></h1><a class="btn sm" href="index.html">ดูหน้าร้าน</a><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ">${ic('logout')}</button></div></header>
+ $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.png" alt=""><h1 class="brand"><b>จัดการสินค้า</b></h1><a class="swbtn" href="index.html">${ic('store',18)}<span class="t">หน้าร้านลูกค้า</span></a><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ">${ic('logout')}</button></div></header>
  <main class="awrap">${tabs()}${aview==='edit'?editView():aview==='set'?setView():aview==='ord'?ordView():listView()}</main>`;
  if(aview==='list')drawList();
 }
