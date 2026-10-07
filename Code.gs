@@ -34,7 +34,7 @@ function doGet(e) {
   try {
     const action = (e && e.parameter && e.parameter.action) || 'list';
     if (action === 'list') return json_(readAll_(false));
-    if (action === 'ping') return json_({ ok: true });
+    if (action === 'ping') return json_({ ok: true, version: 'orders-2026-10-06' }); // เปิด URL/exec?action=ping เพื่อเช็กว่าใช้โค้ดเวอร์ชันใหม่
     return json_({ ok: false, error: 'unknown action' });
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message || err) });
@@ -138,7 +138,8 @@ function readAll_(admin) {
     fbUrl: st.fbUrl || '',
     units: list_(st.units),
     packs: list_(st.packs),
-    products: products
+    products: products,
+    top: admin ? [] : topIds_()
   };
   if (!admin) {
     try { cache.put('pub', JSON.stringify(out), CACHE_SECONDS); } catch (e) { /* ข้อมูลใหญ่เกินแคช ก็ข้ามไป */ }
@@ -348,3 +349,40 @@ function bool_(v) {
 }
 function list_(s) { return str_(s).split(',').map(function (x) { return x.trim(); }).filter(Boolean); }
 function bySort_(a, b) { return num_(a.sortOrder) - num_(b.sortOrder); }
+
+
+/* ---------------- ทดสอบเขียนคำสั่งซื้อจากหน้า Apps Script (เลือกฟังก์ชันนี้แล้วกดเรียกใช้) ---------------- */
+function testOrder() {
+  const r = saveOrder_({
+    orderId: 'TEST-' + Utilities.getUuid().slice(0, 4).toUpperCase(),
+    name: 'ทดสอบ ระบบ', phone: '0800000000', prov: 'สุโขทัย', amp: 'เมืองสุโขทัย', tam: 'ตาลเตี้ย', zip: '64220', addr: '1 ทดสอบ',
+    items: [{ pid: 'p1', vid: 'p1v1', name: 'สินค้าทดสอบ', label: '500 กรัม', qty: 1, unit: 'ถุง' }]
+  });
+  Logger.log('บันทึกแล้ว: ' + JSON.stringify(r) + ' — ดูแท็บ Orders และ Customers (ลบแถวทดสอบทิ้งได้)');
+}
+
+
+/* ---------------- สินค้าขายดี: นับจากจำนวนออเดอร์ที่มีสินค้านั้น (ล่าสุด 500 ออเดอร์) ---------------- */
+function topIds_() {
+  try {
+    const sh = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_ORDERS);
+    if (!sh || sh.getLastRow() < 2) return [];
+    const v = sh.getDataRange().getValues();
+    const c = v[0].map(String).indexOf('itemsJson');
+    if (c < 0) return [];
+    const m = {};
+    v.slice(Math.max(1, v.length - 500)).forEach(function (r) {
+      let items = [];
+      try { items = JSON.parse(r[c] || '[]'); } catch (e) { items = []; }
+      const seen = {};
+      items.forEach(function (i) {
+        const id = str_(i.pid);
+        if (!id || seen[id]) return;
+        seen[id] = true;
+        const x = m[id] || (m[id] = { n: 0, q: 0 });
+        x.n++; x.q += num_(i.qty);
+      });
+    });
+    return Object.keys(m).sort(function (a, b) { return m[b].n - m[a].n || m[b].q - m[a].q; }).slice(0, 6);
+  } catch (e) { return []; }
+}
