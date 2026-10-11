@@ -3,11 +3,11 @@ const PAGE=24;
 const SHOP_LAT=16.842186444945238,SHOP_LNG=99.93208137099553; // พิกัดที่ตั้งบริษัท (แก้ได้ที่นี่)
 const SHOP_TEL='091-383-0459'; // เบอร์โทรเพจ/ร้าน (แก้ได้ที่นี่)
 const telLink=(c='')=>`<a class="tel ${c}" href="tel:${SHOP_TEL.replace(/\D/g,'')}">${ic('phone',18)} โทร ${SHOP_TEL}</a>`;
-let onlyFav=false,greet='',cat='',shownN=0,anim=false,ord={id:'',st:'',err:''},ag={name:'',phone:'',busy:false,res:null,err:''},loadErr='',cart=[],q='',view='shop',pv=null,shopY=0,errs={},msg='',limit=PAGE,cust={name:'',phone:'',prov:'',amp:'',tam:'',zip:'',addr:'',note:''};
+let onlyFav=false,greet='',cat='',shownN=0,anim=false,ord={id:'',st:'',err:''},ag={name:'',phone:'',busy:false,res:null,err:''},loadErr='',cart=[],q='',view='shop',pv=null,shopY=0,errs={},msg='',limit=PAGE,cust={name:'',phone:'',prov:'',amp:'',tam:'',zip:'',addr:'',note:'',tax:false,taxName:'',taxId:'',taxAddr:''};
 try{cart=JSON.parse(localStorage.getItem(CKEY))||[]}catch(e){}
-try{const u=JSON.parse(localStorage.getItem(UKEY));if(u)Object.assign(cust,{name:u.name||'',phone:u.phone||'',prov:u.prov||'',amp:u.amp||'',tam:u.tam||'',zip:u.zip||'',addr:u.addr||''})}catch(e){}
+try{const u=JSON.parse(localStorage.getItem(UKEY));if(u)Object.assign(cust,{name:u.name||'',phone:u.phone||'',prov:u.prov||'',amp:u.amp||'',tam:u.tam||'',zip:u.zip||'',addr:u.addr||'',taxName:u.taxName||'',taxId:u.taxId||'',taxAddr:u.taxAddr||''})}catch(e){}
 const saveCart=()=>{try{localStorage.setItem(CKEY,JSON.stringify(cart))}catch(e){}};
-const saveCust=()=>{try{localStorage.setItem(UKEY,JSON.stringify({name:cust.name,phone:cust.phone,prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:cust.zip,addr:cust.addr}))}catch(e){}};
+const saveCust=()=>{try{localStorage.setItem(UKEY,JSON.stringify({name:cust.name,phone:cust.phone,prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:cust.zip,addr:cust.addr,taxName:cust.taxName,taxId:cust.taxId,taxAddr:cust.taxAddr}))}catch(e){}};
 const prod=id=>D&&D.products.find(p=>p.id===id);
 const priceNote=()=>'ราคาที่แสดงเป็นราคาโดยประมาณ ตัวเลือกที่แสดง $$$ บาท ราคาอยู่ระหว่างกำหนด ค่าจัดส่งและราคาสุดท้ายยืนยันกับบริษัทผ่านแชต Facebook';
 const lineP=i=>hasP(i.v)?Number(i.v.price)*i.qty:null;
@@ -88,7 +88,7 @@ const catKey=n=>{const r=DEFIMG_RULES.find(x=>x[0].test(String(n||'').trim()));r
 function contactHtml(){
  const ll=`${SHOP_LAT},${SHOP_LNG}`;
  return `<section class="contact" id="contact" aria-label="ติดต่อบริษัท"><div class="sechead"><h3>ติดต่อและที่ตั้งบริษัท</h3></div>
- <div class="cgrid"><div class="cinfo"><b class="cname">บริษัท แม่ดอนรุ่งเรืองฟู้ดส์ จำกัด</b>
+ <div class="cgrid"><div class="cinfo"><b class="cname">${esc(COMPANY.name)}</b><p class="cname2"><b>${esc(COMPANY.branch)}</b><br>${esc(COMPANY.addr)}<br>เลขประจำตัวผู้เสียภาษี ${esc(COMPANY.taxId)}</p>
  <a class="crow2" href="tel:${SHOP_TEL.replace(/\D/g,'')}">${ic('phone',20)}<span><small>โทรศัพท์</small>${SHOP_TEL}</span></a>
  <a class="crow2" href="${esc(D&&D.fbUrl||FB_DEFAULT)}" target="_blank" rel="noopener">${ic('send',20)}<span><small>เพจ Facebook</small>ส่งข้อความถึงบริษัท</span></a>
  <a class="crow2" href="https://www.google.com/maps/search/?api=1&query=${ll}" target="_blank" rel="noopener">${ic('pin',20)}<span><small>พิกัดที่ตั้ง</small>${SHOP_LAT.toFixed(5)}, ${SHOP_LNG.toFixed(5)}</span></a>
@@ -273,6 +273,8 @@ function infoView(){
  <div class="fld"><label class="lbl" for="c_zip">รหัสไปรษณีย์ <span class="req" aria-hidden="true">*</span></label><input id="c_zip" class="inp${errs.zip?' bad':''}" inputmode="numeric" maxlength="5" autocomplete="postal-code" value="${esc(cust.zip)}" oninput="this.value=this.value.replace(/\D/g,'');cust.zip=this.value;clrE('zip')">${errs.zip?`<div class="err" id="e_zip" role="alert">${errs.zip}</div>`:''}</div>
  ${field('addr','บ้านเลขที่ / หมู่ / ซอย / ถนน',{req:1,area:1,ac:'address-line1'})}</section>
  <section class="sec">${field('note','หมายเหตุเพิ่มเติม (ไม่บังคับ)',{area:1})}</section>
+ <section class="sec"><label class="chk"><input type="checkbox" ${cust.tax?'checked':''} onchange="cust.tax=this.checked;render()"> <span><b>ต้องการใบกำกับภาษี</b><small class="mu" style="display:block">กรอกข้อมูลสำหรับออกใบกำกับภาษี (ไม่บังคับ)</small></span></label>
+ ${cust.tax?`<div style="margin-top:10px">${field('taxName','ชื่อ-นามสกุล / ชื่อบริษัท ตามใบกำกับภาษี',{req:1})}${field('taxId','เลขประจำตัวผู้เสียภาษี 13 หลัก',{req:1,t:'tel'})}${field('taxAddr','ที่อยู่ตามใบกำกับภาษี',{req:1,area:1})}</div>`:''}</section>
  <div class="stack"><button class="btn pri lg" onclick="toReview()">ถัดไป: ตรวจสอบคำสั่งซื้อ</button></div>`;
 }
 const fullAddr=()=>`${T(cust.addr)}\n${lTam()}${cust.tam} ${lAmp()}${cust.amp}\n${cust.prov===BKK?'':'จ.'}${cust.prov} ${T(cust.zip)}`;
@@ -287,12 +289,15 @@ function toReview(){
  if(cust.amp&&!cust.tam)errs.tam='กรุณาเลือก'+lTam();
  if(!/^\d{5}$/.test(T(cust.zip)))errs.zip='กรุณากรอกรหัสไปรษณีย์ 5 หลัก';
  if(!T(cust.addr))errs.addr='กรุณากรอกบ้านเลขที่ / หมู่ / ซอย / ถนน';
- const ks=['name','phone','prov','amp','tam','zip','addr'];
+ if(cust.tax){if(!T(cust.taxName))errs.taxName='กรุณากรอกชื่อสำหรับออกใบกำกับภาษี';if(!/^\d{13}$/.test(T(cust.taxId).replace(/\D/g,'')))errs.taxId='กรุณากรอกเลขประจำตัวผู้เสียภาษี 13 หลัก';if(!T(cust.taxAddr))errs.taxAddr='กรุณากรอกที่อยู่ตามใบกำกับภาษี'}
+ const ks=['name','phone','prov','amp','tam','zip','addr','taxName','taxId','taxAddr'];
  if(ks.some(k=>errs[k])){render();const k=ks.find(x=>errs[x]);const e=k&&$('#c_'+k);e&&e.focus();return}
  saveCust();view='review';render();scrollTo(0,0);
 }
 
 /* ---------- ตรวจสอบ / ข้อความ ---------- */
+const taxTxt=()=>cust.tax?`ชื่อ: ${T(cust.taxName)}\nเลขประจำตัวผู้เสียภาษี: ${T(cust.taxId).replace(/\D/g,'')}\nที่อยู่: ${T(cust.taxAddr)}`:'';
+const taxMsg=()=>cust.tax?`\n\n🧾 ขอใบกำกับภาษี\n\n${taxTxt()}`:'';
 function makeMsg(){
  const l=items();
  return `📦 ใบสั่งซื้อสินค้า\nบริษัท แม่ดอนรุ่งเรืองฟู้ดส์ จำกัด\n🧾 เลขที่: ${ord.id}\n\n👤 ข้อมูลผู้สั่งซื้อ\n\nชื่อ: ${T(cust.name)}\nโทร: ${T(cust.phone)}\n\n🛍️ รายการสินค้า\n\n`
@@ -300,17 +305,24 @@ function makeMsg(){
    const s=[T(i.v&&i.v.size),T(i.v&&i.v.size)?T(i.v.sizeUnit):''].filter(Boolean).join(' '),pk=i.v?T(i.v.packaging):'';
    return `${n+1}. ${i.p.name}`+(s?`\n   ขนาด: ${s}`:'')+(pk?`\n   บรรจุภัณฑ์: ${pk}`:'')+`\n   จำนวน: ${i.qty}${qunit(i.v)?' '+qunit(i.v):''}`+(hasP(i.v)?`\n   ราคา: ${money(i.v.price)} x ${i.qty} = ${money(lineP(i))}`:'');
   }).join('\n\n')
- +`\n\n📍 ที่อยู่จัดส่ง\n\n${fullAddr()}\n\n📝 หมายเหตุ\n\n${T(cust.note)||'-'}${unkN(l)||!l.length?'':`\n\n💰 ยอดรวมโดยประมาณ: ${money(sumP(l))}`}\n\n💬 ขอความกรุณายืนยันราคาและค่าจัดส่งในแชตนี้ (ราคาอาจมีการเปลี่ยนแปลง)`;
+ +`\n\n📍 ที่อยู่จัดส่ง\n\n${fullAddr()}\n\n📝 หมายเหตุ\n\n${T(cust.note)||'-'}${taxMsg()}${unkN(l)||!l.length?'':`\n\n💰 ยอดรวมโดยประมาณ: ${money(sumP(l))}`}\n\n💬 ขอความกรุณายืนยันราคาและค่าจัดส่งในแชตนี้ (ราคาอาจมีการเปลี่ยนแปลง)`;
 }
 function reviewView(){
  return `<h2 class="h2">ตรวจสอบคำสั่งซื้อ</h2>
- <section class="sec"><h3>ข้อมูลผู้สั่ง</h3><p style="margin-top:8px"><b>${esc(cust.name)}</b></p><p class="mu">โทร ${esc(cust.phone)}</p><p style="margin-top:8px;white-space:pre-line">${esc(fullAddr())}</p>${T(cust.note)?`<p class="mu" style="margin-top:8px">หมายเหตุ: ${esc(cust.note)}</p>`:''}</section>
+ <section class="sec"><h3>ข้อมูลผู้สั่ง</h3><p style="margin-top:8px"><b>${esc(cust.name)}</b></p><p class="mu">โทร ${esc(cust.phone)}</p><p style="margin-top:8px;white-space:pre-line">${esc(fullAddr())}</p>${T(cust.note)?`<p class="mu" style="margin-top:8px">หมายเหตุ: ${esc(cust.note)}</p>`:''}${cust.tax?`<p class="mu" style="margin-top:8px;white-space:pre-line">ขอใบกำกับภาษี\n${esc(taxTxt())}</p>`:''}</section>
  <section class="sec"><h3>รายการสินค้า</h3>${items().map(i=>`<div class="sumrow"><div><b>${esc(i.p.name)}</b>${i.v?`<div class="mu">${esc(vlabel(i.v))}</div>`:''}</div><b>× ${i.qty}${qunit(i.v)?' '+qunit(i.v):''}<div class="mu" style="font-weight:600">${hasP(i.v)?money(lineP(i)):'$$$ บาท'}</div></b></div>`).join('')}${totalHtml(items())}</section>
  <div class="note">${ic('info',18)}<span>${priceNote()} (ราคาอาจมีการเปลี่ยนแปลง)</span></div>
  <div class="stack"><button class="btn pri lg" onclick="confirmOrder()">ยืนยันคำสั่งซื้อ</button><button class="btn" onclick="go('info')">แก้ไขข้อมูล</button></div>`;
 }
 // สรุปรายการและคำนวณยอดหลังยืนยันคำสั่งซื้อ
-let doneItems=[];
+let doneItems=[],doneCust=null;
+function viewDoc(){
+ const c=doneCust||cust,t=c.tax;
+ openDoc(docHtml({type:'order',no:ord.id,date:dmy(new Date()),
+  buyer:t?{name:c.taxName,addr:c.taxAddr,taxId:String(c.taxId).replace(/\D/g,''),tel:c.phone}:{name:c.name,addr:c.fa,tel:c.phone},
+  lines:doneItems.map(i=>({name:i.p.name,label:i.v?vlabel(i.v):'',qty:i.qty,unit:qunit(i.v),price:hasP(i.v)?i.v.price:''})),
+  note:'เอกสารนี้จัดทำจากคำสั่งซื้อทางเว็บไซต์ ราคาและค่าจัดส่งยืนยันกับบริษัทผ่านแชต Facebook'+(t?'\nผู้สั่งขอใบกำกับภาษี บริษัทจะออกให้ตามราคาที่ยืนยัน':''),unknownMark:'$$$'}));
+}
 function calcHtml(){
  const l=doneItems;if(!l.length)return'';
  return `<section class="sec calc"><h3>สรุปรายการและยอดโดยประมาณ</h3><table class="ctab"><thead><tr><th>สินค้า</th><th class="n">จำนวน</th><th class="n">ราคา/หน่วย</th><th class="n">รวม</th></tr></thead><tbody>${l.map(i=>`<tr><td><b>${esc(i.p.name)}</b>${i.v?`<small>${esc(vlabel(i.v))}</small>`:''}</td><td class="n">${i.qty}${qunit(i.v)?' '+qunit(i.v):''}</td><td class="n">${hasP(i.v)?Number(i.v.price).toLocaleString('th-TH'):'<span class="pq">$$$</span>'}</td><td class="n">${hasP(i.v)?lineP(i).toLocaleString('th-TH'):'<span class="pq">$$$</span>'}</td></tr>`).join('')}</tbody></table>${totalHtml(l)}<p class="hint">${priceNote()}</p></section>`;
@@ -320,6 +332,7 @@ function doneView(){
  ${ordHtml()}${calcHtml()}<section class="sec"><h3>ขั้นตอนการส่งคำสั่งซื้อ</h3><ol class="how"><li>กดปุ่ม “คัดลอกข้อความ”</li><li>กดปุ่ม “เปิด Facebook” เพื่อเข้าสู่แชตของเพจบริษัท</li><li>วางข้อความที่คัดลอกไว้ แล้วกดส่ง</li></ol><pre id="msgbox">${esc(msg)}</pre></section>
  <div class="stack"><button class="btn pri lg" onclick="copyMsg()">${ic('copy')} คัดลอกข้อความ</button>
  <a class="btn lg" href="${esc(D.fbUrl)}" target="_blank" rel="noopener" onclick="copyMsg(1)">${ic('send')} เปิด Facebook</a>
+ <button class="btn" onclick="viewDoc()">ดูใบสั่งซื้อ / บันทึกเป็น PDF</button>
  <button class="btn" onclick="cart=[];saveCart();msg='';view='shop';render();scrollTo(0,0)">กลับไปเลือกสินค้า</button></div>
  <p class="adminlink">สอบถามข้อมูลเพิ่มเติม ${telLink()}</p>`;
 }
@@ -329,10 +342,10 @@ function ordHtml(){
  return `<div id="ordst" class="note" role="status">${m?ic(m[1],18)+'<span>'+m[0]+'</span>':''}</div>`.replace('<div id="ordst" class="note" role="status"></div>','<div id="ordst"></div>');
 }
 const paintOrd=()=>{const e=$('#ordst');if(e)e.outerHTML=ordHtml()};
-function confirmOrder(){doneItems=items();greet='';ag={name:'',phone:'',busy:false,res:null,err:''};ord={id:newOrderId(),st:'',err:''};msg=makeMsg();view='done';render();scrollTo(0,0);sendOrder()}
+function confirmOrder(){doneItems=items();doneCust={...cust,fa:fullAddr().replace(/\n/g,' ')};greet='';ag={name:'',phone:'',busy:false,res:null,err:''};ord={id:newOrderId(),st:'',err:''};msg=makeMsg();view='done';render();scrollTo(0,0);sendOrder()}
 let lastOrder=null;
 async function sendOrder(){
- const order=lastOrder&&ord.st==='fail'?lastOrder:{orderId:ord.id,name:T(cust.name),phone:normPhone(cust.phone),prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:T(cust.zip),addr:T(cust.addr),note:T(cust.note),
+ const order=lastOrder&&ord.st==='fail'?lastOrder:{orderId:ord.id,name:T(cust.name),phone:normPhone(cust.phone),prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:T(cust.zip),addr:T(cust.addr),note:[T(cust.note),cust.tax?'[ขอใบกำกับภาษี] '+taxTxt().replace(/\n/g,' | '):''].filter(Boolean).join('\n'),
   items:items().map(i=>({pid:i.pid,vid:i.vid||'',name:i.p.name,label:i.v?vlabel(i.v):'',qty:i.qty,unit:qunit(i.v)}))};
  lastOrder=order;ord.st='saving';ord.err='';paintOrd();
  try{await Service.placeOrder(order);ord.st='ok';setTimeout(refreshSales,800)}catch(e){ord.st='fail';ord.err=e.message||'ผิดพลาด'}
