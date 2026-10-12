@@ -1,6 +1,6 @@
 // data.js — ข้อมูลและฟังก์ชันที่ใช้ร่วมกัน (หน้าร้าน + หน้าผู้ดูแล)
 // ถ้าจะเปลี่ยนที่เก็บข้อมูลเป็น Google Sheets / Firebase / ฐานข้อมูล ให้แก้เฉพาะ Service ด้านล่าง
-const WEB_VER='v24';
+const WEB_VER='v25';
 const IS_ADMIN=/admin/i.test(location.pathname);
 const KEY='mdr_data_v1',CKEY='mdr_cart_v1',UKEY='mdr_cust_v1',MAXV=5;
 const MSG_URL='https://m.me/61573351996765'; // ลิงก์เปิดแชต Messenger ของเพจโดยตรง (ลูกค้ากดแล้วเข้าหน้าแชตเลย)
@@ -156,15 +156,16 @@ const DOCKEY='mdr_docs_v1',DOC_PRE={quote:'QT',delivery:'DN',receipt:'RC',taxful
 const localDocs={
  all(){try{return JSON.parse(localStorage.getItem(DOCKEY))||[]}catch(e){return[]}},
  put(a){try{localStorage.setItem(DOCKEY,JSON.stringify(a))}catch(e){throw new Error('พื้นที่เก็บข้อมูลเต็ม')}},
- issue(type,id,by){
+ issue(type,id,by,snap){
   const pre=DOC_PRE[type];if(!pre)throw new Error('ประเภทเอกสารไม่ถูกต้อง');
   const a=this.all(),ex=a.find(x=>x.orderId===id&&x.type===type&&x.status!=='ยกเลิก');
-  if(ex)return{ok:true,no:ex.no,existed:true};
+  if(ex){if(!ex.snapshot&&snap){ex.snapshot=Object.assign({},snap,{no:ex.no});this.put(a)}return{ok:true,no:ex.no,existed:true,snapshot:ex.snapshot||null}}
   const d=new Date(),p=n=>String(n).padStart(2,'0'),key=pre+String(d.getFullYear()+543).slice(-2)+p(d.getMonth()+1);
   const last=a.reduce((m,x)=>x.no.indexOf(key+'-')===0?Math.max(m,+x.no.slice(key.length+1)||0):m,0);
   const no=key+'-'+String(last+1).padStart(4,'0');
-  a.push({no,type,orderId:id,issuedAt:d.toISOString().slice(0,19).replace('T',' '),issuedBy:by,status:'ใช้งาน',reason:''});this.put(a);
-  return{ok:true,no,existed:false};
+  const sn=snap?Object.assign({},snap,{no}):null;
+  a.push({no,type,orderId:id,issuedAt:d.toISOString().slice(0,19).replace('T',' '),issuedBy:by,status:'ใช้งาน',reason:'',snapshot:sn});this.put(a);
+  return{ok:true,no,existed:false,snapshot:sn};
  },
  list(id){return this.all().filter(x=>!id||x.orderId===id).reverse()},
  void(no,reason){const a=this.all(),x=a.find(y=>y.no===no);if(!x)throw new Error('ไม่พบเลขที่เอกสารนี้');x.status='ยกเลิก';x.reason=reason||'';this.put(a);return{ok:true,docNo:no}}
@@ -268,14 +269,15 @@ const Service={
 
  // ----- เลขที่เอกสาร: เซิร์ฟเวอร์แจกเลขเรียงต่อเนื่อง (ชุด+ปี พ.ศ. 2 หลัก+เดือน-ลำดับ 4 หลัก รีเซ็ตทุกเดือน) -----
  // แอดมินออกเอกสาร: ออเดอร์+ประเภทเดิมที่ยังไม่ยกเลิก ได้เลขเดิม
- async issueDoc(type,orderId){
-  if(!REMOTE)return localDocs.issue(type,orderId,'admin');
-  try{return await api(Object.assign({action:'issueDoc',type:type,orderId:orderId},CRED))}
+ // snapshot = เนื้อหาเอกสารที่กรอก — เก็บเป็นฉบับจริงตอนออกครั้งแรก เปิดซ้ำได้เหมือนเดิมเสมอ (ถ้าจะแก้ต้องยกเลิกเลขแล้วออกใหม่)
+ async issueDoc(type,orderId,snapshot){
+  if(!REMOTE)return localDocs.issue(type,orderId,'admin',snapshot);
+  try{return await api(Object.assign({action:'issueDoc',type:type,orderId:orderId,snapshot:snapshot},CRED))}
   catch(e){if(e.message==='unauthorized')Service.logout();throw e}
  },
  // ลูกค้าขอเลขเอกสารของออเดอร์ตัวเอง (type 'quote' | 'taxabb')
- async docNo(type,o){
-  if(!REMOTE)return localDocs.issue(type,o.orderId,'customer');
+ async docNo(type,o,snapshot){
+  if(!REMOTE)return localDocs.issue(type,o.orderId,'customer',snapshot);
   return api({action:'docNo',type:type,orderId:o.orderId,name:o.name,phone:o.phone});
  },
  async listDocs(orderId){

@@ -228,8 +228,8 @@ function ordRows(){
  return l.map(o=>{const op=oopen===o.orderId,n=(o.items||[]).length;
   return `<div class="aitem"><button class="rmain" style="width:100%;padding:12px" onclick="oopen=oopen==='${esc(o.orderId)}'?null:'${esc(o.orderId)}';$('#olist').innerHTML=ordRows()" aria-expanded="${op}"><span style="min-width:0"><span class="rname">${esc(o.name)} · ${esc(o.phone)}</span><span class="rmeta">${esc(o.orderId)} · ${esc(String(o.createdAt||'').slice(0,16))} · ${n} รายการ · ${stBadge(stText(o.status))}</span></span></button>
   ${op?`<div class="racts" style="display:block;padding:0 14px 14px"><p class="mu">${esc(oaddr(o))}</p>${o.note?`<p class="mu" style="white-space:pre-line">หมายเหตุ: ${esc(o.note)}</p>`:''}${(o.items||[]).map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${esc(i.qty)}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}<div class="stack" style="margin-top:12px">${stText(o.status)===ST_SHIP?`<p class="hint" style="margin:0">จัดส่งเมื่อ ${esc(String(o.shippedAt||'').slice(0,16))}</p><button class="btn" onclick="setWait('${esc(o.orderId)}')">ยกเลิกสถานะจัดส่ง (กลับเป็นรอจัดเตรียมและจัดส่ง)</button>`:`<button class="btn pri" onclick="startShip('${esc(o.orderId)}')">จัดส่งแล้ว (ตกลงราคา / ยืนยันราคา)</button>`}
-  <button class="btn" onclick="startDoc('${esc(o.orderId)}')">ออกเอกสาร (ใบประมาณการ / ใบส่งสินค้า / ใบเสร็จ / ใบกำกับภาษี)</button>
-  <button class="btn" onclick="startDoc('${esc(o.orderId)}','taxabb')">ใบกำกับภาษีอย่างย่อ (ออกอัตโนมัติ)</button></div></div>`:''}</div>`}).join('');
+  <button class="btn" onclick="startDoc('${esc(o.orderId)}')">ออกเอกสาร</button>
+  <button class="btn" onclick="startDoc('${esc(o.orderId)}','taxabb')">ใบกำกับภาษีอย่างย่อ</button></div></div>`:''}</div>`}).join('');
 }
 
 /* ---------- ตั้งค่า ---------- */
@@ -353,14 +353,25 @@ function startDoc(id,type){
 async function loadIssued(id){
  try{const l=await Service.listDocs(id);if(dd&&dd.oid===id){dd.issued=l;if(aview==='doc'&&dd.step===1)render()}}catch(e){}
 }
-async function voidDocNo(no){
- const why=prompt('ยกเลิกเลขที่ '+no+'\nเลขนี้จะยังอยู่ในทะเบียน (ไม่ถูกลบและไม่ถูกนำกลับมาใช้) ใส่เหตุผล (ไม่บังคับ):');
- if(why===null)return;
- try{await Service.voidDoc(no,why);toast('ยกเลิกเลขที่ '+no+' แล้ว');if(dd)await loadIssued(dd.oid);render()}
- catch(e){toast('ยกเลิกไม่สำเร็จ: '+friendly(e.message),6000)}
-}
 const docTName=k=>(DOC_TYPES[k]||{}).t||k;
 const actDoc=(d,k)=>(d.issued||[]).find(x=>x.type===k&&x.status!=='ยกเลิก');
+// เปิดใบที่ออกแล้ว: ใช้เนื้อหาที่เก็บไว้ตอนออกจริง (ไม่เปลี่ยน)
+function viewIssued(k){
+ const d=dd,x=d&&actDoc(d,k);if(!x)return;
+ if(x.snapshot){openDoc(docHtml(x.snapshot));return}
+ toast('ใบนี้ออกไว้ก่อนมีระบบเก็บเนื้อหา ตรวจข้อมูลแล้วกดออกเอกสาร ระบบจะเก็บเป็นฉบับจริงโดยใช้เลขเดิม',5000);pickDoc(k);
+}
+// ยกเลิกเลขเดิม แล้วเปิดฟอร์มพร้อมข้อมูลเดิมให้แก้ ก่อนออกเลขใหม่
+async function reissueDoc(k){
+ const d=dd,x=d&&actDoc(d,k);if(!x)return;
+ const why=prompt('ยกเลิกเลขที่ '+x.no+' แล้วออกใหม่\nเลขเดิมจะยังอยู่ในทะเบียนเป็น "ยกเลิก" ไม่ถูกลบ ใส่เหตุผล (ไม่บังคับ):');
+ if(why===null)return;
+ try{await Service.voidDoc(x.no,why)}catch(e){toast('ยกเลิกไม่สำเร็จ: '+friendly(e.message),6000);return}
+ const sn=x.snapshot;
+ if(sn){const b=sn.buyer||{};Object.assign(d,{date:sn.date||d.date,seller:sn.seller||'',name:b.name||d.name,addr:b.addr||d.addr,taxId:b.taxId||d.taxId,tel:b.tel||d.tel,note:sn.note||'',showPrice:!!sn.showPrice,lines:(sn.lines||d.lines).map(l=>({...l,price:l.price==null?'':String(l.price)}))})}
+ await loadIssued(d.oid);
+ d.type=k;d.step=2;d.quick=false;toast('ยกเลิกเลขที่ '+x.no+' แล้ว แก้ข้อมูลแล้วกดออกเอกสารใหม่');render();scrollTo(0,0);
+}
 function pickDoc(k){
  const d=dd;if(!d)return;const T0=DOC_TYPES[k];
  d.type=k;d.step=2;d.quick=false;
@@ -370,32 +381,44 @@ function pickDoc(k){
 function docView(){
  if(!dd)return '';
  const d=dd,T0=DOC_TYPES[d.type]||{};
- if(d.step===1)return `<div class="lhead"><h2 class="h2">ออกเอกสาร</h2><button class="btn sm" onclick="backOrd()">← กลับ</button></div>
- <p class="mu" style="margin:6px 0 12px">ขั้นที่ 1 จาก 3 · เลือกประเภทเอกสาร (คำสั่งซื้อ ${esc(d.oid)})</p>
- <div class="dtype">${DOC_ORDER.map(k=>{const t=DOC_TYPES[k],rec=(d.req&&k==='taxfull')||(!d.req&&k==='receipt');return `<button class="${rec?'rec':''}" onclick="pickDoc('${k}')"><b>${esc(t.t)}${actDoc(d,k)?`<span class="rt">ออกแล้ว ${esc(actDoc(d,k).no)}</span>`:''}${rec?`<span class="rt">${d.req?'ลูกค้าขอใบกำกับภาษี':'แนะนำ'}</span>`:''}</b><span>${esc(t.d)}</span></button>`}).join('')}</div>
- ${(d.issued||[]).length?`<section class="sec"><h3>เลขที่เอกสารที่ออกแล้วของคำสั่งซื้อนี้</h3>${d.issued.map(x=>`<div class="sumrow"><div><b${x.status==='ยกเลิก'?' style="text-decoration:line-through;opacity:.6"':''}>${esc(x.no)}</b><div class="mu">${esc(docTName(x.type))} · ${esc(x.issuedAt)}${x.status==='ยกเลิก'?' · ยกเลิกแล้ว'+(x.reason?' ('+esc(x.reason)+')':''):''}</div></div>${x.status==='ยกเลิก'?'':`<button class="btn sm" onclick="voidDocNo('${esc(x.no)}')">ยกเลิกเลขนี้</button>`}</div>`).join('')}<p class="hint">ออกซ้ำประเภทเดิม ระบบใช้เลขเดิม · ถ้าต้องการออกใหม่ ให้ยกเลิกเลขเดิมก่อน แล้วระบบจะแจกเลขถัดไป</p></section>`:''}`;
+ if(d.step===1){
+  const hist=(d.issued||[]).filter(x=>x.status==='ยกเลิก');
+  return `<div class="lhead"><h2 class="h2">ออกเอกสาร</h2><button class="btn sm" onclick="backOrd()">← กลับ</button></div>
+ <p class="mu" style="margin:6px 0 12px">คำสั่งซื้อ ${esc(d.oid)} · ${esc(d.name)}</p>
+ <div class="dtype">${DOC_ORDER.map(k=>{const t=DOC_TYPES[k],x=actDoc(d,k),rec=(d.req&&k==='taxfull')||(!d.req&&k==='receipt');
+  return `<div class="dcard ${x?'done':rec?'rec':''}"><b>${esc(t.t)}${!x&&rec?`<span class="rt">${d.req?'ลูกค้าขอใบกำกับภาษี':'แนะนำ'}</span>`:''}</b><span class="mu">${esc(t.d)}</span>
+  ${x?`<div class="dno">ออกแล้ว เลขที่ <b>${esc(x.no)}</b><small>${esc(x.issuedAt)}</small></div><div class="drow"><button class="btn pri" onclick="viewIssued('${k}')">ดู / พิมพ์ / PDF</button><button class="btn" onclick="reissueDoc('${k}')">ยกเลิกแล้วออกใหม่</button></div>`
+  :`<div class="drow"><button class="btn pri" onclick="pickDoc('${k}')">ออกเอกสาร</button></div>`}</div>`}).join('')}</div>
+ <p class="hint">ใบที่ออกแล้วจะเปิดดูได้เหมือนเดิมทุกครั้ง แก้ไม่ได้ ถ้าต้องแก้ ให้กด "ยกเลิกแล้วออกใหม่" ระบบจะเก็บเลขเดิมไว้เป็น "ยกเลิก" แล้วออกเลขถัดไปให้</p>
+ ${hist.length?`<section class="sec"><h3>เลขที่ที่ยกเลิกแล้ว</h3>${hist.map(x=>`<div class="sumrow"><div><b style="text-decoration:line-through;opacity:.6">${esc(x.no)}</b><div class="mu">${esc(docTName(x.type))} · ยกเลิก${x.reason?' ('+esc(x.reason)+')':''}</div></div></div>`).join('')}</section>`:''}`;
+ }
  const f=(k,l,o={})=>`<div class="${o.full?'full':''}"><label for="d_${k}">${l}</label>${o.area?`<textarea id="d_${k}" class="inp" rows="2" oninput="dd.${k}=this.value">${esc(d[k])}</textarea>`:`<input id="d_${k}" class="inp" value="${esc(d[k])}" oninput="dd.${k}=this.value">`}</div>`;
  const showP=T0.price||d.showPrice;
- return `<div class="lhead"><h2 class="h2">${esc(T0.t)}</h2><button class="btn sm" onclick="dd.step=1;render()">← เลือกประเภทใหม่</button></div>
- <p class="mu" style="margin:6px 0 12px">ขั้นที่ 2 จาก 3 · ตรวจและแก้ข้อมูลก่อนออกเอกสาร${T0.price?' — ราคาต่อหน่วยเป็นราคารวมภาษีแล้ว ระบบแยก VAT 7% และเขียนจำนวนเงินเป็นตัวอักษรให้':''}</p>
+ return `<div class="lhead"><h2 class="h2">${esc(T0.t)}</h2><button class="btn sm" onclick="dd.step=1;render()">← กลับ</button></div>
+ <p class="mu" style="margin:6px 0 12px">ตรวจและแก้ข้อมูล แล้วกดปุ่มด้านล่างเพื่อออกเอกสาร${T0.price?' — ราคาต่อหน่วยเป็นราคารวมภาษีแล้ว ระบบแยก VAT 7% และเขียนจำนวนเงินเป็นตัวอักษรให้':''}</p>
  <section class="sec"><div class="dform">
- <div><label for="d_no">เลขที่เอกสาร</label><input id="d_no" class="inp" readonly value="${esc(actDoc(d,d.type)?actDoc(d,d.type).no:'ออกให้อัตโนมัติเมื่อกดดูตัวอย่าง')}"></div>${f('date','วันที่')}${f('seller','ชื่อผู้ขาย (ลายเซ็นตัวแทน ไม่บังคับ)',{full:1})}
+ <div><label for="d_no">เลขที่เอกสาร</label><input id="d_no" class="inp" readonly value="${esc(actDoc(d,d.type)?actDoc(d,d.type).no:'ระบบออกเลขให้อัตโนมัติ')}"></div>${f('date','วันที่')}${f('seller','ชื่อผู้ขาย (ลายเซ็นตัวแทน ไม่บังคับ)',{full:1})}
  ${f('name',T0.buyerTax?'ชื่อลูกค้า / บริษัท':'ชื่อลูกค้า',{full:1})}${f('addr','ที่อยู่ลูกค้า',{full:1,area:1})}${T0.buyerTax?f('taxId','เลขประจำตัวผู้เสียภาษี (13 หลัก)'):''}${f('tel','โทรศัพท์')}
  </div></section>
  ${T0.k==='quote'?`<section class="sec"><label class="chk"><input type="checkbox" ${d.showPrice?'checked':''} onchange="dd.showPrice=this.checked;render()"> <span><b>แสดงราคาในใบประมาณการ</b></span></label></section>`:''}
  <section class="sec"><h3>รายการสินค้า</h3><div class="dlines">${d.lines.map((l,i)=>`<div class="dline"><span><b>${esc(l.name)}</b><small class="mu" style="display:block">${esc(l.label)}</small></span><span class="mu">${esc(l.qty)} ${esc(l.unit)}</span>${showP?`<input class="inp" inputmode="decimal" aria-label="ราคาต่อหน่วย ${esc(l.name)}" placeholder="ราคา/หน่วย" value="${esc(l.price)}" oninput="dd.lines[${i}].price=this.value">`:'<span></span>'}</div>`).join('')}</div></section>
  <section class="sec">${f('note','หมายเหตุ',{full:1,area:1})}</section>
- <div class="stack"><button class="btn pri lg" onclick="previewDoc()"${d.busy?' disabled':''}>${d.busy?'กำลังออกเลขที่เอกสาร…':'ขั้นที่ 3: ดูตัวอย่าง / พิมพ์ / บันทึกเป็น PDF'}</button></div>`;
+ <div class="stack"><button class="btn pri lg" onclick="previewDoc()"${d.busy?' disabled':''}>${d.busy?'กำลังออกเลขที่เอกสาร…':'ออกเอกสาร (ดู / พิมพ์ / PDF)'}</button></div>`;
 }
 async function previewDoc(){
  const d=dd;if(!d||d.busy)return;const T0=DOC_TYPES[d.type];
  if(T0.price&&!d.lines.every(l=>okN(T(l.price)))){toast('กรุณากรอกราคาให้ครบทุกรายการ');return}
  if(T0.buyerTax&&(!T(d.name)||!T(d.addr)||T(d.taxId).replace(/\D/g,'').length!==13)){toast('ใบกำกับภาษีเต็มรูปแบบต้องมีชื่อ ที่อยู่ และเลขประจำตัวผู้เสียภาษี 13 หลักของลูกค้า');return}
- d.busy=true;if(!d.quick)render();toast('กำลังออกเลขที่เอกสาร…',40000);
- try{const r=await Service.issueDoc(d.type,d.oid);d.no=r.no}
- catch(e){d.busy=false;toast('ออกเลขที่เอกสารไม่สำเร็จ: '+friendly(e.message),7000);if(aview==='doc')render();return}
- d.busy=false;toast('ออกเลขที่ '+d.no+' แล้ว',1800);if(aview==='doc'&&!d.quick)render();loadIssued(d.oid);
- openDoc(docHtml({type:d.type,no:d.no,date:T(d.date),seller:T(d.seller),showPrice:d.showPrice,stamp:true,
+ const snap={type:d.type,date:T(d.date),seller:T(d.seller),showPrice:d.showPrice,stamp:true,
   buyer:{name:T(d.name),addr:T(d.addr),taxId:T0.buyerTax?T(d.taxId).replace(/\D/g,''):'',tel:T(d.tel)},
-  lines:d.lines.map(l=>({...l,price:T(l.price)})),note:T(d.note),unknownMark:'-'}),d.quick?backOrd:null);
+  lines:d.lines.map(l=>({...l,price:T(l.price)})),note:T(d.note),unknownMark:'-'};
+ d.busy=true;if(!d.quick)render();toast('กำลังออกเลขที่เอกสาร…',40000);
+ let r;
+ try{r=await Service.issueDoc(d.type,d.oid,snap)}
+ catch(e){d.busy=false;toast('ออกเลขที่เอกสารไม่สำเร็จ: '+friendly(e.message),7000);if(aview==='doc')render();return}
+ d.busy=false;d.no=r.no;
+ toast(r.existed?'เลขที่ '+r.no+' ออกไว้แล้ว เปิดฉบับเดิม (ถ้าต้องการแก้ ให้ยกเลิกแล้วออกใหม่)':'ออกเลขที่ '+r.no+' แล้ว',r.existed?4500:1800);
+ const fin=r.snapshot||Object.assign({},snap,{no:r.no});
+ if(aview==='doc'&&!d.quick)render();loadIssued(d.oid);
+ openDoc(docHtml(fin),d.quick?backOrd:null);
 }

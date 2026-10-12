@@ -11,7 +11,7 @@
  */
 
 // ===== รหัสเข้าหน้าแอดมิน (เปลี่ยนได้ที่นี่ แล้วทำให้ใช้งานได้ใหม่) =====
-const VERSION = 'v17-2026-10-12';
+const VERSION = 'v18-2026-10-12';
 const ADMIN_USER = 'admin';
 const ADMIN_PASS = '1234';
 
@@ -28,7 +28,7 @@ const ORDER_HEADERS = ['orderId', 'createdAt', 'name', 'phone', 'province', 'amp
 const CUSTOMER_HEADERS = ['phone', 'name', 'province', 'amphoe', 'tambon', 'zip', 'address', 'lastOrderId', 'lastOrderAt', 'lastItemsJson', 'orderCount'];
 const SHEET_DOCS = 'Documents';   // ทะเบียนเอกสารที่ออกแล้ว (ยกเลิกแทนลบ)
 const SHEET_COUNTERS = 'Counters'; // ตัวนับเลขที่เอกสารแยกตามชุด+เดือน
-const DOC_HEADERS = ['docNo', 'type', 'orderId', 'issuedAt', 'issuedBy', 'status', 'voidedAt', 'voidReason'];
+const DOC_HEADERS = ['docNo', 'type', 'orderId', 'issuedAt', 'issuedBy', 'status', 'voidedAt', 'voidReason', 'docJson'];
 const COUNTER_HEADERS = ['key', 'last'];
 const DOC_PRE = { quote: 'QT', delivery: 'DN', receipt: 'RC', taxfull: 'INV', taxabb: 'ABB' };
 const MAX_ITEMS = 80;
@@ -46,7 +46,7 @@ function doGet(e) {
     const action = (e && e.parameter && e.parameter.action) || 'list';
     if (action === 'list') return json_(readAll_(false));
     if (action === 'sales') { const st = cachedSales_(); return json_({ ok: true, top: st.top, sales: st.sales }); }
-    if (action === 'ping') return json_({ ok: true, version: VERSION, features: ['sales', 'history3', 'price-always', 'variant-names', 'track', 'status', 'docno'] }); // เปิด URL/exec?action=ping เพื่อเช็กว่าใช้โค้ดเวอร์ชันใหม่
+    if (action === 'ping') return json_({ ok: true, version: VERSION, features: ['sales', 'history3', 'price-always', 'variant-names', 'track', 'status', 'docno', 'docsnap'] }); // เปิด URL/exec?action=ping เพื่อเช็กว่าใช้โค้ดเวอร์ชันใหม่
     return json_({ ok: false, error: 'unknown action' });
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message || err) });
@@ -67,7 +67,7 @@ function doPost(e) {
     if (b.action === 'save') return json_(saveAll_(b.data));
     if (b.action === 'listOrders') return json_(listOrders_());
     if (b.action === 'setStatus') return json_(setStatus_(b));
-    if (b.action === 'issueDoc') return json_(issueDoc_(b.type, b.orderId, 'admin'));
+    if (b.action === 'issueDoc') return json_(issueDoc_(b.type, b.orderId, 'admin', b.snapshot));
     if (b.action === 'voidDoc') return json_(voidDoc_(b));
     if (b.action === 'listDocs') return json_(listDocs_(b));
     if (b.action === 'diag') return json_(diag_());
@@ -403,9 +403,17 @@ function listOrders_() {
   };
 }
 
+// แท็บ Documents: ชีตเก่า (v17) ยังไม่มีคอลัมน์ docJson ให้เพิ่มหัวคอลัมน์ต่อท้ายให้อัตโนมัติ
+function docSheet_() {
+  const sh = sheet_(SHEET_DOCS, DOC_HEADERS);
+  const h = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].map(function (x) { return String(x).trim(); });
+  if (h.indexOf('docJson') < 0) sh.getRange(1, h.length + 1).setValue('docJson').setFontWeight('bold').setBackground('#e8f0e9');
+  return sh;
+}
+function parseSnap_(t) { try { const o = JSON.parse(str_(t)); return o && typeof o === 'object' ? o : null; } catch (e) { return null; } }
 /* ---------------- เลขที่เอกสาร: เซิร์ฟเวอร์แจกเลขเรียงต่อเนื่อง (ชุด+ปี พ.ศ. 2 หลัก+เดือน-ลำดับ 4 หลัก รีเซ็ตทุกเดือน) ---------------- */
 // ออกเลข: ออเดอร์+ประเภทเดิมที่ยังไม่ยกเลิก ได้เลขเดิม / ไม่เช่นนั้นแจกเลขถัดไปภายใต้ล็อก (ต่อให้กดพร้อมกันก็ไม่ซ้ำ)
-function issueDoc_(type, orderId, by) {
+function issueDoc_(type, orderId, by, snap) {
   const pre = DOC_PRE[str_(type)];
   const id = clean_(orderId, 40);
   if (!pre) throw new Error('ประเภทเอกสารไม่ถูกต้อง');
@@ -413,13 +421,20 @@ function issueDoc_(type, orderId, by) {
   const lock = LockService.getScriptLock();
   lock.waitLock(25000);
   try {
-    const dsh = sheet_(SHEET_DOCS, DOC_HEADERS);
+    const dsh = docSheet_();
     const v = dsh.getDataRange().getValues();
     const h = v[0].map(function (x) { return String(x).trim(); });
     const ix = function (k) { return h.indexOf(k); };
     for (let r = 1; r < v.length; r++) {
       if (str_(v[r][ix('orderId')]) === id && str_(v[r][ix('type')]) === type && str_(v[r][ix('status')]) !== 'ยกเลิก') {
-        return { ok: true, no: str_(v[r][ix('docNo')]), existed: true, issuedAt: str_(v[r][ix('issuedAt')]) };
+        const eno = str_(v[r][ix('docNo')]);
+        let sn = parseSnap_(v[r][ix('docJson')]);
+        // ใบเก่าที่ยังไม่เคยเก็บเนื้อหา: เก็บเนื้อหาครั้งนี้เป็นฉบับจริง (หลังจากนี้เปิดกี่ครั้งก็เหมือนเดิม)
+        if (!sn && snap && typeof snap === 'object') {
+          snap.no = eno; const js = JSON.stringify(snap);
+          if (js.length < 45000) { dsh.getRange(r + 1, ix('docJson') + 1).setNumberFormat('@').setValue(js); sn = snap; SpreadsheetApp.flush(); }
+        }
+        return { ok: true, no: eno, existed: true, issuedAt: str_(v[r][ix('issuedAt')]), snapshot: sn };
       }
     }
     const d = new Date();
@@ -439,9 +454,11 @@ function issueDoc_(type, orderId, by) {
     else appendRow_(csh, 2, [key, n]);
     const no = key + '-' + ('0000' + n).slice(-4);
     const at = now_();
-    appendRow_(dsh, DOC_HEADERS.length, [no, type, id, at, by || '', 'ใช้งาน', '', '']);
+    let js = '';
+    if (snap && typeof snap === 'object') { snap.no = no; js = JSON.stringify(snap); if (js.length >= 45000) { js = ''; snap = null; } } else snap = null;
+    appendRow_(dsh, DOC_HEADERS.length, [no, type, id, at, by || '', 'ใช้งาน', '', '', js]);
     SpreadsheetApp.flush();
-    return { ok: true, no: no, existed: false, issuedAt: at };
+    return { ok: true, no: no, existed: false, issuedAt: at, snapshot: snap };
   } finally {
     lock.releaseLock();
   }
@@ -455,7 +472,14 @@ function publicDocNo_(b) {
   const o = rows_(ordSheet_()).filter(function (r) { return str_(r.orderId) === id; })[0];
   if (!o || phone_(o.phone) !== phone || norm_(o.name) !== name || stKey_(o.status) === 'cancel') throw new Error('ไม่พบคำสั่งซื้อนี้');
   if (type === 'taxabb' && stKey_(o.status) !== 'ship') throw new Error('ใบกำกับภาษีอย่างย่อออกได้เมื่อสถานะเป็นจัดส่งแล้ว');
-  return issueDoc_(type, id, 'customer');
+  let snap = null;
+  if (type === 'taxabb') { // ใบกำกับภาษีอย่างย่อที่ลูกค้าเปิดเอง: เซิร์ฟเวอร์สร้างเนื้อหาจากข้อมูลออเดอร์เอง (ไม่รับเนื้อหาจากลูกค้า)
+    let it = [];
+    try { it = JSON.parse(str_(o.itemsJson) || '[]'); } catch (e) { it = []; }
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(str_(o.shippedAt));
+    snap = { type: 'taxabb', no: '', date: m ? m[3] + '/' + m[2] + '/' + m[1] : '', stamp: true, buyer: { name: str_(o.name), tel: phone }, lines: it.map(function (i) { return { name: str_(i.name), label: str_(i.label), qty: i.qty, unit: str_(i.unit), price: i.price }; }) };
+  }
+  return issueDoc_(type, id, 'customer', snap);
 }
 // แอดมินยกเลิกเลขเอกสาร (เลขยังอยู่ในทะเบียน ไม่ถูกลบ ไม่ถูกนำกลับมาใช้) แล้วออกใบใหม่ได้เลขถัดไป
 function voidDoc_(b) {
@@ -464,7 +488,7 @@ function voidDoc_(b) {
   const lock = LockService.getScriptLock();
   lock.waitLock(25000);
   try {
-    const sh = sheet_(SHEET_DOCS, DOC_HEADERS);
+    const sh = docSheet_();
     const v = sh.getDataRange().getValues();
     const h = v[0].map(function (x) { return String(x).trim(); });
     const ix = function (k) { return h.indexOf(k); };
@@ -483,12 +507,12 @@ function voidDoc_(b) {
 }
 function listDocs_(b) {
   const id = clean_(b && b.orderId, 40);
-  let rows = rows_(sheet_(SHEET_DOCS, DOC_HEADERS));
+  let rows = rows_(docSheet_());
   if (id) rows = rows.filter(function (r) { return str_(r.orderId) === id; });
   return {
     ok: true,
     docs: rows.slice(-300).reverse().map(function (r) {
-      return { no: str_(r.docNo), type: str_(r.type), orderId: str_(r.orderId), issuedAt: str_(r.issuedAt), issuedBy: str_(r.issuedBy), status: str_(r.status) || 'ใช้งาน', voidedAt: str_(r.voidedAt), reason: str_(r.voidReason) };
+      return { no: str_(r.docNo), type: str_(r.type), orderId: str_(r.orderId), issuedAt: str_(r.issuedAt), issuedBy: str_(r.issuedBy), status: str_(r.status) || 'ใช้งาน', voidedAt: str_(r.voidedAt), reason: str_(r.voidReason), snapshot: id ? parseSnap_(r.docJson) : null };
     })
   };
 }

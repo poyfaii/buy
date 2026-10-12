@@ -371,10 +371,11 @@ async function doTrack(){
 async function openAbb(n){
  const o=tk.res&&tk.res.orders&&tk.res.orders[n];if(!o||docBusy)return;
  docBusy=true;toast('กำลังเตรียมใบกำกับภาษี…',30000);
- let no;try{no=(await Service.docNo('taxabb',{orderId:o.orderId,name:o.name,phone:o.phone})).no}catch(e){docBusy=false;toast(friendly(e.message)||'ขอเลขที่เอกสารไม่สำเร็จ ลองใหม่อีกครั้ง',5000);return}
+ const mine={type:'taxabb',no:'',date:ymd(o.shippedAt),stamp:true,buyer:{name:o.name,tel:o.phone},
+  lines:(o.items||[]).map(i=>({name:i.name,label:i.label,qty:i.qty,unit:i.unit,price:i.price}))};
+ let r;try{r=await Service.docNo('taxabb',{orderId:o.orderId,name:o.name,phone:o.phone},mine)}catch(e){docBusy=false;toast(friendly(e.message)||'ขอเลขที่เอกสารไม่สำเร็จ ลองใหม่อีกครั้ง',5000);return}
  docBusy=false;toast('พร้อมแล้ว',600);
- openDoc(docHtml({type:'taxabb',no:no,date:ymd(o.shippedAt),stamp:true,buyer:{name:o.name,tel:o.phone},
-  lines:(o.items||[]).map(i=>({name:i.name,label:i.label,qty:i.qty,unit:i.unit,price:i.price}))}));
+ openDoc(docHtml(r.snapshot||Object.assign({},mine,{no:r.no})));
 }
 
 /* ---------- บันทึกคำสั่งซื้อ ---------- */

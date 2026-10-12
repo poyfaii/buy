@@ -654,3 +654,21 @@ body{background:radial-gradient(900px 420px at 85% -80px,#fff4d6 0,rgba(255,244,
 .dc-signame{position:absolute;left:8%;bottom:6px;font:italic 400 24px/1 'Mali','Sriracha','Itim',cursive;color:#1a3fa0;transform:rotate(-4deg);font-style:normal;white-space:nowrap}
 @media print{.dc-stamp,.dc-signame{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 .dc-sign i.sg{height:92px}.dc-stamp{width:88px;height:88px;bottom:-4px}
+
+/* v22: สถานะคำสั่งซื้อ */
+.stb{display:inline-block;padding:3px 12px;border-radius:99px;font-size:13.5px;font-weight:700}
+.stb.wait{background:#fdf1d4;color:#7a5a12}.stb.ok{background:#e1f3e6;color:#1d6a3d}
+.dc-tab.np{min-width:0}
+.fchips{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}
+.dtype{display:grid;gap:10px}
+.dtype button{display:block;width:100%;text-align:left;border:1.5px solid var(--line);background:var(--surface);border-radius:14px;padding:12px 14px;min-height:58px}
+.dtype button b{display:block;font-size:15.5px}.dtype button span{display:block;color:var(--mu);font-size:13.5px}
+.dtype button.rec{border-color:var(--pr);background:var(--accs)}
+.dtype .rt{display:inline-block;margin-left:6px;font-size:12px;font-weight:700;color:var(--pr2)}
+
+.dcard{border:1.5px solid var(--line);background:var(--surface);border-radius:14px;padding:12px 14px;display:grid;gap:6px}
+.dcard>b{font-size:15.5px}.dcard>span{font-size:13.5px}
+.dcard.rec{border-color:var(--pr);background:var(--accs)}
+.dcard.done{border-color:var(--pr)}
+.dcard .dno{font-size:14px}.dcard .dno small{display:block;color:var(--mu);font-size:12.5px}
+.dcard .drow{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}.dcard .drow .btn{flex:1 1 140px}
