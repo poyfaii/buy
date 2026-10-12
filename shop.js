@@ -316,13 +316,16 @@ function reviewView(){
 }
 // สรุปรายการและคำนวณยอดหลังยืนยันคำสั่งซื้อ
 let doneItems=[],doneCust=null;
+let docBusy=false;
 async function viewDoc(){
+ if(docBusy)return;docBusy=true;toast('กำลังเตรียมเอกสาร…',30000);
  const c=doneCust||cust,t=c.tax;
  let no;try{no=(await Service.docNo('quote',{orderId:ord.id,name:T(c.name),phone:normPhone(c.phone)})).no}catch(e){no=docNoFor('QT',ord.id)} // ถ้าขอเลขจากระบบไม่ได้ ใช้เลขอ้างอิงจากรหัสคำสั่งซื้อ
  openDoc(docHtml({type:'quote',no:no,date:dmy(new Date()),
   buyer:t?{name:c.taxName,addr:c.taxAddr,taxId:String(c.taxId).replace(/\D/g,''),tel:c.phone}:{name:c.name,addr:c.fa,tel:c.phone},
   lines:doneItems.map(i=>({name:i.p.name,label:i.v?vlabel(i.v):'',qty:i.qty,unit:qunit(i.v)})),
   note:'เอกสารนี้จัดทำจากคำสั่งซื้อทางเว็บไซต์ ราคาและค่าจัดส่งยืนยันกับบริษัทผ่านแชต Facebook'+(t?'\nผู้สั่งขอใบกำกับภาษี บริษัทจะออกให้เมื่อตกลงราคาและจัดส่งเรียบร้อย':'')}));
+ docBusy=false;toast('พร้อมแล้ว',600);
 }
 function calcHtml(){
  const l=doneItems;if(!l.length)return'';
@@ -366,8 +369,10 @@ async function doTrack(){
  tk.busy=false;render();
 }
 async function openAbb(n){
- const o=tk.res&&tk.res.orders&&tk.res.orders[n];if(!o)return;
- let no;try{no=(await Service.docNo('taxabb',{orderId:o.orderId,name:o.name,phone:o.phone})).no}catch(e){toast(friendly(e.message)||'ขอเลขที่เอกสารไม่สำเร็จ ลองใหม่อีกครั้ง',5000);return}
+ const o=tk.res&&tk.res.orders&&tk.res.orders[n];if(!o||docBusy)return;
+ docBusy=true;toast('กำลังเตรียมใบกำกับภาษี…',30000);
+ let no;try{no=(await Service.docNo('taxabb',{orderId:o.orderId,name:o.name,phone:o.phone})).no}catch(e){docBusy=false;toast(friendly(e.message)||'ขอเลขที่เอกสารไม่สำเร็จ ลองใหม่อีกครั้ง',5000);return}
+ docBusy=false;toast('พร้อมแล้ว',600);
  openDoc(docHtml({type:'taxabb',no:no,date:ymd(o.shippedAt),stamp:true,buyer:{name:o.name,tel:o.phone},
   lines:(o.items||[]).map(i=>({name:i.name,label:i.label,qty:i.qty,unit:i.unit,price:i.price}))}));
 }
