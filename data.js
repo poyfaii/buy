@@ -1,6 +1,6 @@
 // data.js — ข้อมูลและฟังก์ชันที่ใช้ร่วมกัน (หน้าร้าน + หน้าผู้ดูแล)
 // ถ้าจะเปลี่ยนที่เก็บข้อมูลเป็น Google Sheets / Firebase / ฐานข้อมูล ให้แก้เฉพาะ Service ด้านล่าง
-const WEB_VER='v25';
+const WEB_VER='v27';
 const IS_ADMIN=/admin/i.test(location.pathname);
 const KEY='mdr_data_v1',CKEY='mdr_cart_v1',UKEY='mdr_cust_v1',MAXV=5;
 const MSG_URL='https://m.me/61573351996765'; // ลิงก์เปิดแชต Messenger ของเพจโดยตรง (ลูกค้ากดแล้วเข้าหน้าแชตเลย)
@@ -149,6 +149,9 @@ let CRED=null;
 try{CRED=JSON.parse(sessionStorage.getItem(CREDKEY))}catch(e){}
 // สถานะคำสั่งซื้อ (มี 2 แบบ) — สถานะว่าง/"ใหม่" ของออเดอร์เก่านับเป็นรอจัดเตรียมและจัดส่ง
 const ST_WAIT='รอจัดเตรียมและจัดส่ง',ST_SHIP='จัดส่งแล้ว',TRACK_DAYS=3;
+// สถานะการชำระเงิน (แยกจากสถานะจัดส่ง) ว่าง = รอชำระเงิน
+const ST_UNPAID='รอชำระเงิน',ST_PAID='ชำระแล้ว';
+const payText=s=>String(s==null?'':s).trim()===ST_PAID?ST_PAID:ST_UNPAID;
 const stText=s=>{s=String(s==null?'':s).trim();return s===ST_SHIP?ST_SHIP:s==='ยกเลิก'?'ยกเลิก':ST_WAIT};
 
 // โหมดทดลอง (ยังไม่ต่อชีต): ทะเบียนเลขที่เอกสารเก็บในเครื่อง ใช้รูปแบบเดียวกับของจริง
@@ -196,7 +199,7 @@ const Service={
  },
  async placeOrder(o){
   if(!REMOTE){
-   const a=localOrders().filter(x=>x.orderId!==o.orderId);a.push(Object.assign({createdAt:new Date().toISOString().slice(0,19).replace('T',' '),status:ST_WAIT,shippedAt:''},o));
+   const a=localOrders().filter(x=>x.orderId!==o.orderId);a.push(Object.assign({createdAt:new Date().toISOString().slice(0,19).replace('T',' '),status:ST_WAIT,shippedAt:'',payStatus:ST_UNPAID},o));
    try{localStorage.setItem(ORDKEY,JSON.stringify(a.slice(-200)))}catch(e){throw new Error('พื้นที่เก็บข้อมูลเต็ม')}
    return{ok:true,orderId:o.orderId};
   }
@@ -219,7 +222,7 @@ const Service={
   if(!REMOTE){
    const p=normPhone(phone),n=nameKey(name),since=Date.now()-TRACK_DAYS*86400000;
    const l=localOrders().filter(x=>normPhone(x.phone)===p&&n&&nameKey(x.name)===n&&stText(x.status)!=='ยกเลิก'&&new Date(String(x.createdAt).replace(' ','T')).getTime()>=since);
-   const orders=l.slice(-10).reverse().map(x=>({orderId:x.orderId,createdAt:x.createdAt,name:x.name,phone:p,status:stText(x.status),shippedAt:x.shippedAt||'',items:x.items||[]}));
+   const orders=l.slice(-10).reverse().map(x=>({orderId:x.orderId,createdAt:x.createdAt,name:x.name,phone:p,status:stText(x.status),shippedAt:x.shippedAt||'',payStatus:payText(x.payStatus),items:x.items||[]}));
    return{ok:true,found:orders.length>0,orders,days:TRACK_DAYS};
   }
   return api({action:'track',phone:phone,name:name});
@@ -288,6 +291,18 @@ const Service={
  async voidDoc(docNo,reason){
   if(!REMOTE)return localDocs.void(docNo,reason);
   try{return await api(Object.assign({action:'voidDoc',docNo:docNo,reason:reason||''},CRED))}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
+ },
+ // แอดมินบันทึกรับชำระเงิน: info={pay:'paid'|'unpaid',method,paidAt,amount,note}
+ async setPay(orderId,info){
+  if(!REMOTE){
+   const a=localOrders(),o=a.find(x=>x.orderId===orderId);if(!o)throw new Error('ไม่พบคำสั่งซื้อนี้');
+   const paid=info.pay==='paid';
+   Object.assign(o,{payStatus:paid?ST_PAID:ST_UNPAID,paidAt:paid?(info.paidAt||new Date().toISOString().slice(0,10)):'',payMethod:paid?T(info.method):'',payAmount:paid&&info.amount!==''&&info.amount!=null?String(info.amount):'',payNote:paid?T(info.note):''});
+   try{localStorage.setItem(ORDKEY,JSON.stringify(a))}catch(e){throw new Error('พื้นที่เก็บข้อมูลเต็ม')}
+   return Object.assign({ok:true,orderId},{payStatus:o.payStatus,paidAt:o.paidAt,payMethod:o.payMethod,payAmount:o.payAmount,payNote:o.payNote});
+  }
+  try{return await api(Object.assign({action:'setPay',orderId:orderId},info,CRED))}
   catch(e){if(e.message==='unauthorized')Service.logout();throw e}
  },
  async save(d){

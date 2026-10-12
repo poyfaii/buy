@@ -54,17 +54,18 @@ function render(){
   ?`<div class="awrap" style="padding-top:20px"><div class="empty">${ic('info',44)}<p>${esc(loadErr)}</p><button class="btn pri lg" onclick="loadAdmin()">ลองใหม่</button><button class="btn" onclick="logout()">ออกจากระบบ</button></div></div>`
   :`<div class="awrap" style="padding-top:20px"><div class="sk" style="aspect-ratio:auto;height:220px"></div></div>`;return}
  $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.gif" alt=""><h1 class="brand"><b>จัดการสินค้า</b></h1><a class="swbtn" href="index.html">${ic('store',18)}<span class="t">หน้าร้านลูกค้า</span></a><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ">${ic('logout')}</button></div></header>
- <main class="awrap">${tabs()}${aview==='edit'?editView():aview==='set'?setView():aview==='ord'?ordView():aview==='doc'?docView():aview==='ship'?shipView():listView()}</main>`;
+ <main class="awrap">${tabs()}${aview==='edit'?editView():aview==='set'?setView():aview==='ord'?ordView():aview==='rep'?repView():aview==='dreg'?dregView():aview==='doc'?docView():aview==='ship'?shipView():aview==='pay'?payView():listView()}</main>`;
  if(aview==='list')drawList();
+ const on=document.querySelector('.tabs a.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'center',block:'nearest'})}catch(e){}
 }
 function tabs(){
  const list=aview==='list'||(aview==='edit'&&draft&&!draft.isNew),nw=aview==='edit'&&draft&&draft.isNew;
- return `<nav class="tabs" aria-label="เมนูผู้ดูแล"><a href="#" class="${list?'on':''}" onclick="return nav('list')">สินค้า</a><a href="#" class="${nw?'on':''}" onclick="return nav('new')">เพิ่มสินค้า</a><a href="#" class="${aview==='ord'?'on':''}" onclick="return nav('ord')">คำสั่งซื้อ</a><a href="#" class="${aview==='set'?'on':''}" onclick="return nav('set')">ตั้งค่า</a></nav>`;
+ return `<nav class="tabs" aria-label="เมนูผู้ดูแล"><a href="#" class="${list?'on':''}" onclick="return nav('list')">สินค้า</a><a href="#" class="${nw?'on':''}" onclick="return nav('new')">เพิ่มสินค้า</a><a href="#" class="${aview==='ord'?'on':''}" onclick="return nav('ord')">คำสั่งซื้อ</a><a href="#" class="${aview==='dreg'?'on':''}" onclick="return nav('dreg')">เอกสาร</a><a href="#" class="${aview==='rep'?'on':''}" onclick="return nav('rep')">รายงาน</a><a href="#" class="${aview==='set'?'on':''}" onclick="return nav('set')">ตั้งค่า</a></nav>`;
 }
 function nav(t){
  if(aview==='edit'&&dirty&&!confirm('ยังไม่ได้บันทึกการเปลี่ยนแปลง ออกจากหน้านี้หรือไม่?'))return false;
  dirty=false;
- if(t==='new')newP();else{draft=null;aview=t;render();if(t==='ord')loadOrders()}
+ if(t==='new')newP();else{draft=null;aview=t;render();if(t==='ord'||t==='rep')loadOrders();if(t==='dreg')loadDocList()}
  scrollTo(0,0);return false;
 }
 
@@ -208,26 +209,27 @@ async function saveP(again){
 async function loadOrders(){
  oerr='';ords=null;render();
  try{ords=await Service.listOrders()}catch(e){if(e.message==='unauthorized'){logout();return}oerr=e.message||'โหลดคำสั่งซื้อไม่ได้'}
- if(aview==='ord')render();
+ if(aview==='ord'||aview==='rep')render();
 }
 const oaddr=o=>[o.addr,(o.prov==='กรุงเทพมหานคร'?'แขวง':'ตำบล')+(o.tam||''),(o.prov==='กรุงเทพมหานคร'?'เขต':'อำเภอ')+(o.amp||''),(o.prov==='กรุงเทพมหานคร'?'':'จ.')+(o.prov||''),o.zip].filter(Boolean).join(' ');
 function ordView(){
  if(oerr)return `<div class="empty">${ic('info',44)}<p>${esc(oerr)}</p><button class="btn pri" onclick="loadOrders()">ลองใหม่</button></div>`;
  if(!ords)return `<div class="sk" style="aspect-ratio:auto;height:160px;margin-top:14px"></div>`;
  const l=fOrds();
- const cn=k=>ords.filter(o=>k==='all'||stText(o.status)===k).length;
+ const cn=k=>ords.filter(o=>ofMatch(o,k)).length;
  return `<div class="lhead"><h2 class="h2">คำสั่งซื้อล่าสุด</h2><button class="btn sm" onclick="loadOrders()">รีเฟรช</button></div>
  <div class="search">${ic('search')}<input class="inp" type="search" autocomplete="off" aria-label="ค้นหาคำสั่งซื้อ" placeholder="ค้นหาชื่อ / เบอร์ / เลขที่" value="${esc(oq)}" oninput="oq=this.value;$('#olist').innerHTML=ordRows()"></div>
- <div class="cats" role="group" aria-label="กรองสถานะ">${[['all','ทั้งหมด'],[ST_WAIT,ST_WAIT],[ST_SHIP,ST_SHIP]].map(c=>`<button class="cat" aria-pressed="${ofl===c[0]}" onclick="ofl='${c[0]}';render()">${esc(c[1])} (${cn(c[0])})</button>`).join('')}</div>
+ <div class="cats" role="group" aria-label="กรองสถานะ">${[['all','ทั้งหมด'],[ST_WAIT,ST_WAIT],[ST_SHIP,ST_SHIP],['unpaid','ค้างชำระ']].map(c=>`<button class="cat" aria-pressed="${ofl===c[0]}" onclick="ofl='${c[0]}';render()">${esc(c[1])} (${cn(c[0])})</button>`).join('')}</div>
  <div class="gmeta">แสดง ${Math.min(l.length,200)} จาก ${ords.length} รายการ</div><div id="olist" class="alist">${ordRows()}</div>`;
 }
-function fOrds(){const k=oq.trim().toLowerCase();return(ords||[]).filter(o=>(ofl==='all'||stText(o.status)===ofl)&&(!k||[o.name,o.phone,o.orderId].some(x=>String(x||'').toLowerCase().includes(k))))}
+const ofMatch=(o,k)=>k==='all'||(k==='unpaid'?(payText(o.payStatus)===ST_UNPAID&&stText(o.status)!=='ยกเลิก'):stText(o.status)===k);
+function fOrds(){const k=oq.trim().toLowerCase();return(ords||[]).filter(o=>ofMatch(o,ofl)&&(!k||[o.name,o.phone,o.orderId].some(x=>String(x||'').toLowerCase().includes(k))))}
 function ordRows(){
  const l=fOrds();
  if(!l.length)return `<div class="empty">${ic('box',44)}<p>${ords&&ords.length?'ไม่พบรายการที่ค้นหา':'ยังไม่มีคำสั่งซื้อ'}</p></div>`;
  return l.map(o=>{const op=oopen===o.orderId,n=(o.items||[]).length;
-  return `<div class="aitem"><button class="rmain" style="width:100%;padding:12px" onclick="oopen=oopen==='${esc(o.orderId)}'?null:'${esc(o.orderId)}';$('#olist').innerHTML=ordRows()" aria-expanded="${op}"><span style="min-width:0"><span class="rname">${esc(o.name)} · ${esc(o.phone)}</span><span class="rmeta">${esc(o.orderId)} · ${esc(String(o.createdAt||'').slice(0,16))} · ${n} รายการ · ${stBadge(stText(o.status))}</span></span></button>
-  ${op?`<div class="racts" style="display:block;padding:0 14px 14px"><p class="mu">${esc(oaddr(o))}</p>${o.note?`<p class="mu" style="white-space:pre-line">หมายเหตุ: ${esc(o.note)}</p>`:''}${(o.items||[]).map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${esc(i.qty)}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}<div class="stack" style="margin-top:12px">${stText(o.status)===ST_SHIP?`<p class="hint" style="margin:0">จัดส่งเมื่อ ${esc(String(o.shippedAt||'').slice(0,16))}</p><button class="btn" onclick="setWait('${esc(o.orderId)}')">ยกเลิกสถานะจัดส่ง (กลับเป็นรอจัดเตรียมและจัดส่ง)</button>`:`<button class="btn pri" onclick="startShip('${esc(o.orderId)}')">จัดส่งแล้ว (ตกลงราคา / ยืนยันราคา)</button>`}
+  return `<div class="aitem"><button class="rmain" style="width:100%;padding:12px" onclick="oopen=oopen==='${esc(o.orderId)}'?null:'${esc(o.orderId)}';$('#olist').innerHTML=ordRows()" aria-expanded="${op}"><span style="min-width:0"><span class="rname">${esc(o.name)} · ${esc(o.phone)}</span><span class="rmeta">${esc(o.orderId)} · ${esc(String(o.createdAt||'').slice(0,16))} · ${n} รายการ · ${stBadge(stText(o.status))} ${payBadge(o)}</span></span></button>
+  ${op?`<div class="racts" style="display:block;padding:0 14px 14px"><p class="mu">${esc(oaddr(o))}</p>${o.note?`<p class="mu" style="white-space:pre-line">หมายเหตุ: ${esc(o.note)}</p>`:''}${(o.items||[]).map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${esc(i.qty)}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}${payBlock(o)}<div class="stack" style="margin-top:12px">${stText(o.status)===ST_SHIP?`<p class="hint" style="margin:0">จัดส่งเมื่อ ${esc(String(o.shippedAt||'').slice(0,16))}</p><button class="btn" onclick="setWait('${esc(o.orderId)}')">ยกเลิกสถานะจัดส่ง (กลับเป็นรอจัดเตรียมและจัดส่ง)</button>`:`<button class="btn pri" onclick="startShip('${esc(o.orderId)}')">จัดส่งแล้ว (ตกลงราคา / ยืนยันราคา)</button>`}
   <button class="btn" onclick="startDoc('${esc(o.orderId)}')">ออกเอกสาร</button>
   <button class="btn" onclick="startDoc('${esc(o.orderId)}','taxabb')">ใบกำกับภาษีอย่างย่อ</button></div></div>`:''}</div>`}).join('');
 }
@@ -295,6 +297,7 @@ init();
 
 /* ---------- ยืนยันราคา + จัดส่ง / ออกเอกสารเป็นขั้นตอน ---------- */
 const stBadge=st=>`<span class="stb ${st===ST_SHIP?'ok':'wait'}">${esc(st)}</span>`;
+const payBadge=o=>{const p=payText(o.payStatus);return `<span class="stb ${p===ST_PAID?'ok':'wait'}">${p===ST_PAID?'ชำระแล้ว':'รอชำระเงิน'}</span>`};
 const okN=x=>x!==''&&x!=null&&!isNaN(Number(x));
 function findV(i){
  const p=(D.products||[]).find(x=>x.id===i.pid)||(D.products||[]).find(x=>x.name===i.name);if(!p)return null;
@@ -330,6 +333,40 @@ async function setWait(id){
  catch(e){toast('บันทึกไม่สำเร็จ: '+friendly(e.message),6000)}
  render();
 }
+// ----- รับชำระเงิน (บันทึกหลังตกลงราคา/ได้รับสลิปทางแชต) -----
+const PAY_METHODS=['โอนเงิน','เงินสด','เก็บเงินปลายทาง'];
+const ordTotal=o=>{const l=linesOf(o);return l.length&&l.every(x=>okN(x.price))?Math.round(l.reduce((t,x)=>t+Number(x.price)*Number(x.qty),0)*100)/100:null};
+function payBlock(o){
+ const ok=payText(o.payStatus)===ST_PAID;
+ return `<div class="payb ${ok?'ok':''}"><b>การชำระเงิน: ${ok?'ชำระแล้ว':'รอชำระเงิน'}</b>${ok?`<div class="mu">${esc(o.payMethod||'-')} · ${esc(o.paidAt||'')}${o.payAmount!==''&&o.payAmount!=null?' · '+Number(o.payAmount).toLocaleString('th-TH',{minimumFractionDigits:2})+' บาท':''}${o.payNote?'<br>'+esc(o.payNote):''}</div><button class="btn sm" onclick="unPay('${esc(o.orderId)}')">ยกเลิกการรับชำระ</button>`:`<div class="mu">ได้รับเงินแล้ว (เช่น สลิปโอนในแชต) กดบันทึกรับชำระ</div><button class="btn pri sm" onclick="startPay('${esc(o.orderId)}')">บันทึกรับชำระเงิน</button>`}</div>`;
+}
+let pd=null,pBusy=false;
+const todayStr=()=>{const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`};
+function startPay(id){const o=ordOf(id);if(!o)return;const t=ordTotal(o);pd={oid:id,name:o.name,method:'โอนเงิน',date:todayStr(),amount:t==null?'':String(t),note:''};aview='pay';pushAdm();render();scrollTo(0,0)}
+function payView(){
+ if(!pd)return'';
+ return `<div class="lhead"><h2 class="h2">บันทึกรับชำระเงิน</h2><button class="btn sm" onclick="backOrd()">← กลับ</button></div>
+ <p class="mu" style="margin:6px 0 12px">คำสั่งซื้อ ${esc(pd.oid)} · ${esc(pd.name)}<br>บันทึกเมื่อได้รับเงินแล้ว (ระบบไม่เก็บรูปสลิป ใส่เลขอ้างอิงในหมายเหตุได้)</p>
+ <section class="sec"><span class="lbl">วิธีชำระ</span><div class="cats" role="group">${PAY_METHODS.map(m=>`<button class="cat" aria-pressed="${pd.method===m}" onclick="pd.method='${m}';render()">${m}</button>`).join('')}</div>
+ <div class="fld" style="margin-top:10px"><label class="lbl" for="pd_d">วันที่รับเงิน</label><input id="pd_d" class="inp" type="date" value="${esc(pd.date)}" oninput="pd.date=this.value"></div>
+ <div class="fld"><label class="lbl" for="pd_a">จำนวนเงินที่ได้รับ (บาท)</label><input id="pd_a" class="inp" inputmode="decimal" value="${esc(pd.amount)}" oninput="pd.amount=this.value"></div>
+ <div class="fld"><label class="lbl" for="pd_n">หมายเหตุ (เช่น ธนาคาร / เวลาในสลิป)</label><input id="pd_n" class="inp" value="${esc(pd.note)}" oninput="pd.note=this.value"></div></section>
+ <div class="stack"><button class="btn pri lg" onclick="confirmPay()"${pBusy?' disabled':''}>${pBusy?'กำลังบันทึก…':'ยืนยันรับชำระเงิน'}</button></div>`;
+}
+async function confirmPay(){
+ if(!pd||pBusy)return;
+ if(pd.amount!==''&&!okN(pd.amount)){toast('จำนวนเงินต้องเป็นตัวเลข');return}
+ pBusy=true;render();
+ try{const r=await Service.setPay(pd.oid,{pay:'paid',method:pd.method,paidAt:pd.date,amount:pd.amount,note:T(pd.note)});const o=ordOf(pd.oid);if(o)Object.assign(o,{payStatus:r.payStatus,paidAt:r.paidAt,payMethod:r.payMethod,payAmount:r.payAmount,payNote:r.payNote});toast('บันทึกรับชำระเงินแล้ว');pBusy=false;backOrd();return}
+ catch(e){toast('บันทึกไม่สำเร็จ: '+friendly(e.message),6000)}
+ pBusy=false;render();
+}
+async function unPay(id){
+ if(!confirm('ยกเลิกการรับชำระ กลับเป็น "รอชำระเงิน" หรือไม่?'))return;
+ try{const r=await Service.setPay(id,{pay:'unpaid'});const o=ordOf(id);if(o)Object.assign(o,{payStatus:r.payStatus,paidAt:'',payMethod:'',payAmount:'',payNote:''});toast('ยกเลิกการรับชำระแล้ว')}
+ catch(e){toast('ทำรายการไม่สำเร็จ: '+friendly(e.message),6000)}
+ render();
+}
 // ----- ออกเอกสาร: ขั้น 1 เลือกประเภท > ขั้น 2 กรอก/ตรวจข้อมูล > ขั้น 3 ตัวอย่าง พิมพ์ / PDF -----
 let dd=null;
 // ย้อนกลับจากหน้าย่อย (ตกลงราคา/ออกเอกสาร) ไปรายการคำสั่งซื้อ — ใช้ร่วมกับปุ่มย้อนกลับของมือถือ/เบราว์เซอร์
@@ -337,7 +374,7 @@ function pushAdm(){try{history.pushState({mdAdm:1},'')}catch(e){}}
 function backOrd(){if(history.state&&history.state.mdAdm){history.back();return}aview='ord';render();scrollTo(0,0)}
 window.addEventListener('popstate',()=>{
  if(history.state&&history.state.mdAdm)return; // ยังอยู่ในหน้าย่อย (เช่น เพิ่งปิดตัวอย่างเอกสาร)
- if(aview==='doc'||aview==='ship'){aview='ord';render();scrollTo(0,0)}
+ if(aview==='doc'||aview==='ship'||aview==='pay'){aview='ord';render();scrollTo(0,0)}
 });
 function startDoc(id,type){
  const o=ordOf(id);if(!o)return;
@@ -386,7 +423,7 @@ function docView(){
   return `<div class="lhead"><h2 class="h2">ออกเอกสาร</h2><button class="btn sm" onclick="backOrd()">← กลับ</button></div>
  <p class="mu" style="margin:6px 0 12px">คำสั่งซื้อ ${esc(d.oid)} · ${esc(d.name)}</p>
  <div class="dtype">${DOC_ORDER.map(k=>{const t=DOC_TYPES[k],x=actDoc(d,k),rec=(d.req&&k==='taxfull')||(!d.req&&k==='receipt');
-  return `<div class="dcard ${x?'done':rec?'rec':''}"><b>${esc(t.t)}${!x&&rec?`<span class="rt">${d.req?'ลูกค้าขอใบกำกับภาษี':'แนะนำ'}</span>`:''}</b><span class="mu">${esc(t.d)}</span>
+  return `<div class="dcard ${x?'done':rec?'rec':''}"><b>${esc(t.t)}${!x&&rec?`<span class="rt">${d.req?'ลูกค้าขอใบกำกับภาษี':'แนะนำ'}</span>`:''}</b><span class="mu">${esc(t.d)}</span>${(k==='receipt'||k==='taxfull')&&!x&&ordOf(d.oid)&&payText(ordOf(d.oid).payStatus)!==ST_PAID?'<span class="mu" style="color:#a15c00">ยังไม่ได้บันทึกรับชำระเงิน</span>':''}
   ${x?`<div class="dno">ออกแล้ว เลขที่ <b>${esc(x.no)}</b><small>${esc(x.issuedAt)}</small></div><div class="drow"><button class="btn pri" onclick="viewIssued('${k}')">ดู / พิมพ์ / PDF</button><button class="btn" onclick="reissueDoc('${k}')">ยกเลิกแล้วออกใหม่</button></div>`
   :`<div class="drow"><button class="btn pri" onclick="pickDoc('${k}')">ออกเอกสาร</button></div>`}</div>`}).join('')}</div>
  <p class="hint">ใบที่ออกแล้วจะเปิดดูได้เหมือนเดิมทุกครั้ง แก้ไม่ได้ ถ้าต้องแก้ ให้กด "ยกเลิกแล้วออกใหม่" ระบบจะเก็บเลขเดิมไว้เป็น "ยกเลิก" แล้วออกเลขถัดไปให้</p>

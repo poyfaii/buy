@@ -343,6 +343,7 @@ function doneView(){
 /* ---------- ตรวจสอบสถานะคำสั่งซื้อ (ชื่อ + เบอร์โทร ย้อนหลัง 3 วัน) ---------- */
 let tk={name:'',phone:'',busy:false,res:null,err:''};
 const stBadge=st=>`<span class="stb ${st===ST_SHIP?'ok':'wait'}">${esc(st)}</span>`;
+const payBadge=p=>{p=payText(p);return `<span class="stb ${p===ST_PAID?'ok':'wait'}">${p===ST_PAID?'ชำระแล้ว':'รอชำระเงิน'}</span>`};
 const ymd=t=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(t||''));return m?`${m[3]}/${m[2]}/${m[1]}`:dmy(new Date())};
 const allPriced=l=>(l||[]).length>0&&l.every(i=>i.price!==''&&i.price!=null&&!isNaN(Number(i.price)));
 function trackView(){
@@ -355,10 +356,10 @@ function trackView(){
  <button class="btn pri lg w" style="margin-top:16px" onclick="doTrack()"${tk.busy?' disabled':''}>${tk.busy?'กำลังตรวจสอบ…':ic('search')+' ตรวจสอบสถานะ'}</button></section>
  ${r&&!r.found?`<div class="note">${ic('info',18)}<span>ไม่พบคำสั่งซื้อย้อนหลัง ${TRACK_DAYS} วันที่ตรงกับชื่อและเบอร์นี้ ตรวจสอบการสะกด หรือสอบถามทางแชต Facebook ${telLink('')}</span></div>`:''}
  ${os.map((o,n)=>{const sh=o.status===ST_SHIP;return `<section class="sec"><div class="hhead"><b>เลขที่ ${esc(o.orderId)}</b><span class="mu">${esc(fmtDate(o.createdAt))}</span></div>
-  <div style="margin:6px 0 10px">${stBadge(o.status)}</div>
+  <div style="margin:6px 0 10px">${stBadge(o.status)} ${payBadge(o.payStatus)}</div>
   ${(o.items||[]).map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${esc(i.qty)}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}
   ${sh?(allPriced(o.items)?`<div class="stack" style="margin-top:12px"><button class="btn pri" onclick="openAbb(${n})">ดูใบกำกับภาษีอย่างย่อ / บันทึกเป็น PDF</button></div>`:`<p class="hint">จัดส่งเรียบร้อยแล้ว หากต้องการใบกำกับภาษี สอบถามทางแชต Facebook</p>`)
-  :`<p class="hint">ทางร้านกำลังจัดเตรียมสินค้า ราคาและค่าจัดส่งคุยต่อในแชต Facebook ใบกำกับภาษีอย่างย่อจะดูได้เมื่อสถานะเป็น "จัดส่งแล้ว"</p>`}</section>`}).join('')}`;
+  :`<p class="hint">ทางร้านกำลังจัดเตรียมสินค้า ราคา ค่าจัดส่ง และการโอนเงินคุยต่อในแชต Facebook (ทางร้านจะบันทึกสถานะชำระเงินให้หลังได้รับเงิน) ใบกำกับภาษีอย่างย่อจะดูได้เมื่อสถานะเป็น "จัดส่งแล้ว"</p>`}</section>`}).join('')}`;
 }
 async function doTrack(){
  if(tk.busy)return;
