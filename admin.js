@@ -2,7 +2,7 @@
 // รหัสผู้ดูแล: โหมดเชื่อม Google Sheets ตรวจที่ Code.gs / โหมดทดลองดูที่ config.js
 let authed=false,lerr='',lu='',loadErr='',logging=false,saving=false;
 try{authed=REMOTE?Service.hasSession():sessionStorage.getItem('mdr_admin_ok')==='1'}catch(e){}
-let ords=null,oerr='',oq='',oopen=null,draft=null,aview='list',aq='',af='all',as='order',menuId=null,dirty=false;
+let ords=null,oerr='',oq='',ofl='all',oopen=null,draft=null,aview='list',aq='',af='all',as='order',menuId=null,dirty=false;
 const sorted=()=>[...D.products].sort(bySort);
 const persist=async m=>{
  if(saving){toast('กำลังบันทึกอยู่ รอสักครู่แล้วลองใหม่');return false}
@@ -54,7 +54,7 @@ function render(){
   ?`<div class="awrap" style="padding-top:20px"><div class="empty">${ic('info',44)}<p>${esc(loadErr)}</p><button class="btn pri lg" onclick="loadAdmin()">ลองใหม่</button><button class="btn" onclick="logout()">ออกจากระบบ</button></div></div>`
   :`<div class="awrap" style="padding-top:20px"><div class="sk" style="aspect-ratio:auto;height:220px"></div></div>`;return}
  $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.gif" alt=""><h1 class="brand"><b>จัดการสินค้า</b></h1><a class="swbtn" href="index.html">${ic('store',18)}<span class="t">หน้าร้านลูกค้า</span></a><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ">${ic('logout')}</button></div></header>
- <main class="awrap">${tabs()}${aview==='edit'?editView():aview==='set'?setView():aview==='ord'?ordView():aview==='doc'?docView():listView()}</main>`;
+ <main class="awrap">${tabs()}${aview==='edit'?editView():aview==='set'?setView():aview==='ord'?ordView():aview==='doc'?docView():aview==='ship'?shipView():listView()}</main>`;
  if(aview==='list')drawList();
 }
 function tabs(){
@@ -214,17 +214,22 @@ const oaddr=o=>[o.addr,(o.prov==='กรุงเทพมหานคร'?'แ�
 function ordView(){
  if(oerr)return `<div class="empty">${ic('info',44)}<p>${esc(oerr)}</p><button class="btn pri" onclick="loadOrders()">ลองใหม่</button></div>`;
  if(!ords)return `<div class="sk" style="aspect-ratio:auto;height:160px;margin-top:14px"></div>`;
- const k=oq.trim().toLowerCase(),l=ords.filter(o=>!k||[o.name,o.phone,o.orderId].some(x=>String(x||'').toLowerCase().includes(k)));
+ const l=fOrds();
+ const cn=k=>ords.filter(o=>k==='all'||stText(o.status)===k).length;
  return `<div class="lhead"><h2 class="h2">คำสั่งซื้อล่าสุด</h2><button class="btn sm" onclick="loadOrders()">รีเฟรช</button></div>
  <div class="search">${ic('search')}<input class="inp" type="search" autocomplete="off" aria-label="ค้นหาคำสั่งซื้อ" placeholder="ค้นหาชื่อ / เบอร์ / เลขที่" value="${esc(oq)}" oninput="oq=this.value;$('#olist').innerHTML=ordRows()"></div>
+ <div class="cats" role="group" aria-label="กรองสถานะ">${[['all','ทั้งหมด'],[ST_WAIT,ST_WAIT],[ST_SHIP,ST_SHIP]].map(c=>`<button class="cat" aria-pressed="${ofl===c[0]}" onclick="ofl='${c[0]}';render()">${esc(c[1])} (${cn(c[0])})</button>`).join('')}</div>
  <div class="gmeta">แสดง ${Math.min(l.length,200)} จาก ${ords.length} รายการ</div><div id="olist" class="alist">${ordRows()}</div>`;
 }
+function fOrds(){const k=oq.trim().toLowerCase();return(ords||[]).filter(o=>(ofl==='all'||stText(o.status)===ofl)&&(!k||[o.name,o.phone,o.orderId].some(x=>String(x||'').toLowerCase().includes(k))))}
 function ordRows(){
- const k=oq.trim().toLowerCase(),l=(ords||[]).filter(o=>!k||[o.name,o.phone,o.orderId].some(x=>String(x||'').toLowerCase().includes(k)));
+ const l=fOrds();
  if(!l.length)return `<div class="empty">${ic('box',44)}<p>${ords&&ords.length?'ไม่พบรายการที่ค้นหา':'ยังไม่มีคำสั่งซื้อ'}</p></div>`;
  return l.map(o=>{const op=oopen===o.orderId,n=(o.items||[]).length;
-  return `<div class="aitem"><button class="rmain" style="width:100%;padding:12px" onclick="oopen=oopen==='${esc(o.orderId)}'?null:'${esc(o.orderId)}';$('#olist').innerHTML=ordRows()" aria-expanded="${op}"><span style="min-width:0"><span class="rname">${esc(o.name)} · ${esc(o.phone)}</span><span class="rmeta">${esc(o.orderId)} · ${esc(String(o.createdAt||'').slice(0,16))} · ${n} รายการ${o.status?' · '+esc(o.status):''}</span></span></button>
-  ${op?`<div class="racts" style="display:block;padding:0 14px 14px"><p class="mu">${esc(oaddr(o))}</p>${o.note?`<p class="mu" style="white-space:pre-line">หมายเหตุ: ${esc(o.note)}</p>`:''}${(o.items||[]).map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${esc(i.qty)}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}<div style="margin-top:12px"><button class="btn pri" onclick="startDoc('${esc(o.orderId)}')">ออกเอกสาร (ใบแจ้งหนี้ / ใบกำกับภาษี)</button></div></div>`:''}</div>`}).join('');
+  return `<div class="aitem"><button class="rmain" style="width:100%;padding:12px" onclick="oopen=oopen==='${esc(o.orderId)}'?null:'${esc(o.orderId)}';$('#olist').innerHTML=ordRows()" aria-expanded="${op}"><span style="min-width:0"><span class="rname">${esc(o.name)} · ${esc(o.phone)}</span><span class="rmeta">${esc(o.orderId)} · ${esc(String(o.createdAt||'').slice(0,16))} · ${n} รายการ · ${stBadge(stText(o.status))}</span></span></button>
+  ${op?`<div class="racts" style="display:block;padding:0 14px 14px"><p class="mu">${esc(oaddr(o))}</p>${o.note?`<p class="mu" style="white-space:pre-line">หมายเหตุ: ${esc(o.note)}</p>`:''}${(o.items||[]).map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${esc(i.qty)}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}<div class="stack" style="margin-top:12px">${stText(o.status)===ST_SHIP?`<p class="hint" style="margin:0">จัดส่งเมื่อ ${esc(String(o.shippedAt||'').slice(0,16))}</p><button class="btn" onclick="setWait('${esc(o.orderId)}')">ยกเลิกสถานะจัดส่ง (กลับเป็นรอจัดเตรียมและจัดส่ง)</button>`:`<button class="btn pri" onclick="startShip('${esc(o.orderId)}')">จัดส่งแล้ว (ตกลงราคา / ยืนยันราคา)</button>`}
+  <button class="btn" onclick="startDoc('${esc(o.orderId)}')">ออกเอกสาร (ใบประมาณการ / ใบส่งสินค้า / ใบเสร็จ / ใบกำกับภาษี)</button>
+  <button class="btn" onclick="startDoc('${esc(o.orderId)}','taxabb')">ใบกำกับภาษีอย่างย่อ (ออกอัตโนมัติ)</button></div></div>`:''}</div>`}).join('');
 }
 
 /* ---------- ตั้งค่า ---------- */
@@ -288,40 +293,102 @@ function restore(inp){
 async function init(){if(authed)await loadAdmin();else render()}
 init();
 
-/* ---------- ออกเอกสาร (ใบสั่งซื้อ / ใบแจ้งหนี้ / ใบกำกับภาษี) ---------- */
-let dd=null;
-const seqNo=()=>{const x=new Date(),p=n=>String(n).padStart(2,'0'),k='mdr_docseq_'+x.getFullYear()+p(x.getMonth()+1)+p(x.getDate());let n=1;try{n=(+localStorage.getItem(k)||0)+1}catch(e){}return 'INV'+x.getFullYear()+p(x.getMonth()+1)+p(x.getDate())+String(n).padStart(4,'0')};
-const bumpSeq=no=>{const m=/^INV(\d{8})(\d{4})$/.exec(no);if(m)try{localStorage.setItem('mdr_docseq_'+m[1],String(+m[2]))}catch(e){}};
+/* ---------- ยืนยันราคา + จัดส่ง / ออกเอกสารเป็นขั้นตอน ---------- */
+const stBadge=st=>`<span class="stb ${st===ST_SHIP?'ok':'wait'}">${esc(st)}</span>`;
+const okN=x=>x!==''&&x!=null&&!isNaN(Number(x));
 function findV(i){
  const p=(D.products||[]).find(x=>x.id===i.pid)||(D.products||[]).find(x=>x.name===i.name);if(!p)return null;
  return (p.variants||[]).find(v=>v.id===i.vid)||(p.variants||[]).find(v=>vlabel(v)===i.label)||null;
 }
-function startDoc(id){
- const o=(ords||[]).find(x=>x.orderId===id);if(!o)return;
+// ราคาตั้งต้นของแต่ละรายการ: ราคาที่บันทึกไว้ในออเดอร์ ถ้าไม่มีใช้ราคาในรายการสินค้าตอนนี้
+function linesOf(o){return(o.items||[]).map(i=>{const v=findV(i);return{name:i.name,label:i.label||'',qty:i.qty,unit:i.unit||'',price:okN(i.price)?String(i.price):(v&&hasP(v)?String(v.price):'')}})}
+const ordOf=id=>(ords||[]).find(x=>x.orderId===id);
+let sd=null,sBusy=false;
+function startShip(id){const o=ordOf(id);if(!o)return;sd={oid:id,name:o.name,lines:linesOf(o)};aview='ship';render();scrollTo(0,0)}
+function shipView(){
+ if(!sd)return'';
+ return `<div class="lhead"><h2 class="h2">ตกลงราคา และจัดส่ง</h2><button class="btn sm" onclick="aview='ord';render()">← กลับ</button></div>
+ <p class="mu" style="margin:6px 0 12px">คำสั่งซื้อ ${esc(sd.oid)} · ${esc(sd.name)}<br>กรอกราคาต่อหน่วยที่ตกลงกับลูกค้าแล้ว (ราคารวมภาษี) ระบบจะบันทึกไว้ใช้ออกใบกำกับภาษีอย่างย่อให้ลูกค้าอัตโนมัติ</p>
+ <section class="sec"><div class="dlines">${sd.lines.map((l,i)=>`<div class="dline"><span><b>${esc(l.name)}</b><small class="mu" style="display:block">${esc(l.label)}</small></span><span class="mu">${esc(l.qty)} ${esc(l.unit)}</span><input class="inp" inputmode="decimal" aria-label="ราคาต่อหน่วย ${esc(l.name)}" placeholder="ราคา/หน่วย" value="${esc(l.price)}" oninput="sd.lines[${i}].price=this.value"></div>`).join('')}</div></section>
+ <div class="stack"><button class="btn pri lg" onclick="confirmShip()"${sBusy?' disabled':''}>${sBusy?'กำลังบันทึก…':'ยืนยัน: ตกลงราคาและจัดส่งแล้ว'}</button></div>`;
+}
+async function confirmShip(){
+ if(!sd||sBusy)return;
+ const miss=sd.lines.filter(l=>!okN(T(l.price))).length;
+ if(miss&&!confirm(`ยังมี ${miss} รายการที่ไม่มีราคา จะออกใบกำกับภาษีอย่างย่อให้ลูกค้าไม่ได้ จนกว่าจะกรอกราคาครบ ดำเนินการต่อหรือไม่?`))return;
+ sBusy=true;render();
+ try{
+  const r=await Service.setStatus(sd.oid,'ship',sd.lines.map(l=>okN(T(l.price))?Number(T(l.price)):''));
+  const o=ordOf(sd.oid);if(o){o.status=r.status;o.shippedAt=r.shippedAt;o.items=r.items||o.items}
+  toast('บันทึกสถานะ "จัดส่งแล้ว" เรียบร้อย');aview='ord';
+ }catch(e){if(e.message==='unauthorized'){toast('หมดเวลาเข้าสู่ระบบ กรุณาเข้าใหม่');setTimeout(logout,300)}else toast('บันทึกไม่สำเร็จ: '+friendly(e.message),6000)}
+ sBusy=false;render();
+}
+async function setWait(id){
+ if(!confirm('เปลี่ยนกลับเป็น "รอจัดเตรียมและจัดส่ง" หรือไม่?'))return;
+ try{const r=await Service.setStatus(id,'wait');const o=ordOf(id);if(o){o.status=r.status;o.shippedAt=''}toast('เปลี่ยนสถานะแล้ว')}
+ catch(e){toast('บันทึกไม่สำเร็จ: '+friendly(e.message),6000)}
+ render();
+}
+// ----- ออกเอกสาร: ขั้น 1 เลือกประเภท > ขั้น 2 กรอก/ตรวจข้อมูล > ขั้น 3 ตัวอย่าง พิมพ์ / PDF -----
+let dd=null;
+function startDoc(id,type){
+ const o=ordOf(id);if(!o)return;
  const m=/\[ขอใบกำกับภาษี\] ชื่อ: (.*?) \| เลขประจำตัวผู้เสียภาษี: (\d+) \| ที่อยู่: (.*)/.exec(o.note||'');
- const plain=String(o.note||'').replace(/\n?\[ขอใบกำกับภาษี\].*/,'').trim();
- dd={oid:id,type:m?'tax':'invoice',no:seqNo(),date:dmy(new Date()),due:'',seller:'',
-  name:m?m[1]:o.name,addr:m?m[3]:oaddr(o),taxId:m?m[2]:'',tel:o.phone,note:plain?'หมายเหตุลูกค้า: '+plain:'',
-  lines:(o.items||[]).map(i=>{const v=findV(i);return{name:i.name,label:i.label||'',qty:i.qty,unit:i.unit||'',price:v&&hasP(v)?String(v.price):''}})};
- aview='doc';render();scrollTo(0,0);
+ const plain=String(o.note||'').replace(/\n?\[ขอใบกำกับภาษี\\].*/,'').replace(/\n?\[ขอใบกำกับภาษี\].*/,'').trim();
+ dd={oid:id,step:1,type:'',req:!!m,no:'',date:dmy(new Date()),shipDate:o.shippedAt?dmy(new Date(String(o.shippedAt).replace(' ','T'))):'',seller:'',showPrice:false,
+  name:m?m[1]:o.name,addr:m?m[3]:oaddr(o),taxId:m?m[2]:'',tel:o.phone,note:plain?'หมายเหตุลูกค้า: '+plain:'',lines:linesOf(o),issued:[],busy:false};
+ aview='doc';
+ loadIssued(id);
+ if(type)pickDoc(type);else{render();scrollTo(0,0)}
+}
+// เอกสารที่ออกแล้วของออเดอร์นี้ (มาจากทะเบียนเลขที่บนเซิร์ฟเวอร์)
+async function loadIssued(id){
+ try{const l=await Service.listDocs(id);if(dd&&dd.oid===id){dd.issued=l;if(aview==='doc'&&dd.step===1)render()}}catch(e){}
+}
+async function voidDocNo(no){
+ const why=prompt('ยกเลิกเลขที่ '+no+'\nเลขนี้จะยังอยู่ในทะเบียน (ไม่ถูกลบและไม่ถูกนำกลับมาใช้) ใส่เหตุผล (ไม่บังคับ):');
+ if(why===null)return;
+ try{await Service.voidDoc(no,why);toast('ยกเลิกเลขที่ '+no+' แล้ว');if(dd)await loadIssued(dd.oid);render()}
+ catch(e){toast('ยกเลิกไม่สำเร็จ: '+friendly(e.message),6000)}
+}
+const docTName=k=>(DOC_TYPES[k]||{}).t||k;
+const actDoc=(d,k)=>(d.issued||[]).find(x=>x.type===k&&x.status!=='ยกเลิก');
+function pickDoc(k){
+ const d=dd;if(!d)return;const T0=DOC_TYPES[k];
+ d.type=k;d.step=2;
+ if(k==='taxabb'){d.date=d.shipDate||d.date;if(d.lines.every(l=>okN(T(l.price)))){previewDoc();return}}
+ render();scrollTo(0,0);
 }
 function docView(){
  if(!dd)return '';
- const f=(k,l,o={})=>`<div class="${o.full?'full':''}"><label for="d_${k}">${l}</label>${o.area?`<textarea id="d_${k}" class="inp" rows="2" oninput="dd.${k}=this.value">${esc(dd[k])}</textarea>`:`<input id="d_${k}" class="inp" ${o.t?`type="${o.t}"`:''} value="${esc(dd[k])}" oninput="dd.${k}=this.value">`}</div>`;
- return `<div class="lhead"><h2 class="h2">ออกเอกสาร</h2><button class="btn sm" onclick="aview='ord';render()">← กลับ</button></div>
- <p class="mu" style="margin:6px 0 12px">ราคาต่อหน่วยกรอกเป็นราคารวมภาษีแล้ว ระบบแยกมูลค่าก่อนภาษีกับ VAT 7% และเขียนจำนวนเงินเป็นตัวอักษรให้อัตโนมัติ ต้องกรอกราคาครบทุกรายการจึงจะแสดงยอดรวม ตราประทับโลโก้บริษัทใส่ให้เองทุกใบ ถ้ากรอกชื่อผู้ขาย จะมีลายเซ็นตัวแทนผู้ขายร่วมด้วย</p>
+ const d=dd,T0=DOC_TYPES[d.type]||{};
+ if(d.step===1)return `<div class="lhead"><h2 class="h2">ออกเอกสาร</h2><button class="btn sm" onclick="aview='ord';render()">← กลับ</button></div>
+ <p class="mu" style="margin:6px 0 12px">ขั้นที่ 1 จาก 3 · เลือกประเภทเอกสาร (คำสั่งซื้อ ${esc(d.oid)})</p>
+ <div class="dtype">${DOC_ORDER.map(k=>{const t=DOC_TYPES[k],rec=(d.req&&k==='taxfull')||(!d.req&&k==='receipt');return `<button class="${rec?'rec':''}" onclick="pickDoc('${k}')"><b>${esc(t.t)}${actDoc(d,k)?`<span class="rt">ออกแล้ว ${esc(actDoc(d,k).no)}</span>`:''}${rec?`<span class="rt">${d.req?'ลูกค้าขอใบกำกับภาษี':'แนะนำ'}</span>`:''}</b><span>${esc(t.d)}</span></button>`}).join('')}</div>
+ ${(d.issued||[]).length?`<section class="sec"><h3>เลขที่เอกสารที่ออกแล้วของคำสั่งซื้อนี้</h3>${d.issued.map(x=>`<div class="sumrow"><div><b${x.status==='ยกเลิก'?' style="text-decoration:line-through;opacity:.6"':''}>${esc(x.no)}</b><div class="mu">${esc(docTName(x.type))} · ${esc(x.issuedAt)}${x.status==='ยกเลิก'?' · ยกเลิกแล้ว'+(x.reason?' ('+esc(x.reason)+')':''):''}</div></div>${x.status==='ยกเลิก'?'':`<button class="btn sm" onclick="voidDocNo('${esc(x.no)}')">ยกเลิกเลขนี้</button>`}</div>`).join('')}<p class="hint">ออกซ้ำประเภทเดิม ระบบใช้เลขเดิม · ถ้าต้องการออกใหม่ ให้ยกเลิกเลขเดิมก่อน แล้วระบบจะแจกเลขถัดไป</p></section>`:''}`;
+ const f=(k,l,o={})=>`<div class="${o.full?'full':''}"><label for="d_${k}">${l}</label>${o.area?`<textarea id="d_${k}" class="inp" rows="2" oninput="dd.${k}=this.value">${esc(d[k])}</textarea>`:`<input id="d_${k}" class="inp" value="${esc(d[k])}" oninput="dd.${k}=this.value">`}</div>`;
+ const showP=T0.price||d.showPrice;
+ return `<div class="lhead"><h2 class="h2">${esc(T0.t)}</h2><button class="btn sm" onclick="dd.step=1;render()">← เลือกประเภทใหม่</button></div>
+ <p class="mu" style="margin:6px 0 12px">ขั้นที่ 2 จาก 3 · ตรวจและแก้ข้อมูลก่อนออกเอกสาร${T0.price?' — ราคาต่อหน่วยเป็นราคารวมภาษีแล้ว ระบบแยก VAT 7% และเขียนจำนวนเงินเป็นตัวอักษรให้':''}</p>
  <section class="sec"><div class="dform">
- <div class="full"><label for="d_type">ประเภทเอกสาร</label><select id="d_type" class="inp" onchange="dd.type=this.value">${Object.keys(DOC_TYPES).map(k=>`<option value="${k}"${dd.type===k?' selected':''}>${esc(DOC_TYPES[k].t)}</option>`).join('')}</select></div>
- ${f('no','เลขที่เอกสาร')}${f('date','วันที่')}${f('due','ครบกำหนด (ไม่บังคับ)')}${f('seller','ผู้ขาย / พนักงานขาย (ไม่บังคับ)')}
- ${f('name','ชื่อลูกค้า',{full:1})}${f('addr','ที่อยู่ลูกค้า',{full:1,area:1})}${f('taxId','เลขประจำตัวผู้เสียภาษีลูกค้า')}${f('tel','โทรศัพท์')}
+ <div><label for="d_no">เลขที่เอกสาร</label><input id="d_no" class="inp" readonly value="${esc(actDoc(d,d.type)?actDoc(d,d.type).no:'ออกให้อัตโนมัติเมื่อกดดูตัวอย่าง')}"></div>${f('date','วันที่')}${f('seller','ชื่อผู้ขาย (ลายเซ็นตัวแทน ไม่บังคับ)',{full:1})}
+ ${f('name',T0.buyerTax?'ชื่อลูกค้า / บริษัท':'ชื่อลูกค้า',{full:1})}${f('addr','ที่อยู่ลูกค้า',{full:1,area:1})}${T0.buyerTax?f('taxId','เลขประจำตัวผู้เสียภาษี (13 หลัก)'):''}${f('tel','โทรศัพท์')}
  </div></section>
- <section class="sec"><h3>รายการสินค้า</h3><div class="dlines">${dd.lines.map((l,i)=>`<div class="dline"><span><b>${esc(l.name)}</b><small class="mu" style="display:block">${esc(l.label)}</small></span><span class="mu">${esc(l.qty)} ${esc(l.unit)}</span><input class="inp" inputmode="decimal" aria-label="ราคาต่อหน่วย ${esc(l.name)}" placeholder="ราคา/หน่วย" value="${esc(l.price)}" oninput="dd.lines[${i}].price=this.value"></div>`).join('')}</div></section>
+ ${T0.k==='quote'?`<section class="sec"><label class="chk"><input type="checkbox" ${d.showPrice?'checked':''} onchange="dd.showPrice=this.checked;render()"> <span><b>แสดงราคาในใบประมาณการ</b></span></label></section>`:''}
+ <section class="sec"><h3>รายการสินค้า</h3><div class="dlines">${d.lines.map((l,i)=>`<div class="dline"><span><b>${esc(l.name)}</b><small class="mu" style="display:block">${esc(l.label)}</small></span><span class="mu">${esc(l.qty)} ${esc(l.unit)}</span>${showP?`<input class="inp" inputmode="decimal" aria-label="ราคาต่อหน่วย ${esc(l.name)}" placeholder="ราคา/หน่วย" value="${esc(l.price)}" oninput="dd.lines[${i}].price=this.value">`:'<span></span>'}</div>`).join('')}</div></section>
  <section class="sec">${f('note','หมายเหตุ',{full:1,area:1})}</section>
- <div class="stack"><button class="btn pri lg" onclick="previewDoc()">ดูตัวอย่าง / พิมพ์ / บันทึกเป็น PDF</button></div>`;
+ <div class="stack"><button class="btn pri lg" onclick="previewDoc()"${d.busy?' disabled':''}>ขั้นที่ 3: ดูตัวอย่าง / พิมพ์ / บันทึกเป็น PDF</button></div>`;
 }
-function previewDoc(){
- const d=dd;if(!d)return;
- openDoc(docHtml({type:d.type,no:T(d.no),date:T(d.date),due:T(d.due),seller:T(d.seller),buyer:{name:T(d.name),addr:T(d.addr),taxId:T(d.taxId),tel:T(d.tel)},
-  lines:d.lines.map(l=>({...l,price:T(l.price)})),note:T(d.note),unknownMark:'-',stamp:true}));
- bumpSeq(T(d.no));
+async function previewDoc(){
+ const d=dd;if(!d||d.busy)return;const T0=DOC_TYPES[d.type];
+ if(T0.price&&!d.lines.every(l=>okN(T(l.price)))){toast('กรุณากรอกราคาให้ครบทุกรายการ');return}
+ if(T0.buyerTax&&(!T(d.name)||!T(d.addr)||T(d.taxId).replace(/\D/g,'').length!==13)){toast('ใบกำกับภาษีเต็มรูปแบบต้องมีชื่อ ที่อยู่ และเลขประจำตัวผู้เสียภาษี 13 หลักของลูกค้า');return}
+ d.busy=true;
+ try{const r=await Service.issueDoc(d.type,d.oid);d.no=r.no}
+ catch(e){d.busy=false;toast('ออกเลขที่เอกสารไม่สำเร็จ: '+friendly(e.message),6000);return}
+ d.busy=false;loadIssued(d.oid);
+ openDoc(docHtml({type:d.type,no:d.no,date:T(d.date),seller:T(d.seller),showPrice:d.showPrice,stamp:true,
+  buyer:{name:T(d.name),addr:T(d.addr),taxId:T0.buyerTax?T(d.taxId).replace(/\D/g,''):'',tel:T(d.tel)},
+  lines:d.lines.map(l=>({...l,price:T(l.price)})),note:T(d.note),unknownMark:'-'}));
 }

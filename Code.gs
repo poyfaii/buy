@@ -11,7 +11,7 @@
  */
 
 // ===== รหัสเข้าหน้าแอดมิน (เปลี่ยนได้ที่นี่ แล้วทำให้ใช้งานได้ใหม่) =====
-const VERSION = 'v15-2026-10-10';
+const VERSION = 'v17-2026-10-12';
 const ADMIN_USER = 'admin';
 const ADMIN_PASS = '1234';
 
@@ -24,9 +24,18 @@ const VARIANT_HEADERS = ['id', 'productId', 'productName', 'sortOrder', 'size', 
 const SETTING_HEADERS = ['key', 'value'];
 const SHEET_ORDERS = 'Orders';
 const SHEET_CUSTOMERS = 'Customers';
-const ORDER_HEADERS = ['orderId', 'createdAt', 'name', 'phone', 'province', 'amphoe', 'tambon', 'zip', 'address', 'note', 'items', 'itemsJson', 'status'];
+const ORDER_HEADERS = ['orderId', 'createdAt', 'name', 'phone', 'province', 'amphoe', 'tambon', 'zip', 'address', 'note', 'items', 'itemsJson', 'status', 'shippedAt'];
 const CUSTOMER_HEADERS = ['phone', 'name', 'province', 'amphoe', 'tambon', 'zip', 'address', 'lastOrderId', 'lastOrderAt', 'lastItemsJson', 'orderCount'];
+const SHEET_DOCS = 'Documents';   // ทะเบียนเอกสารที่ออกแล้ว (ยกเลิกแทนลบ)
+const SHEET_COUNTERS = 'Counters'; // ตัวนับเลขที่เอกสารแยกตามชุด+เดือน
+const DOC_HEADERS = ['docNo', 'type', 'orderId', 'issuedAt', 'issuedBy', 'status', 'voidedAt', 'voidReason'];
+const COUNTER_HEADERS = ['key', 'last'];
+const DOC_PRE = { quote: 'QT', delivery: 'DN', receipt: 'RC', taxfull: 'INV', taxabb: 'ABB' };
 const MAX_ITEMS = 80;
+// สถานะคำสั่งซื้อ (มี 2 แบบ) — คำสั่งซื้อเก่าที่สถานะว่าง/"ใหม่" นับเป็นรอจัดเตรียมและจัดส่ง
+const ST_WAIT = 'รอจัดเตรียมและจัดส่ง';
+const ST_SHIP = 'จัดส่งแล้ว';
+const TRACK_DAYS = 3; // ลูกค้าตรวจสถานะได้ย้อนหลังกี่วัน
 const IMAGE_FOLDER = 'MaedonShop-Images';
 const SALES_CACHE_SECONDS = 45; // ยอดขายรีเฟรชเร็วกว่ารายการสินค้า (และล้างทันทีเมื่อมีออเดอร์ใหม่)
 const CACHE_SECONDS = 120; // ลูกค้าเห็นการแก้ไขในชีตภายในไม่เกินเวลานี้
@@ -37,7 +46,7 @@ function doGet(e) {
     const action = (e && e.parameter && e.parameter.action) || 'list';
     if (action === 'list') return json_(readAll_(false));
     if (action === 'sales') { const st = cachedSales_(); return json_({ ok: true, top: st.top, sales: st.sales }); }
-    if (action === 'ping') return json_({ ok: true, version: VERSION, features: ['sales', 'history3', 'price-always', 'variant-names'] }); // เปิด URL/exec?action=ping เพื่อเช็กว่าใช้โค้ดเวอร์ชันใหม่
+    if (action === 'ping') return json_({ ok: true, version: VERSION, features: ['sales', 'history3', 'price-always', 'variant-names', 'track', 'status', 'docno'] }); // เปิด URL/exec?action=ping เพื่อเช็กว่าใช้โค้ดเวอร์ชันใหม่
     return json_({ ok: false, error: 'unknown action' });
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message || err) });
@@ -50,11 +59,17 @@ function doPost(e) {
     // ลูกค้าส่งคำสั่งซื้อ / ดึงข้อมูลเดิม (ไม่ต้องล็อกอิน)
     if (b.action === 'order') return json_(saveOrder_(b.order));
     if (b.action === 'lookup') return json_(lookup_(b));
+    if (b.action === 'track') return json_(track_(b));
+    if (b.action === 'docNo') return json_(publicDocNo_(b));
     checkAuth_(b);
     if (b.action === 'login') return json_({ ok: true });
     if (b.action === 'listAll') return json_(readAll_(true));
     if (b.action === 'save') return json_(saveAll_(b.data));
     if (b.action === 'listOrders') return json_(listOrders_());
+    if (b.action === 'setStatus') return json_(setStatus_(b));
+    if (b.action === 'issueDoc') return json_(issueDoc_(b.type, b.orderId, 'admin'));
+    if (b.action === 'voidDoc') return json_(voidDoc_(b));
+    if (b.action === 'listDocs') return json_(listDocs_(b));
     if (b.action === 'diag') return json_(diag_());
     return json_({ ok: false, error: 'unknown action' });
   } catch (err) {
@@ -84,6 +99,8 @@ function setup() {
   format_(sheet_(SHEET_SETTINGS, SETTING_HEADERS), SETTING_HEADERS, ['key', 'value'], null);
   format_(sheet_(SHEET_ORDERS, ORDER_HEADERS), ORDER_HEADERS, ORDER_HEADERS, null);
   format_(sheet_(SHEET_CUSTOMERS, CUSTOMER_HEADERS), CUSTOMER_HEADERS, CUSTOMER_HEADERS, null);
+  format_(sheet_(SHEET_DOCS, DOC_HEADERS), DOC_HEADERS, DOC_HEADERS, null);
+  format_(sheet_(SHEET_COUNTERS, COUNTER_HEADERS), COUNTER_HEADERS, COUNTER_HEADERS, null);
   folder_(); // ขอสิทธิ์ Google Drive สำหรับเก็บรูปสินค้า
   CacheService.getScriptCache().remove('pub');
   Logger.log('พร้อมใช้งานแล้ว — ไปขั้นตอนทำให้ใช้งานได้ (Deploy) ต่อได้เลย');
@@ -238,7 +255,7 @@ function saveOrder_(o) {
   const js = [], lines = [];
   items.forEach(function (i, n) {
     const q = Math.max(1, Math.min(999, parseInt(i.qty, 10) || 1));
-    const it = { pid: clean_(i.pid, 40), vid: clean_(i.vid, 40), name: clean_(i.name, 150), label: clean_(i.label, 80), qty: q, unit: clean_(i.unit, 10) };
+    const it = { pid: clean_(i.pid, 40), vid: clean_(i.vid, 40), name: clean_(i.name, 150), label: clean_(i.label, 80), qty: q, unit: clean_(i.unit, 10), price: price_(i.price) };
     js.push(it);
     lines.push((n + 1) + '. ' + it.name + (it.label ? ' (' + it.label + ')' : '') + ' x ' + q + (it.unit ? ' ' + it.unit : ''));
   });
@@ -246,11 +263,11 @@ function saveOrder_(o) {
   const lock = LockService.getScriptLock();
   lock.waitLock(25000);
   try {
-    const so = sheet_(SHEET_ORDERS, ORDER_HEADERS), sc = sheet_(SHEET_CUSTOMERS, CUSTOMER_HEADERS);
+    const so = ordSheet_(), sc = sheet_(SHEET_CUSTOMERS, CUSTOMER_HEADERS);
     if (rows_(so).some(function (r) { return str_(r.orderId) === id; })) return { ok: true, orderId: id, duplicate: true };
     const at = now_();
     const f = { province: clean_(o.prov, 60), amphoe: clean_(o.amp, 80), tambon: clean_(o.tam, 80), zip: clean_(o.zip, 5), address: clean_(o.addr, 300) };
-    appendRow_(so, ORDER_HEADERS.length, [id, at, name, phone, f.province, f.amphoe, f.tambon, f.zip, f.address, clean_(o.note, 500), lines.join('\n'), JSON.stringify(js), 'ใหม่']);
+    appendRow_(so, ORDER_HEADERS.length, [id, at, name, phone, f.province, f.amphoe, f.tambon, f.zip, f.address, clean_(o.note, 500), lines.join('\n'), JSON.stringify(js), ST_WAIT, '']);
     // อัปเดต/เพิ่มข้อมูลลูกค้า (อิงเบอร์โทร)
     const vals = sc.getDataRange().getValues();
     let row = -1, count = 0;
@@ -296,14 +313,182 @@ function lookup_(b) {
   };
 }
 
+/* ---------------- สถานะคำสั่งซื้อ / ตรวจสถานะ ---------------- */
+function price_(v) {
+  if (v === '' || v == null) return '';
+  const n = Number(v);
+  return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : '';
+}
+function stKey_(s) {
+  s = str_(s).trim();
+  if (s === ST_SHIP) return 'ship';
+  if (s === 'ยกเลิก') return 'cancel';
+  return 'wait';
+}
+function stText_(s) { const k = stKey_(s); return k === 'ship' ? ST_SHIP : k === 'cancel' ? 'ยกเลิก' : ST_WAIT; }
+// แท็บ Orders: ถ้ายังไม่มีคอลัมน์ shippedAt (ชีตเก่า) ให้เพิ่มหัวคอลัมน์ต่อท้ายให้อัตโนมัติ
+function ordSheet_() {
+  const sh = sheet_(SHEET_ORDERS, ORDER_HEADERS);
+  const h = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].map(function (x) { return String(x).trim(); });
+  if (h.indexOf('shippedAt') < 0) {
+    const last = h.length;
+    sh.getRange(1, last + 1).setValue('shippedAt').setFontWeight('bold').setBackground('#e8f0e9');
+  }
+  return sh;
+}
+function ts_(v) {
+  if (v instanceof Date) return v.getTime();
+  const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(str_(v));
+  return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] - 7, +m[5], +m[6]) : 0; // เวลาไทย UTC+7
+}
+// ลูกค้าตรวจสถานะ: ต้องตรงทั้งชื่อและเบอร์โทร ดูได้เฉพาะออเดอร์ย้อนหลัง TRACK_DAYS วัน (ไม่ส่งที่อยู่กลับไป)
+function track_(b) {
+  const phone = phone_(b.phone), name = norm_(b.name);
+  if (!/^\d{9,10}$/.test(phone) || !name) return { ok: true, found: false, orders: [] };
+  if (!limit_('tk' + phone, 20, 600)) throw new Error('ลองหลายครั้งเกินไป กรุณารอ 10 นาทีแล้วลองใหม่');
+  const since = Date.now() - TRACK_DAYS * 86400000;
+  const orders = rows_(ordSheet_()).filter(function (r) {
+    return phone_(r.phone) === phone && norm_(r.name) === name && stKey_(r.status) !== 'cancel' && ts_(r.createdAt) >= since;
+  }).slice(-10).reverse().map(function (r) {
+    let it = [];
+    try { it = JSON.parse(str_(r.itemsJson) || '[]'); } catch (e) { it = []; }
+    return { orderId: str_(r.orderId), createdAt: str_(r.createdAt), name: str_(r.name), phone: phone, status: stText_(r.status), shippedAt: str_(r.shippedAt), items: it };
+  });
+  return { ok: true, found: orders.length > 0, orders: orders, days: TRACK_DAYS };
+}
+// แอดมินเปลี่ยนสถานะ: status = 'ship' (จัดส่งแล้ว) หรือ 'wait' (กลับเป็นรอจัดเตรียมและจัดส่ง)
+// prices = ราคาต่อหน่วยที่ตกลงกันแล้ว เรียงตามรายการสินค้า (บันทึกลงรายการสินค้าของออเดอร์ ใช้ออกใบกำกับภาษีอย่างย่อ)
+function setStatus_(b) {
+  const id = clean_(b.orderId, 40), ship = b.status === 'ship';
+  if (!id) throw new Error('ไม่พบเลขที่คำสั่งซื้อ');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const sh = ordSheet_();
+    const v = sh.getDataRange().getValues();
+    const h = v[0].map(function (x) { return String(x).trim(); });
+    const cI = function (k) { return h.indexOf(k); };
+    let row = -1;
+    for (let k = 1; k < v.length; k++) { if (str_(v[k][cI('orderId')]) === id) { row = k; break; } }
+    if (row < 0) throw new Error('ไม่พบคำสั่งซื้อนี้');
+    const was = stKey_(v[row][cI('status')]);
+    const set = function (k, val) { sh.getRange(row + 1, cI(k) + 1).setNumberFormat('@').setValue(str_(val)); };
+    set('status', ship ? ST_SHIP : ST_WAIT);
+    let shippedAt = str_(v[row][cI('shippedAt')]);
+    if (ship && (was !== 'ship' || !shippedAt)) shippedAt = now_();
+    if (!ship) shippedAt = '';
+    set('shippedAt', shippedAt);
+    let items = [];
+    try { items = JSON.parse(str_(v[row][cI('itemsJson')]) || '[]'); } catch (e) { items = []; }
+    if (Array.isArray(b.prices)) {
+      items.forEach(function (it, n) { it.price = price_(b.prices[n]); });
+      set('itemsJson', JSON.stringify(items));
+    }
+    SpreadsheetApp.flush();
+    return { ok: true, orderId: id, status: ship ? ST_SHIP : ST_WAIT, shippedAt: shippedAt, items: items };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function listOrders_() {
-  const rows = rows_(sheet_(SHEET_ORDERS, ORDER_HEADERS)).slice(-200).reverse();
+  const rows = rows_(ordSheet_()).slice(-200).reverse();
   return {
     ok: true,
     orders: rows.map(function (r) {
       let items = [];
       try { items = JSON.parse(str_(r.itemsJson) || '[]'); } catch (e) { items = []; }
-      return { orderId: str_(r.orderId), createdAt: str_(r.createdAt), name: str_(r.name), phone: str_(r.phone), prov: str_(r.province), amp: str_(r.amphoe), tam: str_(r.tambon), zip: str_(r.zip), addr: str_(r.address), note: str_(r.note), status: str_(r.status), items: items };
+      return { orderId: str_(r.orderId), createdAt: str_(r.createdAt), name: str_(r.name), phone: str_(r.phone), prov: str_(r.province), amp: str_(r.amphoe), tam: str_(r.tambon), zip: str_(r.zip), addr: str_(r.address), note: str_(r.note), status: stText_(r.status), shippedAt: str_(r.shippedAt), items: items };
+    })
+  };
+}
+
+/* ---------------- เลขที่เอกสาร: เซิร์ฟเวอร์แจกเลขเรียงต่อเนื่อง (ชุด+ปี พ.ศ. 2 หลัก+เดือน-ลำดับ 4 หลัก รีเซ็ตทุกเดือน) ---------------- */
+// ออกเลข: ออเดอร์+ประเภทเดิมที่ยังไม่ยกเลิก ได้เลขเดิม / ไม่เช่นนั้นแจกเลขถัดไปภายใต้ล็อก (ต่อให้กดพร้อมกันก็ไม่ซ้ำ)
+function issueDoc_(type, orderId, by) {
+  const pre = DOC_PRE[str_(type)];
+  const id = clean_(orderId, 40);
+  if (!pre) throw new Error('ประเภทเอกสารไม่ถูกต้อง');
+  if (!id) throw new Error('ไม่พบเลขที่คำสั่งซื้อ');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const dsh = sheet_(SHEET_DOCS, DOC_HEADERS);
+    const v = dsh.getDataRange().getValues();
+    const h = v[0].map(function (x) { return String(x).trim(); });
+    const ix = function (k) { return h.indexOf(k); };
+    for (let r = 1; r < v.length; r++) {
+      if (str_(v[r][ix('orderId')]) === id && str_(v[r][ix('type')]) === type && str_(v[r][ix('status')]) !== 'ยกเลิก') {
+        return { ok: true, no: str_(v[r][ix('docNo')]), existed: true, issuedAt: str_(v[r][ix('issuedAt')]) };
+      }
+    }
+    const d = new Date();
+    const yy = String(Number(Utilities.formatDate(d, 'Asia/Bangkok', 'yyyy')) + 543).slice(-2);
+    const key = pre + yy + Utilities.formatDate(d, 'Asia/Bangkok', 'MM');
+    const csh = sheet_(SHEET_COUNTERS, COUNTER_HEADERS);
+    const cv = csh.getDataRange().getValues();
+    let crow = -1, last = 0;
+    for (let r = 1; r < cv.length; r++) { if (str_(cv[r][0]) === key) { crow = r + 1; last = num_(cv[r][1]); break; } }
+    // กันเลขซ้ำถ้ามีคนแก้ตัวนับในชีต: ใช้ค่าที่มากกว่าระหว่างตัวนับกับเลขสูงสุดในทะเบียน
+    for (let r = 1; r < v.length; r++) {
+      const dn = str_(v[r][ix('docNo')]);
+      if (dn.indexOf(key + '-') === 0) last = Math.max(last, num_(dn.slice(key.length + 1)));
+    }
+    const n = last + 1;
+    if (crow > 0) csh.getRange(crow, 2).setNumberFormat('@').setValue(String(n));
+    else appendRow_(csh, 2, [key, n]);
+    const no = key + '-' + ('0000' + n).slice(-4);
+    const at = now_();
+    appendRow_(dsh, DOC_HEADERS.length, [no, type, id, at, by || '', 'ใช้งาน', '', '']);
+    SpreadsheetApp.flush();
+    return { ok: true, no: no, existed: false, issuedAt: at };
+  } finally {
+    lock.releaseLock();
+  }
+}
+// ลูกค้าขอเลขเอกสารของออเดอร์ตัวเอง (ต้องตรงทั้งชื่อ+เบอร์โทร): ใบประมาณการ (quote) และใบกำกับภาษีอย่างย่อ (taxabb ต้องสถานะจัดส่งแล้ว)
+function publicDocNo_(b) {
+  const type = str_(b.type), id = clean_(b.orderId, 40), phone = phone_(b.phone), name = norm_(b.name);
+  if (type !== 'quote' && type !== 'taxabb') throw new Error('ประเภทเอกสารไม่ถูกต้อง');
+  if (!id || !/^\d{9,10}$/.test(phone) || !name) throw new Error('ไม่พบคำสั่งซื้อนี้');
+  if (!limit_('dn' + phone, 30, 600)) throw new Error('ลองหลายครั้งเกินไป กรุณารอ 10 นาทีแล้วลองใหม่');
+  const o = rows_(ordSheet_()).filter(function (r) { return str_(r.orderId) === id; })[0];
+  if (!o || phone_(o.phone) !== phone || norm_(o.name) !== name || stKey_(o.status) === 'cancel') throw new Error('ไม่พบคำสั่งซื้อนี้');
+  if (type === 'taxabb' && stKey_(o.status) !== 'ship') throw new Error('ใบกำกับภาษีอย่างย่อออกได้เมื่อสถานะเป็นจัดส่งแล้ว');
+  return issueDoc_(type, id, 'customer');
+}
+// แอดมินยกเลิกเลขเอกสาร (เลขยังอยู่ในทะเบียน ไม่ถูกลบ ไม่ถูกนำกลับมาใช้) แล้วออกใบใหม่ได้เลขถัดไป
+function voidDoc_(b) {
+  const no = clean_(b.docNo, 40), why = clean_(b.reason, 200);
+  if (!no) throw new Error('ไม่พบเลขที่เอกสาร');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(25000);
+  try {
+    const sh = sheet_(SHEET_DOCS, DOC_HEADERS);
+    const v = sh.getDataRange().getValues();
+    const h = v[0].map(function (x) { return String(x).trim(); });
+    const ix = function (k) { return h.indexOf(k); };
+    for (let r = 1; r < v.length; r++) {
+      if (str_(v[r][ix('docNo')]) === no) {
+        const set = function (k, val) { sh.getRange(r + 1, ix(k) + 1).setNumberFormat('@').setValue(str_(val)); };
+        set('status', 'ยกเลิก'); set('voidedAt', now_()); set('voidReason', why);
+        SpreadsheetApp.flush();
+        return { ok: true, docNo: no };
+      }
+    }
+    throw new Error('ไม่พบเลขที่เอกสารนี้');
+  } finally {
+    lock.releaseLock();
+  }
+}
+function listDocs_(b) {
+  const id = clean_(b && b.orderId, 40);
+  let rows = rows_(sheet_(SHEET_DOCS, DOC_HEADERS));
+  if (id) rows = rows.filter(function (r) { return str_(r.orderId) === id; });
+  return {
+    ok: true,
+    docs: rows.slice(-300).reverse().map(function (r) {
+      return { no: str_(r.docNo), type: str_(r.type), orderId: str_(r.orderId), issuedAt: str_(r.issuedAt), issuedBy: str_(r.issuedBy), status: str_(r.status) || 'ใช้งาน', voidedAt: str_(r.voidedAt), reason: str_(r.voidReason) };
     })
   };
 }

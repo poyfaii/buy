@@ -30,7 +30,7 @@ function items(){
 const count=()=>items().length;
 
 const STEPS=['เลือกสินค้า','รายการสั่งซื้อ','ข้อมูลผู้สั่ง','ตรวจสอบ','ส่งคำสั่งซื้อ'],SI={shop:0,product:0,again:0,cart:1,info:2,review:3,done:4};
-const BACK={product:'shop',again:'shop',cart:'shop',info:'cart',review:'info'};
+const BACK={product:'shop',again:'shop',track:'shop',cart:'shop',info:'cart',review:'info'};
 
 function head(){
  const n=count();
@@ -47,11 +47,11 @@ const CATK={'กล้วย':'banana','มันฝรั่ง':'potato','ม�
 const CATS=[['กล้วย',n=>n.startsWith('กล้วย')],['มันฝรั่ง',n=>n.startsWith('มันฝรั่ง')],['มัน / เผือก',n=>/^(มัน|เผือก)/.test(n)&&!n.startsWith('มันฝรั่ง')],['พักทอง',n=>n.startsWith('พักทอง')]];
 const inCat=(p,k)=>{const c=CATS.find(x=>x[0]===k);return !c||c[1](String(p.name))};
 const chrome=()=>{const n=count();$('#hdr').innerHTML=head();$('#fab').innerHTML=fabHtml();shownN=n};
-const prog=()=>{const i=SI[view];return `<div class="prog"><div class="segs">${STEPS.map((s,k)=>`<i class="${k<i?'d':k===i?'c':''}"></i>`).join('')}</div><div class="plabel">ขั้นที่ ${i+1} จาก 5 · <b>${STEPS[i]}</b></div></div>`};
+const prog=()=>{const i=SI[view];if(i==null)return'';return `<div class="prog"><div class="segs">${STEPS.map((s,k)=>`<i class="${k<i?'d':k===i?'c':''}"></i>`).join('')}</div><div class="plabel">ขั้นที่ ${i+1} จาก 5 · <b>${STEPS[i]}</b></div></div>`};
 const hero=()=>{
  const nm=T(greet).replace(/^คุณ/,'').split(/\s+/)[0]; // แสดงชื่อเฉพาะหลังลูกค้าเลือกสั่งซ้ำรายการเดิม
  return `<section class="hero"><div class="hero-in"><h2>${nm?`ยินดีต้อนรับกลับ คุณ${esc(nm)}`:'ยินดีต้อนรับสู่ แม่ดอนรุ่งเรืองฟู้ดส์'}</h2><p>${nm?'ท่านสามารถปรับจำนวนรายการเดิม หรือเลือกสินค้าเพิ่มเติมได้ตามต้องการ':'ผู้ผลิตและจำหน่ายผลิตภัณฑ์ขนมทอดกรอบจากกล้วย เผือก มัน มันฝรั่ง และฟักทอง เลือกสินค้า จัดทำรายการสั่งซื้อ และส่งให้บริษัทผ่านเพจ Facebook'}</p>
- <div class="hero-act"><button class="btn" onclick="go('again')">${ic('copy',18)} ลูกค้าเดิม สั่งซ้ำรายการเดิม</button>${telLink('hchip')}</div>
+ <div class="hero-act"><button class="btn" onclick="go('again')">${ic('copy',18)} ลูกค้าเดิม สั่งซ้ำรายการเดิม</button><button class="btn" onclick="go('track')">${ic('search',18)} ตรวจสอบสถานะคำสั่งซื้อ</button>${telLink('hchip')}</div>
  <span class="hnote">${ic('info',15)} ${priceNote()}</span></div></section>`;
 };
 
@@ -60,7 +60,7 @@ function render(){
  let b;
  if(!D&&loadErr)b=`<div class="empty">${ic('info',44)}<p>${esc(loadErr)}</p><button class="btn pri lg" onclick="init()">ลองใหม่</button></div>`;
  else if(!D)b=`<div class="grid">${'<div class="sk"></div>'.repeat(6)}</div>`;
- else b=({shop:shopBody,again:againView,product:productView,cart:cartView,info:infoView,review:reviewView,done:doneView})[view]();
+ else b=({shop:shopBody,again:againView,track:trackView,product:productView,cart:cartView,info:infoView,review:reviewView,done:doneView})[view]();
  const back=BACK[view]?`<button class="back" onclick="${view==='product'?'backShop()':`go('${BACK[view]}')`}">${ic('back')} ย้อนกลับ</button>`:'';
  const mn=$('#main');mn.classList.remove('enter');
  $('#main').innerHTML=(view==='shop'?hero():back)+prog()+(D&&D.stale&&view==='shop'?`<div class="note">${ic('info',18)}<span>ตอนนี้เชื่อมต่อไม่ได้ กำลังแสดงรายการล่าสุดที่เคยโหลดไว้ <a href="#" onclick="init();return false">โหลดใหม่</a></span></div>`:'')+b;
@@ -316,12 +316,13 @@ function reviewView(){
 }
 // สรุปรายการและคำนวณยอดหลังยืนยันคำสั่งซื้อ
 let doneItems=[],doneCust=null;
-function viewDoc(){
+async function viewDoc(){
  const c=doneCust||cust,t=c.tax;
- openDoc(docHtml({type:'order',no:ord.id,date:dmy(new Date()),
+ let no;try{no=(await Service.docNo('quote',{orderId:ord.id,name:T(c.name),phone:normPhone(c.phone)})).no}catch(e){no=docNoFor('QT',ord.id)} // ถ้าขอเลขจากระบบไม่ได้ ใช้เลขอ้างอิงจากรหัสคำสั่งซื้อ
+ openDoc(docHtml({type:'quote',no:no,date:dmy(new Date()),
   buyer:t?{name:c.taxName,addr:c.taxAddr,taxId:String(c.taxId).replace(/\D/g,''),tel:c.phone}:{name:c.name,addr:c.fa,tel:c.phone},
-  lines:doneItems.map(i=>({name:i.p.name,label:i.v?vlabel(i.v):'',qty:i.qty,unit:qunit(i.v),price:hasP(i.v)?i.v.price:''})),
-  note:'เอกสารนี้จัดทำจากคำสั่งซื้อทางเว็บไซต์ ราคาและค่าจัดส่งยืนยันกับบริษัทผ่านแชต Facebook'+(t?'\nผู้สั่งขอใบกำกับภาษี บริษัทจะออกให้ตามราคาที่ยืนยัน':''),unknownMark:'$$$'}));
+  lines:doneItems.map(i=>({name:i.p.name,label:i.v?vlabel(i.v):'',qty:i.qty,unit:qunit(i.v)})),
+  note:'เอกสารนี้จัดทำจากคำสั่งซื้อทางเว็บไซต์ ราคาและค่าจัดส่งยืนยันกับบริษัทผ่านแชต Facebook'+(t?'\nผู้สั่งขอใบกำกับภาษี บริษัทจะออกให้เมื่อตกลงราคาและจัดส่งเรียบร้อย':'')}));
 }
 function calcHtml(){
  const l=doneItems;if(!l.length)return'';
@@ -332,10 +333,45 @@ function doneView(){
  ${ordHtml()}${calcHtml()}<section class="sec"><h3>ขั้นตอนการส่งคำสั่งซื้อ</h3><ol class="how"><li>กดปุ่ม “คัดลอกข้อความ”</li><li>กดปุ่ม “เปิดแชต Facebook” เพื่อเข้าสู่หน้าแชตของบริษัท</li><li>วางข้อความที่คัดลอกไว้ แล้วกดส่ง</li></ol><pre id="msgbox">${esc(msg)}</pre></section>
  <div class="stack"><button class="btn pri lg" onclick="copyMsg()">${ic('copy')} คัดลอกข้อความ</button>
  <a class="btn lg" href="${MSG_URL}" target="_blank" rel="noopener" onclick="copyMsg(1)">${ic('send')} เปิดแชต Facebook</a>
- <button class="btn" onclick="viewDoc()">ดูใบสั่งซื้อ / บันทึกเป็น PDF</button>
+ <button class="btn" onclick="viewDoc()">ดูใบประมาณการราคา / บันทึกเป็น PDF</button>
  <button class="btn" onclick="cart=[];saveCart();msg='';view='shop';render();scrollTo(0,0)">กลับไปเลือกสินค้า</button></div>
  <p class="adminlink">สอบถามข้อมูลเพิ่มเติม ${telLink()}</p>`;
 }
+/* ---------- ตรวจสอบสถานะคำสั่งซื้อ (ชื่อ + เบอร์โทร ย้อนหลัง 3 วัน) ---------- */
+let tk={name:'',phone:'',busy:false,res:null,err:''};
+const stBadge=st=>`<span class="stb ${st===ST_SHIP?'ok':'wait'}">${esc(st)}</span>`;
+const ymd=t=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(t||''));return m?`${m[3]}/${m[2]}/${m[1]}`:dmy(new Date())};
+const allPriced=l=>(l||[]).length>0&&l.every(i=>i.price!==''&&i.price!=null&&!isNaN(Number(i.price)));
+function trackView(){
+ if(!tk.name&&!tk.phone){tk.name=cust.name;tk.phone=cust.phone}
+ const r=tk.res,os=r&&r.found?r.orders:[];
+ return `<h2 class="h2">ตรวจสอบสถานะคำสั่งซื้อ</h2><section class="sec"><p class="sub">กรอกชื่อและเบอร์โทรที่ใช้สั่ง ดูได้เฉพาะคำสั่งซื้อย้อนหลัง ${TRACK_DAYS} วัน</p>
+ <div class="fld"><label class="lbl" for="t_name">ชื่อผู้สั่งซื้อ</label><input id="t_name" class="inp" autocomplete="name" value="${esc(tk.name)}" oninput="tk.name=this.value"></div>
+ <div class="fld"><label class="lbl" for="t_phone">เบอร์โทรศัพท์</label><input id="t_phone" class="inp" type="tel" inputmode="tel" autocomplete="tel" value="${esc(tk.phone)}" oninput="tk.phone=this.value"></div>
+ ${tk.err?`<div class="err" role="alert">${esc(tk.err)}</div>`:''}
+ <button class="btn pri lg w" style="margin-top:16px" onclick="doTrack()"${tk.busy?' disabled':''}>${tk.busy?'กำลังตรวจสอบ…':ic('search')+' ตรวจสอบสถานะ'}</button></section>
+ ${r&&!r.found?`<div class="note">${ic('info',18)}<span>ไม่พบคำสั่งซื้อย้อนหลัง ${TRACK_DAYS} วันที่ตรงกับชื่อและเบอร์นี้ ตรวจสอบการสะกด หรือสอบถามทางแชต Facebook ${telLink('')}</span></div>`:''}
+ ${os.map((o,n)=>{const sh=o.status===ST_SHIP;return `<section class="sec"><div class="hhead"><b>เลขที่ ${esc(o.orderId)}</b><span class="mu">${esc(fmtDate(o.createdAt))}</span></div>
+  <div style="margin:6px 0 10px">${stBadge(o.status)}</div>
+  ${(o.items||[]).map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${esc(i.qty)}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}
+  ${sh?(allPriced(o.items)?`<div class="stack" style="margin-top:12px"><button class="btn pri" onclick="openAbb(${n})">ดูใบกำกับภาษีอย่างย่อ / บันทึกเป็น PDF</button></div>`:`<p class="hint">จัดส่งเรียบร้อยแล้ว หากต้องการใบกำกับภาษี สอบถามทางแชต Facebook</p>`)
+  :`<p class="hint">ทางร้านกำลังจัดเตรียมสินค้า ราคาและค่าจัดส่งคุยต่อในแชต Facebook ใบกำกับภาษีอย่างย่อจะดูได้เมื่อสถานะเป็น "จัดส่งแล้ว"</p>`}</section>`}).join('')}`;
+}
+async function doTrack(){
+ if(tk.busy)return;
+ if(!T(tk.name)||normPhone(tk.phone).length<9){tk.err='กรุณากรอกชื่อและเบอร์โทรศัพท์ให้ครบ';tk.res=null;render();return}
+ tk.busy=true;tk.err='';tk.res=null;render();
+ try{tk.res=await Service.track(normPhone(tk.phone),T(tk.name))}
+ catch(e){tk.err=friendly(e.message)||'ตรวจสอบไม่สำเร็จ'}
+ tk.busy=false;render();
+}
+async function openAbb(n){
+ const o=tk.res&&tk.res.orders&&tk.res.orders[n];if(!o)return;
+ let no;try{no=(await Service.docNo('taxabb',{orderId:o.orderId,name:o.name,phone:o.phone})).no}catch(e){toast(friendly(e.message)||'ขอเลขที่เอกสารไม่สำเร็จ ลองใหม่อีกครั้ง',5000);return}
+ openDoc(docHtml({type:'taxabb',no:no,date:ymd(o.shippedAt),stamp:true,buyer:{name:o.name,tel:o.phone},
+  lines:(o.items||[]).map(i=>({name:i.name,label:i.label,qty:i.qty,unit:i.unit,price:i.price}))}));
+}
+
 /* ---------- บันทึกคำสั่งซื้อ ---------- */
 function ordHtml(){
  const m={saving:[`กำลังบันทึกคำสั่งซื้อ…`,'info'],ok:[REMOTE?`บันทึกคำสั่งซื้อเรียบร้อยแล้ว เลขที่ ${ord.id}`:`โหมดทดลอง: บันทึกในเครื่องนี้เท่านั้น (เลขที่ ${ord.id})`,REMOTE?'check':'info'],fail:[`บันทึกคำสั่งซื้อในระบบไม่สำเร็จ (${esc(ord.err)}) — ยังส่งข้อความทาง Facebook ได้ตามปกติ <a href="#" onclick="sendOrder();return false"><b>ลองบันทึกอีกครั้ง</b></a>`,'info']}[ord.st];
@@ -346,7 +382,7 @@ function confirmOrder(){doneItems=items();doneCust={...cust,fa:fullAddr().replac
 let lastOrder=null;
 async function sendOrder(){
  const order=lastOrder&&ord.st==='fail'?lastOrder:{orderId:ord.id,name:T(cust.name),phone:normPhone(cust.phone),prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:T(cust.zip),addr:T(cust.addr),note:[T(cust.note),cust.tax?'[ขอใบกำกับภาษี] '+taxTxt().replace(/\n/g,' | '):''].filter(Boolean).join('\n'),
-  items:items().map(i=>({pid:i.pid,vid:i.vid||'',name:i.p.name,label:i.v?vlabel(i.v):'',qty:i.qty,unit:qunit(i.v)}))};
+  items:items().map(i=>({pid:i.pid,vid:i.vid||'',name:i.p.name,label:i.v?vlabel(i.v):'',qty:i.qty,unit:qunit(i.v),price:hasP(i.v)?Number(i.v.price):''}))};
  lastOrder=order;ord.st='saving';ord.err='';paintOrd();
  try{await Service.placeOrder(order);ord.st='ok';setTimeout(refreshSales,800)}catch(e){ord.st='fail';ord.err=e.message||'ผิดพลาด'}
  paintOrd();

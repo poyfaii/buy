@@ -1,6 +1,6 @@
 // data.js — ข้อมูลและฟังก์ชันที่ใช้ร่วมกัน (หน้าร้าน + หน้าผู้ดูแล)
 // ถ้าจะเปลี่ยนที่เก็บข้อมูลเป็น Google Sheets / Firebase / ฐานข้อมูล ให้แก้เฉพาะ Service ด้านล่าง
-const WEB_VER='v21';
+const WEB_VER='v23';
 const IS_ADMIN=/admin/i.test(location.pathname);
 const KEY='mdr_data_v1',CKEY='mdr_cart_v1',UKEY='mdr_cust_v1',MAXV=5;
 const MSG_URL='https://m.me/61573351996765'; // ลิงก์เปิดแชต Messenger ของเพจโดยตรง (ลูกค้ากดแล้วเข้าหน้าแชตเลย)
@@ -147,6 +147,28 @@ const topFrom=orders=>{const m={};orders.slice(-500).forEach(o=>(o.items||[]).fo
 const salesFrom=orders=>{const m={};orders.forEach(o=>{if(o.status==='ยกเลิก')return;const seen={};(o.items||[]).forEach(i=>{if(!i.pid)return;const x=m[i.pid]||(m[i.pid]={n:0,u:{}});if(!seen[i.pid]){seen[i.pid]=1;x.n++}const un=T(i.unit)||'ชิ้น';x.u[un]=(x.u[un]||0)+(Number(i.qty)||0)});});return m};
 let CRED=null;
 try{CRED=JSON.parse(sessionStorage.getItem(CREDKEY))}catch(e){}
+// สถานะคำสั่งซื้อ (มี 2 แบบ) — สถานะว่าง/"ใหม่" ของออเดอร์เก่านับเป็นรอจัดเตรียมและจัดส่ง
+const ST_WAIT='รอจัดเตรียมและจัดส่ง',ST_SHIP='จัดส่งแล้ว',TRACK_DAYS=3;
+const stText=s=>{s=String(s==null?'':s).trim();return s===ST_SHIP?ST_SHIP:s==='ยกเลิก'?'ยกเลิก':ST_WAIT};
+
+// โหมดทดลอง (ยังไม่ต่อชีต): ทะเบียนเลขที่เอกสารเก็บในเครื่อง ใช้รูปแบบเดียวกับของจริง
+const DOCKEY='mdr_docs_v1',DOC_PRE={quote:'QT',delivery:'DN',receipt:'RC',taxfull:'INV',taxabb:'ABB'};
+const localDocs={
+ all(){try{return JSON.parse(localStorage.getItem(DOCKEY))||[]}catch(e){return[]}},
+ put(a){try{localStorage.setItem(DOCKEY,JSON.stringify(a))}catch(e){throw new Error('พื้นที่เก็บข้อมูลเต็ม')}},
+ issue(type,id,by){
+  const pre=DOC_PRE[type];if(!pre)throw new Error('ประเภทเอกสารไม่ถูกต้อง');
+  const a=this.all(),ex=a.find(x=>x.orderId===id&&x.type===type&&x.status!=='ยกเลิก');
+  if(ex)return{ok:true,no:ex.no,existed:true};
+  const d=new Date(),p=n=>String(n).padStart(2,'0'),key=pre+String(d.getFullYear()+543).slice(-2)+p(d.getMonth()+1);
+  const last=a.reduce((m,x)=>x.no.indexOf(key+'-')===0?Math.max(m,+x.no.slice(key.length+1)||0):m,0);
+  const no=key+'-'+String(last+1).padStart(4,'0');
+  a.push({no,type,orderId:id,issuedAt:d.toISOString().slice(0,19).replace('T',' '),issuedBy:by,status:'ใช้งาน',reason:''});this.put(a);
+  return{ok:true,no,existed:false};
+ },
+ list(id){return this.all().filter(x=>!id||x.orderId===id).reverse()},
+ void(no,reason){const a=this.all(),x=a.find(y=>y.no===no);if(!x)throw new Error('ไม่พบเลขที่เอกสารนี้');x.status='ยกเลิก';x.reason=reason||'';this.put(a);return{ok:true,docNo:no}}
+};
 const Service={
  // หน้าลูกค้า (ไม่มีราคา เฉพาะสินค้าที่เปิดแสดง)
  async load(){
@@ -173,7 +195,7 @@ const Service={
  },
  async placeOrder(o){
   if(!REMOTE){
-   const a=localOrders().filter(x=>x.orderId!==o.orderId);a.push(Object.assign({createdAt:new Date().toISOString().slice(0,19).replace('T',' '),status:'ใหม่'},o));
+   const a=localOrders().filter(x=>x.orderId!==o.orderId);a.push(Object.assign({createdAt:new Date().toISOString().slice(0,19).replace('T',' '),status:ST_WAIT,shippedAt:''},o));
    try{localStorage.setItem(ORDKEY,JSON.stringify(a.slice(-200)))}catch(e){throw new Error('พื้นที่เก็บข้อมูลเต็ม')}
    return{ok:true,orderId:o.orderId};
   }
@@ -190,6 +212,16 @@ const Service={
    return{ok:true,found:true,customer:{name:x.name,prov:x.prov,amp:x.amp,tam:x.tam,zip:x.zip,addr:x.addr},items:x.items||[],history};
   }
   return api({action:'lookup',phone:phone,name:name});
+ },
+ // ลูกค้าตรวจสถานะคำสั่งซื้อ: ต้องตรงทั้งชื่อและเบอร์โทร ดูได้ย้อนหลัง TRACK_DAYS วัน
+ async track(phone,name){
+  if(!REMOTE){
+   const p=normPhone(phone),n=nameKey(name),since=Date.now()-TRACK_DAYS*86400000;
+   const l=localOrders().filter(x=>normPhone(x.phone)===p&&n&&nameKey(x.name)===n&&stText(x.status)!=='ยกเลิก'&&new Date(String(x.createdAt).replace(' ','T')).getTime()>=since);
+   const orders=l.slice(-10).reverse().map(x=>({orderId:x.orderId,createdAt:x.createdAt,name:x.name,phone:p,status:stText(x.status),shippedAt:x.shippedAt||'',items:x.items||[]}));
+   return{ok:true,found:orders.length>0,orders,days:TRACK_DAYS};
+  }
+  return api({action:'track',phone:phone,name:name});
  },
  // ยอดขายล่าสุด (เบามาก ใช้รีเฟรชบนหน้าร้านโดยไม่โหลดสินค้าใหม่)
  async sales(){
@@ -217,6 +249,43 @@ const Service={
  async listOrders(){
   if(!REMOTE)return localOrders().slice().reverse();
   try{return(await api(Object.assign({action:'listOrders'},CRED))).orders||[]}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
+ },
+ // แอดมินเปลี่ยนสถานะ: status 'ship' | 'wait' ; prices = ราคาต่อหน่วยที่ตกลงแล้ว (เรียงตามรายการ)
+ async setStatus(orderId,status,prices){
+  if(!REMOTE){
+   const a=localOrders(),o=a.find(x=>x.orderId===orderId);if(!o)throw new Error('ไม่พบคำสั่งซื้อนี้');
+   o.status=status==='ship'?ST_SHIP:ST_WAIT;
+   const now=new Date().toISOString().slice(0,19).replace('T',' ');
+   o.shippedAt=status==='ship'?(o.shippedAt||now):'';
+   if(Array.isArray(prices))(o.items||[]).forEach((it,n)=>{const v=prices[n];it.price=v===''||v==null||isNaN(Number(v))?'':Number(v)});
+   try{localStorage.setItem(ORDKEY,JSON.stringify(a))}catch(e){throw new Error('พื้นที่เก็บข้อมูลเต็ม')}
+   return{ok:true,status:o.status,shippedAt:o.shippedAt,items:o.items};
+  }
+  try{return await api(Object.assign({action:'setStatus',orderId:orderId,status:status,prices:prices},CRED))}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
+ },
+
+ // ----- เลขที่เอกสาร: เซิร์ฟเวอร์แจกเลขเรียงต่อเนื่อง (ชุด+ปี พ.ศ. 2 หลัก+เดือน-ลำดับ 4 หลัก รีเซ็ตทุกเดือน) -----
+ // แอดมินออกเอกสาร: ออเดอร์+ประเภทเดิมที่ยังไม่ยกเลิก ได้เลขเดิม
+ async issueDoc(type,orderId){
+  if(!REMOTE)return localDocs.issue(type,orderId,'admin');
+  try{return await api(Object.assign({action:'issueDoc',type:type,orderId:orderId},CRED))}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
+ },
+ // ลูกค้าขอเลขเอกสารของออเดอร์ตัวเอง (type 'quote' | 'taxabb')
+ async docNo(type,o){
+  if(!REMOTE)return localDocs.issue(type,o.orderId,'customer');
+  return api({action:'docNo',type:type,orderId:o.orderId,name:o.name,phone:o.phone});
+ },
+ async listDocs(orderId){
+  if(!REMOTE)return localDocs.list(orderId);
+  try{return(await api(Object.assign({action:'listDocs',orderId:orderId||''},CRED))).docs||[]}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
+ },
+ async voidDoc(docNo,reason){
+  if(!REMOTE)return localDocs.void(docNo,reason);
+  try{return await api(Object.assign({action:'voidDoc',docNo:docNo,reason:reason||''},CRED))}
   catch(e){if(e.message==='unauthorized')Service.logout();throw e}
  },
  async save(d){
