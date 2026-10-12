@@ -90,7 +90,7 @@ function contactHtml(){
  return `<section class="contact" id="contact" aria-label="ติดต่อบริษัท"><div class="sechead"><h3>ติดต่อและที่ตั้งบริษัท</h3></div>
  <div class="cgrid"><div class="cinfo"><b class="cname">${esc(COMPANY.name)}</b><p class="cname2"><b>${esc(COMPANY.branch)}</b><br>${esc(COMPANY.addr)}<br>เลขประจำตัวผู้เสียภาษี ${esc(COMPANY.taxId)}</p>
  <a class="crow2" href="tel:${SHOP_TEL.replace(/\D/g,'')}">${ic('phone',20)}<span><small>โทรศัพท์</small>${SHOP_TEL}</span></a>
- <a class="crow2" href="${esc(D&&D.fbUrl||FB_DEFAULT)}" target="_blank" rel="noopener">${ic('send',20)}<span><small>เพจ Facebook</small>ส่งข้อความถึงบริษัท</span></a>
+ <a class="crow2" href="${MSG_URL}" target="_blank" rel="noopener">${ic('send',20)}<span><small>แชต Facebook Messenger</small>ส่งข้อความถึงบริษัท</span></a>
  <a class="crow2" href="https://www.google.com/maps/search/?api=1&query=${ll}" target="_blank" rel="noopener">${ic('pin',20)}<span><small>พิกัดที่ตั้ง</small>${SHOP_LAT.toFixed(5)}, ${SHOP_LNG.toFixed(5)}</span></a>
  <a class="btn pri go lg" href="https://www.google.com/maps/dir/?api=1&destination=${ll}" target="_blank" rel="noopener">${ic('pin',18)} นำทางไปยังบริษัท</a></div>
  <div class="cmap"><iframe title="แผนที่ที่ตั้งบริษัท แม่ดอนรุ่งเรืองฟู้ดส์ จำกัด" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${ll}&z=15&output=embed"></iframe></div></div></section>`;
@@ -329,9 +329,9 @@ function calcHtml(){
 }
 function doneView(){
  return `<section class="sec" style="text-align:center;display:grid;justify-items:center;gap:6px"><div class="okmark">${ic('check',34)}</div><h2 class="h2" style="margin:6px 0 0">จัดทำคำสั่งซื้อเรียบร้อยแล้ว</h2><p class="mu">ระบบจัดทำข้อความคำสั่งซื้อให้เรียบร้อยแล้ว กรุณาส่งคำสั่งซื้อให้บริษัทผ่านเพจ Facebook ตามขั้นตอนด้านล่าง</p></section>
- ${ordHtml()}${calcHtml()}<section class="sec"><h3>ขั้นตอนการส่งคำสั่งซื้อ</h3><ol class="how"><li>กดปุ่ม “คัดลอกข้อความ”</li><li>กดปุ่ม “เปิด Facebook” เพื่อเข้าสู่แชตของเพจบริษัท</li><li>วางข้อความที่คัดลอกไว้ แล้วกดส่ง</li></ol><pre id="msgbox">${esc(msg)}</pre></section>
+ ${ordHtml()}${calcHtml()}<section class="sec"><h3>ขั้นตอนการส่งคำสั่งซื้อ</h3><ol class="how"><li>กดปุ่ม “คัดลอกข้อความ”</li><li>กดปุ่ม “เปิดแชต Facebook” เพื่อเข้าสู่หน้าแชตของบริษัท</li><li>วางข้อความที่คัดลอกไว้ แล้วกดส่ง</li></ol><pre id="msgbox">${esc(msg)}</pre></section>
  <div class="stack"><button class="btn pri lg" onclick="copyMsg()">${ic('copy')} คัดลอกข้อความ</button>
- <a class="btn lg" href="${esc(D.fbUrl)}" target="_blank" rel="noopener" onclick="copyMsg(1)">${ic('send')} เปิด Facebook</a>
+ <a class="btn lg" href="${MSG_URL}" target="_blank" rel="noopener" onclick="copyMsg(1)">${ic('send')} เปิดแชต Facebook</a>
  <button class="btn" onclick="viewDoc()">ดูใบสั่งซื้อ / บันทึกเป็น PDF</button>
  <button class="btn" onclick="cart=[];saveCart();msg='';view='shop';render();scrollTo(0,0)">กลับไปเลือกสินค้า</button></div>
  <p class="adminlink">สอบถามข้อมูลเพิ่มเติม ${telLink()}</p>`;
