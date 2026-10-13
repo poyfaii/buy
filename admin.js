@@ -2,7 +2,7 @@
 // รหัสผู้ดูแล: โหมดเชื่อม Google Sheets ตรวจที่ Code.gs / โหมดทดลองดูที่ config.js
 let authed=false,lerr='',lu='',loadErr='',logging=false,saving=false;
 try{authed=REMOTE?Service.hasSession():sessionStorage.getItem('mdr_admin_ok')==='1'}catch(e){}
-let ords=null,oerr='',oq='',ofl='all',oopen=null,draft=null,aview='list',aq='',af='all',as='order',menuId=null,dirty=false;
+let ords=null,oerr='',oq='',ofl='all',oopen=null,draft=null,aview='dash',aq='',af='all',as='order',menuId=null,dirty=false;
 const sorted=()=>[...D.products].sort(bySort);
 const persist=async m=>{
  if(saving){toast('กำลังบันทึกอยู่ รอสักครู่แล้วลองใหม่');return false}
@@ -40,12 +40,13 @@ async function doLogin(e){
  render();const f=$('#lp');f&&f.focus();
  return false;
 }
-function logout(){authed=false;D=null;loadErr='';draft=null;dirty=false;aview='list';menuId=null;Service.logout();try{sessionStorage.removeItem('mdr_admin_ok')}catch(x){}render()}
+function logout(){authed=false;D=null;loadErr='';draft=null;dirty=false;aview='dash';menuId=null;Service.logout();try{sessionStorage.removeItem('mdr_admin_ok')}catch(x){}render()}
 async function loadAdmin(){
  loadErr='';D=null;render();
  try{D=await Service.loadAdmin();lists()}
  catch(e){if(e.message==='unauthorized'){logout();lerr='รหัสผ่านไม่ถูกต้องหรือหมดอายุ กรุณาเข้าสู่ระบบใหม่';render();return}loadErr=e.message||'โหลดข้อมูลไม่ได้'}
  render();
+ if(aview==='dash'){loadOrders();loadDashDocs()}
 }
 
 function render(){
@@ -54,18 +55,18 @@ function render(){
   ?`<div class="awrap" style="padding-top:20px"><div class="empty">${ic('info',44)}<p>${esc(loadErr)}</p><button class="btn pri lg" onclick="loadAdmin()">ลองใหม่</button><button class="btn" onclick="logout()">ออกจากระบบ</button></div></div>`
   :`<div class="awrap" style="padding-top:20px"><div class="sk" style="aspect-ratio:auto;height:220px"></div></div>`;return}
  $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.gif" alt=""><h1 class="brand"><b>จัดการสินค้า</b></h1><a class="swbtn" href="index.html">${ic('store',18)}<span class="t">หน้าร้านลูกค้า</span></a><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ">${ic('logout')}</button></div></header>
- <main class="awrap">${tabs()}${aview==='edit'?editView():aview==='set'?setView():aview==='ord'?ordView():aview==='rep'?repView():aview==='dreg'?dregView():aview==='doc'?docView():aview==='ship'?shipView():aview==='pay'?payView():listView()}</main>`;
+ <main class="awrap">${tabs()}${aview==='edit'?editView():aview==='set'?setView():aview==='dash'?dashView():aview==='ord'?ordView():aview==='rep'?repView():aview==='dreg'?dregView():aview==='doc'?docView():aview==='ship'?shipView():aview==='pay'?payView():listView()}</main>`;
  if(aview==='list')drawList();
  const on=document.querySelector('.tabs a.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'center',block:'nearest'})}catch(e){}
 }
 function tabs(){
  const list=aview==='list'||(aview==='edit'&&draft&&!draft.isNew),nw=aview==='edit'&&draft&&draft.isNew;
- return `<nav class="tabs" aria-label="เมนูผู้ดูแล"><a href="#" class="${list?'on':''}" onclick="return nav('list')">สินค้า</a><a href="#" class="${nw?'on':''}" onclick="return nav('new')">เพิ่มสินค้า</a><a href="#" class="${aview==='ord'?'on':''}" onclick="return nav('ord')">คำสั่งซื้อ</a><a href="#" class="${aview==='dreg'?'on':''}" onclick="return nav('dreg')">เอกสาร</a><a href="#" class="${aview==='rep'?'on':''}" onclick="return nav('rep')">รายงาน</a><a href="#" class="${aview==='set'?'on':''}" onclick="return nav('set')">ตั้งค่า</a></nav>`;
+ return `<nav class="tabs" aria-label="เมนูผู้ดูแล"><a href="#" class="${aview==='dash'?'on':''}" onclick="return nav('dash')">ภาพรวม</a><a href="#" class="${list?'on':''}" onclick="return nav('list')">สินค้า</a><a href="#" class="${nw?'on':''}" onclick="return nav('new')">เพิ่มสินค้า</a><a href="#" class="${aview==='ord'?'on':''}" onclick="return nav('ord')">คำสั่งซื้อ</a><a href="#" class="${aview==='dreg'?'on':''}" onclick="return nav('dreg')">เอกสาร</a><a href="#" class="${aview==='rep'?'on':''}" onclick="return nav('rep')">รายงาน</a><a href="#" class="${aview==='set'?'on':''}" onclick="return nav('set')">ตั้งค่า</a></nav>`;
 }
 function nav(t){
  if(aview==='edit'&&dirty&&!confirm('ยังไม่ได้บันทึกการเปลี่ยนแปลง ออกจากหน้านี้หรือไม่?'))return false;
  dirty=false;
- if(t==='new')newP();else{draft=null;aview=t;render();if(t==='ord'||t==='rep')loadOrders();if(t==='dreg')loadDocList()}
+ if(t==='new')newP();else{draft=null;aview=t;render();if(t==='ord'||t==='rep'||t==='dash')loadOrders();if(t==='dreg')loadDocList();if(t==='dash')loadDashDocs()}
  scrollTo(0,0);return false;
 }
 
@@ -209,7 +210,7 @@ async function saveP(again){
 async function loadOrders(){
  oerr='';ords=null;render();
  try{ords=await Service.listOrders()}catch(e){if(e.message==='unauthorized'){logout();return}oerr=e.message||'โหลดคำสั่งซื้อไม่ได้'}
- if(aview==='ord'||aview==='rep')render();
+ if(aview==='ord'||aview==='rep'||aview==='dash')render();
 }
 const oaddr=o=>[o.addr,(o.prov==='กรุงเทพมหานคร'?'แขวง':'ตำบล')+(o.tam||''),(o.prov==='กรุงเทพมหานคร'?'เขต':'อำเภอ')+(o.amp||''),(o.prov==='กรุงเทพมหานคร'?'':'จ.')+(o.prov||''),o.zip].filter(Boolean).join(' ');
 function ordView(){
@@ -219,10 +220,10 @@ function ordView(){
  const cn=k=>ords.filter(o=>ofMatch(o,k)).length;
  return `<div class="lhead"><h2 class="h2">คำสั่งซื้อล่าสุด</h2><button class="btn sm" onclick="loadOrders()">รีเฟรช</button></div>
  <div class="search">${ic('search')}<input class="inp" type="search" autocomplete="off" aria-label="ค้นหาคำสั่งซื้อ" placeholder="ค้นหาชื่อ / เบอร์ / เลขที่" value="${esc(oq)}" oninput="oq=this.value;$('#olist').innerHTML=ordRows()"></div>
- <div class="cats" role="group" aria-label="กรองสถานะ">${[['all','ทั้งหมด'],[ST_WAIT,ST_WAIT],[ST_SHIP,ST_SHIP],['unpaid','ค้างชำระ']].map(c=>`<button class="cat" aria-pressed="${ofl===c[0]}" onclick="ofl='${c[0]}';render()">${esc(c[1])} (${cn(c[0])})</button>`).join('')}</div>
+ <div class="cats" role="group" aria-label="กรองสถานะ">${[['all','ทั้งหมด'],[ST_WAIT,ST_WAIT],[ST_SHIP,ST_SHIP],['unpaid','ส่งแล้วค้างชำระ']].map(c=>`<button class="cat" aria-pressed="${ofl===c[0]}" onclick="ofl='${c[0]}';render()">${esc(c[1])} (${cn(c[0])})</button>`).join('')}</div>
  <div class="gmeta">แสดง ${Math.min(l.length,200)} จาก ${ords.length} รายการ</div><div id="olist" class="alist">${ordRows()}</div>`;
 }
-const ofMatch=(o,k)=>k==='all'||(k==='unpaid'?(payText(o.payStatus)===ST_UNPAID&&stText(o.status)!=='ยกเลิก'):stText(o.status)===k);
+const ofMatch=(o,k)=>k==='all'||(k==='unpaid'?(payText(o.payStatus)===ST_UNPAID&&stText(o.status)===ST_SHIP):stText(o.status)===k);
 function fOrds(){const k=oq.trim().toLowerCase();return(ords||[]).filter(o=>ofMatch(o,ofl)&&(!k||[o.name,o.phone,o.orderId].some(x=>String(x||'').toLowerCase().includes(k))))}
 function ordRows(){
  const l=fOrds();

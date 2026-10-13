@@ -50,10 +50,11 @@ const chrome=()=>{const n=count();$('#hdr').innerHTML=head();$('#fab').innerHTML
 const prog=()=>{const i=SI[view];if(i==null)return'';return `<div class="prog"><div class="segs">${STEPS.map((s,k)=>`<i class="${k<i?'d':k===i?'c':''}"></i>`).join('')}</div><div class="plabel">ขั้นที่ ${i+1} จาก 5 · <b>${STEPS[i]}</b></div></div>`};
 const hero=()=>{
  const nm=T(greet).replace(/^คุณ/,'').split(/\s+/)[0]; // แสดงชื่อเฉพาะหลังลูกค้าเลือกสั่งซ้ำรายการเดิม
- return `<section class="hero"><div class="hero-in"><h2>${nm?`ยินดีต้อนรับกลับ คุณ${esc(nm)}`:'ยินดีต้อนรับสู่ แม่ดอนรุ่งเรืองฟู้ดส์'}</h2><p>${nm?'ท่านสามารถปรับจำนวนรายการเดิม หรือเลือกสินค้าเพิ่มเติมได้ตามต้องการ':'ผู้ผลิตและจำหน่ายผลิตภัณฑ์ขนมทอดกรอบจากกล้วย เผือก มัน มันฝรั่ง และฟักทอง เลือกสินค้า จัดทำรายการสั่งซื้อ และส่งให้บริษัทผ่านเพจ Facebook'}</p>
- <div class="hero-act"><button class="btn" onclick="go('again')">${ic('copy',18)} ลูกค้าเดิม สั่งซ้ำรายการเดิม</button><button class="btn" onclick="go('track')">${ic('search',18)} ตรวจสอบสถานะคำสั่งซื้อ</button>${telLink('hchip')}</div>
- <span class="hnote">${ic('info',15)} ${priceNote()}</span></div></section>`;
+ return `<section class="hero hc"><div class="hero-in"><h2>${nm?`ยินดีต้อนรับกลับ คุณ${esc(nm)}`:'ขนมทอดกรอบ จากกล้วย เผือก มัน มันฝรั่ง และฟักทอง'}</h2><p>${nm?'ปรับจำนวนรายการเดิม หรือเลือกสินค้าเพิ่มได้ตามต้องการ':'แม่ดอนรุ่งเรืองฟู้ดส์ · เลือกสินค้า จัดทำรายการ แล้วส่งให้บริษัทผ่านแชต Facebook'}</p>
+ <div class="hact"><button onclick="go('again')">${ic('copy',22)}<span>สั่งซ้ำ<br>รายการเดิม</span></button><button onclick="go('track')">${ic('search',22)}<span>ตรวจสอบ<br>สถานะ</span></button><a href="tel:${SHOP_TEL.replace(/\D/g,'')}">${ic('phone',22)}<span>โทร<br>${SHOP_TEL}</span></a></div>
+ <span class="hnote">${ic('info',15)} <span>${priceNote()}</span></span></div></section>`;
 };
+
 
 function render(){
  chrome();
