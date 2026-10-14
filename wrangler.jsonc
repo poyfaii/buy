@@ -13,10 +13,10 @@
     {
       "binding": "DB",
       "database_name": "maedon-db",
-      "database_id": "วางรหัส Database ID ตรงนี้"      // ขั้นที่ 1 ในคู่มือ
+      "database_id": "7e13e9cb-49bc-4f89-9b9a-24d336bcc139"      // ขั้นที่ 1 ในคู่มือ
     }
   ],
   "vars": {
-    "APPS_URL": "วาง URL Apps Script ที่ลงท้าย /exec ตรงนี้"   // URL เดิมที่เคยอยู่ใน config.js
+    "APPS_URL": "https://script.google.com/macros/s/AKfycbwpyOWsntMprTiFuwFIh174PJw-RZnMgD2YFlbPPdUCzu5JmRjQVUbXbesLw0jqmw99/exec"   // URL เดิมที่เคยอยู่ใน config.js
   }
 }
