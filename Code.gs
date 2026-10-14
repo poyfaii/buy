@@ -11,7 +11,7 @@
  */
 
 // ===== รหัสเข้าหน้าแอดมิน (เปลี่ยนได้ที่นี่ แล้วทำให้ใช้งานได้ใหม่) =====
-const VERSION = 'v20-2026-10-12';
+const VERSION = 'v21-2026-10-13';
 const ADMIN_USER = 'admin';
 const ADMIN_PASS = '1234';
 
@@ -48,7 +48,7 @@ function doGet(e) {
     const action = (e && e.parameter && e.parameter.action) || 'list';
     if (action === 'list') return json_(readAll_(false));
     if (action === 'sales') { const st = cachedSales_(); return json_({ ok: true, top: st.top, sales: st.sales }); }
-    if (action === 'ping') return json_({ ok: true, version: VERSION, features: ['sales', 'history3', 'price-always', 'variant-names', 'track', 'status', 'docno', 'docsnap', 'pay'] }); // เปิด URL/exec?action=ping เพื่อเช็กว่าใช้โค้ดเวอร์ชันใหม่
+    if (action === 'ping') return json_({ ok: true, version: VERSION, features: ['sales', 'history3', 'price-always', 'variant-names', 'track', 'status', 'docno', 'docsnap', 'pay', 'export'] }); // เปิด URL/exec?action=ping เพื่อเช็กว่าใช้โค้ดเวอร์ชันใหม่
     return json_({ ok: false, error: 'unknown action' });
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message || err) });
@@ -74,6 +74,7 @@ function doPost(e) {
     if (b.action === 'voidDoc') return json_(voidDoc_(b));
     if (b.action === 'listDocs') return json_(listDocs_(b));
     if (b.action === 'diag') return json_(diag_());
+    if (b.action === 'exportAll') return json_(exportAll_(b));
     return json_({ ok: false, error: 'unknown action' });
   } catch (err) {
     return json_({ ok: false, error: String(err && err.message || err) });
@@ -841,6 +842,38 @@ function onEdit(e) {
   } catch (err) { /* ข้ามไป ระบบจะเติมให้ตอนโหลดข้อมูลครั้งถัดไป */ }
 }
 
+
+/* ---------------- ส่งข้อมูลออก (ใช้ตอนย้ายไป Cloudflare D1 — ปุ่ม "ย้ายข้อมูล" ในหน้าแอดมิน > ตั้งค่า) ----------------
+ * b.part = 'info' -> จำนวนแถวของทุกตาราง ; b.table + b.from + b.count -> ส่งทีละช่วง (ไม่แก้ไขอะไรในชีต) */
+function cell_(v) { return v instanceof Date ? Utilities.formatDate(v, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss') : str_(v); }
+function exportTables_() {
+  return {
+    products: function () { fillIds_(); return rows_(sheet_(SHEET_PRODUCTS, PRODUCT_HEADERS)); },
+    variants: function () { return rows_(sheet_(SHEET_VARIANTS, VARIANT_HEADERS)); },
+    settings: function () { return rows_(sheet_(SHEET_SETTINGS, SETTING_HEADERS)); },
+    customers: function () { return rows_(sheet_(SHEET_CUSTOMERS, CUSTOMER_HEADERS)); },
+    orders: function () { return rows_(ordSheet_()); },
+    docs: function () { return rows_(docSheet_()); },
+    counters: function () { return rows_(sheet_(SHEET_COUNTERS, COUNTER_HEADERS)); }
+  };
+}
+function exportAll_(b) {
+  const T = exportTables_();
+  if (b.part === 'info') {
+    const counts = {};
+    Object.keys(T).forEach(function (k) { counts[k] = T[k]().length; });
+    return { ok: true, version: VERSION, counts: counts };
+  }
+  const f = T[str_(b.table)];
+  if (!f) throw new Error('ไม่รู้จักตาราง');
+  const all = f(), from = Math.max(0, num_(b.from)), cnt = Math.max(1, Math.min(500, num_(b.count) || 100));
+  const rows = all.slice(from, from + cnt).map(function (r) {
+    const o = {};
+    Object.keys(r).forEach(function (k) { o[k] = cell_(r[k]); });
+    return o;
+  });
+  return { ok: true, table: str_(b.table), total: all.length, from: from, rows: rows };
+}
 
 /* ---------------- ตรวจสอบสถานะระบบ (ปุ่ม "ทดสอบการเชื่อมต่อ" ในหน้าแอดมิน > ตั้งค่า) ---------------- */
 function diag_() {

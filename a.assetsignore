@@ -1,0 +1,10 @@
+worker
+wrangler.jsonc
+.assetsignore
+*.md
+*.zip
+*.gs
+*.json
+.git
+.github
+node_modules

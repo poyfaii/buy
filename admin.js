@@ -250,19 +250,67 @@ async function runDiag(){
 function diagHtml(){
  if(!REMOTE)return `<section class="sec" style="border-color:#f3b8b2"><h3>สถานะการเชื่อมต่อ: ยังไม่ได้เชื่อม</h3><p class="sub">โหมดทดลอง — ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น ไม่เข้า Google Sheets<br>แก้โดยใส่ URL เว็บแอป (ลงท้าย /exec) ในไฟล์ <b>config.js</b> บรรทัด <code>const API_URL='…'</code> แล้วอัปโหลดไฟล์ขึ้นเว็บอีกครั้ง</p></section>`;
  const r=dg;
- return `<section class="sec"><h3>สถานะการเชื่อมต่อ Google Sheets</h3><p class="sub">URL: …${esc(String(API_URL).slice(-22))}</p>
+ return `<section class="sec"><h3>สถานะการเชื่อมต่อ${r&&r.mode==='D1'?' (ฐานข้อมูล D1)':r?' Google Sheets':''}</h3><p class="sub">URL: …${esc(String(API_URL).slice(-22))}</p>
  ${r&&r.err?`<div class="err" role="alert" style="margin-top:10px">❌ ${esc(r.err)}</div>`:''}
- ${r&&r.ok?`<div class="note" style="margin-top:10px">${ic('check',18)}<span>เชื่อมต่อได้ — Code.gs เวอร์ชัน <b>${esc(r.version||'?')}</b><br>สินค้า ${r.products} · ตัวเลือก ${r.variants} · คำสั่งซื้อ ${r.orders} · ลูกค้า ${r.customers}${r.missing&&r.missing.length?`<br>⚠ ไม่พบแท็บ: ${esc(r.missing.join(', '))} (เรียกใช้ฟังก์ชัน setup ใน Apps Script)`:''}</span></div>`:''}
+ ${r&&r.ok?`<div class="note" style="margin-top:10px">${ic('check',18)}<span>เชื่อมต่อได้ — ${r.mode==='D1'?'Worker':'Code.gs'} เวอร์ชัน <b>${esc(r.version||'?')}</b><br>สินค้า ${r.products} · ตัวเลือก ${r.variants} · คำสั่งซื้อ ${r.orders} · ลูกค้า ${r.customers}${r.missing&&r.missing.length?`<br>⚠ ไม่พบแท็บ: ${esc(r.missing.join(', '))} (เรียกใช้ฟังก์ชัน setup ใน Apps Script)`:''}</span></div>`:''}
  <button class="btn pri" style="margin-top:12px" onclick="runDiag()"${dgBusy?' disabled':''}>${dgBusy?'กำลังทดสอบ…':'ทดสอบการเชื่อมต่อ'}</button></section>`;
+}
+/* ---------- ย้ายฐานข้อมูลไป Cloudflare D1 ---------- */
+let dbi,mg=null;
+async function loadDbi(){dbi=null;dbi=(await Service.dbinfo())||{none:true};render()}
+function dbHtml(){
+ if(!REMOTE)return'';
+ if(dbi===undefined){loadDbi();return''}
+ if(dbi===null)return`<section class="sec"><h3>ฐานข้อมูล</h3><p class="sub">กำลังตรวจสอบ…</p></section>`;
+ if(dbi.none)return`<section class="sec"><h3>ฐานข้อมูล</h3><p class="sub">ตอนนี้เว็บเชื่อม Google Sheets โดยตรง — ถ้าต้องการย้ายไป Cloudflare D1 (เร็วกว่า ฟรี) ให้ทำตาม "คู่มือติดตั้ง" หมวดย้ายไป D1 ก่อน</p></section>`;
+ if(mg&&mg.busy)return`<section class="sec"><h3>กำลังย้ายข้อมูลไป D1…</h3><div class="meter" role="progressbar" aria-valuenow="${mg.pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${mg.pct}%"></i></div><p class="hint">${esc(mg.msg)} — อย่าปิดหน้านี้จนกว่าจะเสร็จ</p></section>`;
+ const res=mg&&mg.done?`<div class="note" style="margin-top:10px">${ic('check',18)}<span>ย้ายเสร็จแล้ว: ${Object.keys(mg.counts).map(k=>k+' '+mg.counts[k]).join(' · ')}${mg.warn&&mg.warn.length?`<br>⚠ จำนวนต่างจากชีต: ${esc(mg.warn.join(', '))}`:''}</span></div>`:'';
+ const err=mg&&mg.err?`<div class="err" role="alert" style="margin-top:10px">❌ ${esc(mg.err)}</div>`:'';
+ if(dbi.mode==='d1')return`<section class="sec"><h3>ฐานข้อมูล: Cloudflare D1 <span class="hint">(ใช้งานอยู่)</span></h3><p class="sub">ข้อมูลทั้งหมดเก็บใน D1 — ย้ายเมื่อ ${esc(dbi.migratedAt||'-')} · Google Sheets ไม่ได้อัปเดตอีกแล้ว</p>${res}${err}
+ <div class="stack" style="grid-template-columns:1fr 1fr;margin-top:12px"><button class="btn" onclick="dlDb()">ดาวน์โหลดข้อมูลสำรองทั้งหมด</button><button class="btn dng" onclick="rbDb()">กลับไปใช้ Google Sheets</button></div></section>`;
+ if(!dbi.hasDB)return`<section class="sec"><h3>ฐานข้อมูล: Google Sheets</h3><p class="sub">ยังไม่ได้ผูกฐานข้อมูล D1 กับเว็บ — ดูคู่มือติดตั้งขั้นที่ 1–3 (ใส่ database_id ในไฟล์ wrangler.jsonc)</p></section>`;
+ return`<section class="sec"><h3>ฐานข้อมูล: Google Sheets <span class="hint">(ใช้งานอยู่)</span></h3><p class="sub">พร้อมย้ายไป Cloudflare D1 แล้ว — ใช้เวลาไม่กี่นาที ระหว่างย้ายลูกค้ายังสั่งซื้อได้ปกติ แต่ออเดอร์ที่เข้าระหว่างย้ายจะไม่ถูกนับ แนะนำให้ทำตอนเงียบๆ</p>${res}${err}
+ <button class="btn pri" style="margin-top:12px" onclick="runMigrate()">ย้ายข้อมูลไป D1</button></section>`;
+}
+async function runMigrate(){
+ if(!CRED_OK())return;
+ if(!confirm('ย้ายข้อมูลทั้งหมดจาก Google Sheets ไป Cloudflare D1 ตอนนี้?\n\n• ใช้เวลาไม่กี่นาที อย่าปิดหน้านี้\n• หลังย้ายเสร็จ Google Sheets จะไม่ถูกอัปเดตอีก (ข้อมูลเดิมยังอยู่ครบ)\n• กลับไปใช้ Sheets ได้ แต่ออเดอร์ใหม่ใน D1 จะไม่ตามกลับไป'))return;
+ mg={busy:true,pct:2,msg:'เริ่มต้น…'};render();
+ try{
+  const b=await Service.migrate('begin');
+  const steps=b.plan.reduce((n,p)=>n+Math.max(1,Math.ceil(p.total/p.chunk)),0)+1;let done=0;
+  for(const p of b.plan){
+   for(let from=0;from<p.total;from+=p.chunk){
+    mg.msg='กำลังย้าย '+p.table+' ('+Math.min(from+p.chunk,p.total)+'/'+p.total+')';mg.pct=Math.round(done/steps*95)+2;render();
+    await Service.migrate('part',{table:p.table,from:from});done++;
+   }
+  }
+  mg.msg='ตรวจสอบและสลับไปใช้ D1';mg.pct=97;render();
+  const f=await Service.migrate('finish');
+  mg={done:true,counts:f.counts,warn:f.warn};
+ }catch(e){mg={err:friendly(e.message)+' — ข้อมูลเดิมใน Google Sheets ยังใช้งานอยู่ตามปกติ'}}
+ dbi=undefined;render();
+}
+const CRED_OK=()=>{if(Service.hasSession())return true;toast('กรุณาเข้าสู่ระบบใหม่');return false};
+async function dlDb(){
+ try{
+  const j=await Service.backupDb(),b=new Blob([JSON.stringify(j)],{type:'application/json'}),a=document.createElement('a');
+  a.href=URL.createObjectURL(b);a.download='สำรองฐานข้อมูล-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  toast('ดาวน์โหลดไฟล์สำรองแล้ว');
+ }catch(e){toast(friendly(e.message),4000)}
+}
+async function rbDb(){
+ if(!confirm('กลับไปใช้ Google Sheets?\n\nออเดอร์/เอกสารที่เกิดขึ้นหลังย้ายมา D1 จะไม่อยู่ใน Google Sheets\nแนะนำให้กด "ดาวน์โหลดข้อมูลสำรองทั้งหมด" ไว้ก่อน'))return;
+ try{await Service.rollback();mg=null;dbi=undefined;toast('กลับไปใช้ Google Sheets แล้ว');render()}catch(e){toast(friendly(e.message),4000)}
 }
 function setView(){
  const used=JSON.stringify(D).length,pct=Math.min(100,Math.round(used/5000000*100));
  const bk=REMOTE
-  ?`<section class="sec"><h3>การเชื่อมต่อข้อมูล</h3><p class="sub">เชื่อมต่อ Google Sheets แล้ว — สินค้าที่เพิ่ม/แก้ไขที่นี่จะบันทึกลงชีตและลูกค้าทุกเครื่องเห็นตรงกัน (ลูกค้าอาจเห็นการเปลี่ยนแปลงช้าได้ไม่เกิน 2 นาที)</p><div class="stack" style="grid-template-columns:1fr 1fr"><button class="btn" onclick="backup()">ดาวน์โหลดไฟล์สำรอง</button><label class="btn">กู้คืนจากไฟล์สำรอง<input class="sr" type="file" accept=".json,application/json" onchange="restore(this)"></label></div></section>`
+  ?`<section class="sec"><h3>การเชื่อมต่อข้อมูล</h3><p class="sub">เชื่อมต่อฐานข้อมูลแล้ว — สินค้าที่เพิ่ม/แก้ไขที่นี่จะบันทึกลงฐานข้อมูลและลูกค้าทุกเครื่องเห็นตรงกัน (ลูกค้าอาจเห็นการเปลี่ยนแปลงช้าได้ไม่เกิน 2 นาที)</p><div class="stack" style="grid-template-columns:1fr 1fr"><button class="btn" onclick="backup()">ดาวน์โหลดไฟล์สำรอง</button><label class="btn">กู้คืนจากไฟล์สำรอง<input class="sr" type="file" accept=".json,application/json" onchange="restore(this)"></label></div></section>`
   :`<section class="sec"><h3>สำรองข้อมูลสินค้า</h3><p class="sub">ข้อมูลสินค้าเก็บอยู่ในเครื่อง/เบราว์เซอร์นี้ ควรดาวน์โหลดไฟล์สำรองไว้เป็นระยะ และใช้ย้ายข้อมูลไปเครื่องอื่นได้</p>
  <div class="hint">พื้นที่ที่ใช้ไป ${(used/1e6).toFixed(1)} MB จากประมาณ 5 MB</div><div class="meter" role="img" aria-label="ใช้พื้นที่ ${pct}%"><i style="width:${pct}%"></i></div>
  <div class="stack" style="grid-template-columns:1fr 1fr"><button class="btn" onclick="backup()">ดาวน์โหลดไฟล์สำรอง</button><label class="btn">กู้คืนจากไฟล์สำรอง<input class="sr" type="file" accept=".json,application/json" onchange="restore(this)"></label></div></section>`;
- return `<div class="edit"><h2 class="h2">ตั้งค่า</h2>${diagHtml()}
+ return `<div class="edit"><h2 class="h2">ตั้งค่า</h2>${diagHtml()}${dbHtml()}
  <section class="sec"><h3>ลิงก์ Facebook Page ของบริษัท</h3><label class="sr" for="fb">ลิงก์ Facebook Page</label><input id="fb" class="inp" type="url" style="margin-top:10px" value="${esc(D.fbUrl)}" placeholder="https://www.facebook.com/ชื่อเพจ"><p class="hint">ลูกค้าจะถูกพาไปที่ลิงก์นี้หลังคัดลอกข้อความสั่งซื้อ</p><button class="btn pri" style="margin-top:12px" onclick="saveFb()">${ic('check')} บันทึก</button></section>
  <section class="sec"><h3>หน่วยและบรรจุภัณฑ์ที่ใช้บ่อย</h3><p class="sub">ช่วยให้กรอกสินค้าเร็วขึ้น (เลือกจากรายการได้เลยตอนเพิ่มสินค้า)</p>${chipSet('units','หน่วยขนาด')}${chipSet('packs','บรรจุภัณฑ์')}</section>
  ${bk}

@@ -1,6 +1,6 @@
 // data.js — ข้อมูลและฟังก์ชันที่ใช้ร่วมกัน (หน้าร้าน + หน้าผู้ดูแล)
 // ถ้าจะเปลี่ยนที่เก็บข้อมูลเป็น Google Sheets / Firebase / ฐานข้อมูล ให้แก้เฉพาะ Service ด้านล่าง
-const WEB_VER='v28';
+const WEB_VER='v29';
 const IS_ADMIN=/admin/i.test(location.pathname);
 const KEY='mdr_data_v1',CKEY='mdr_cart_v1',UKEY='mdr_cust_v1',MAXV=5;
 const MSG_URL='https://m.me/61573351996765'; // ลิงก์เปิดแชต Messenger ของเพจโดยตรง (ลูกค้ากดแล้วเข้าหน้าแชตเลย)
@@ -200,6 +200,23 @@ const Service={
  async diag(){
   if(!REMOTE)return{local:true};
   return api(Object.assign({action:'diag'},CRED));
+ },
+ // ----- ย้ายฐานข้อมูล Google Sheets -> Cloudflare D1 (ทำงานเมื่อ API_URL='/api' และ Worker ผูก D1 แล้ว) -----
+ async dbinfo(){
+  if(!REMOTE)return null;
+  try{const j=await net(API_URL+(API_URL.includes('?')?'&':'?')+'action=dbinfo',{},15000);return j&&j.ok&&j.hasDB!==undefined?j:null}catch(e){return null}
+ },
+ async migrate(phase,extra){
+  try{return await api(Object.assign({action:'migrate',phase:phase},extra||{},CRED))}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
+ },
+ async rollback(){
+  try{return await api(Object.assign({action:'rollback'},CRED))}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
+ },
+ async backupDb(){
+  try{return await api(Object.assign({action:'backup'},CRED))}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
  },
  async placeOrder(o){
   if(!REMOTE){
