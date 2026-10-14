@@ -231,8 +231,21 @@ async function notifyLine(env, text) {
  return res;
 }
 function orderText(o) {
- const lines = o.lines.length > 30 ? o.lines.slice(0, 30).concat(['…และอีก ' + (o.lines.length - 30) + ' รายการ']) : o.lines;
- return ['🛒 ออเดอร์ใหม่ ' + o.id, o.name + ' · ' + o.phone, '', lines.join('\n'), '', [o.addr, o.tam, o.amp, o.prov, o.zip].filter(Boolean).join(' '), o.note ? 'หมายเหตุ: ' + o.note : '', 'เปิดดู: ' + o.origin + '/admin.html'].filter((x, i, a) => x !== '' || (a[i - 1] !== '' && i > 0)).join('\n');
+ const BAR = '━━━━━━━━━━━━━━';
+ const MO = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+ const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})/.exec(o.at || '');
+ const when = m ? (+m[3]) + ' ' + MO[+m[2] - 1] + ' ' + (+m[1] + 543) + ' · ' + m[4] + ' น.' : '';
+ const its = o.items || [], shown = its.slice(0, 30);
+ const rows = shown.map((i, n) => (n + 1) + '. ' + i.name + '\n     ' + [i.label, 'x ' + i.qty + (i.unit ? ' ' + i.unit : '')].filter(Boolean).join(' · '));
+ if (its.length > 30) rows.push('…และอีก ' + (its.length - 30) + ' รายการ');
+ const priced = its.length && its.every(i => typeof i.price === 'number');
+ const total = priced ? its.reduce((t, i) => t + i.price * i.qty, 0) : 0;
+ const addr = [o.addr, [o.tam, o.amp].filter(Boolean).join(' '), [o.prov, o.zip].filter(Boolean).join(' ')].filter(Boolean).join('\n');
+ const out = ['🛒 ออเดอร์ใหม่', 'เลขที่ ' + o.id].concat(when ? ['🕒 ' + when] : [], [BAR, '👤 ลูกค้า', o.name, '📞 ' + o.phone, BAR, '📦 รายการสินค้า (' + its.length + ' รายการ)', rows.join('\n'), BAR, '📍 ที่อยู่จัดส่ง', addr || '-']);
+ if (o.note) out.push(BAR, '📝 หมายเหตุ', o.note);
+ if (priced) out.push(BAR, '💰 ยอดโดยประมาณ ' + total.toLocaleString('en-US') + ' บาท');
+ out.push(BAR, '🔗 จัดการออเดอร์', o.origin + '/admin.html');
+ return out.join('\n');
 }
 
 /* ---------- คำสั่งซื้อ ---------- */
@@ -269,7 +282,7 @@ async function saveOrder(env, o, ctx, origin) {
   throw e;
  }
  if (lineOn(env)) {
-  const p = notifyLine(env, orderText({ id, name, phone, lines, addr: f.address, tam: f.tambon && 'ต.' + f.tambon, amp: f.amphoe && 'อ.' + f.amphoe, prov: f.province && 'จ.' + f.province, zip: f.zip, note: clean(o.note, 200), origin: origin || '' }));
+  const p = notifyLine(env, orderText({ id, at, name, phone, items: js, addr: f.address, tam: f.tambon && 'ต.' + f.tambon, amp: f.amphoe && 'อ.' + f.amphoe, prov: f.province && 'จ.' + f.province, zip: f.zip, note: clean(o.note, 200), origin: origin || '' }));
   if (ctx && ctx.waitUntil) ctx.waitUntil(p); else await p;
  }
  return { ok: true, orderId: id };

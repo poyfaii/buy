@@ -1,9 +1,8 @@
 // data.js — ข้อมูลและฟังก์ชันที่ใช้ร่วมกัน (หน้าร้าน + หน้าผู้ดูแล)
 // ถ้าจะเปลี่ยนที่เก็บข้อมูลเป็น Google Sheets / Firebase / ฐานข้อมูล ให้แก้เฉพาะ Service ด้านล่าง
-const WEB_VER='v31';
+const WEB_VER='v32';
 const IS_ADMIN=/admin/i.test(location.pathname);
 const KEY='mdr_data_v1',CKEY='mdr_cart_v1',UKEY='mdr_cust_v1',MAXV=5;
-const MSG_URL='https://m.me/61573351996765'; // ลิงก์เปิดแชต Messenger ของเพจโดยตรง (ลูกค้ากดแล้วเข้าหน้าแชตเลย)
 const FB_DEFAULT='https://www.facebook.com/share/1C4DTWS3ef/?mibextid=wwXIfr'; // ลิงก์เพจ Facebook ของบริษัท
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36).slice(-3);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -49,7 +48,7 @@ const ic=(n,s=20)=>`<svg class="ic" viewBox="0 0 24 24" width="${s}" height="${s
 const mkV=(size='',sizeUnit='',packaging='',price='',i=0)=>({id:uid(),size,sizeUnit,packaging,price,status:true,sortOrder:i});
 
 // ข้อความหมายเหตุราคา (แสดงที่หน้ารายละเอียดสินค้า — แก้ได้รายสินค้าในหน้าแอดมิน)
-const PRICE_NOTE='ราคาอาจมีการปรับเปลี่ยน กรุณายืนยันราคากับทางร้านในแชต Facebook ก่อนสั่งซื้อ';
+const PRICE_NOTE='ราคาอาจมีการปรับเปลี่ยน บริษัทจะยืนยันราคาและค่าจัดส่งกับคุณอีกครั้งหลังรับคำสั่งซื้อ';
 const noteOf=p=>p.note===undefined?PRICE_NOTE:T(p.note);
 // ชุดขนาดมาตรฐานของสินค้าทุกรายการ
 const SIZES=[['500','กรัม'],['1','กิโลกรัม'],['ยกลัง','']];

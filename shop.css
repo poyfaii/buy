@@ -1,0 +1,208 @@
+/* shop.css — ดีไซน์หน้าลูกค้า (เฉพาะหน้า index.html ผ่าน body.shop; หน้าแอดมินไม่ถูกแตะ)
+   พาเลตต์ 5 สี: เขียวป่า #12301f · ทอง #d9a53a · กระดาษ #f5f6f0 · ขาว #ffffff · เขียวเทา #66766b
+   (สีแดงใช้เฉพาะข้อความแจ้งข้อผิดพลาด) */
+body.shop{
+ --forest:#12301f;--gold:#d9a53a;--paper:#f5f6f0;--white:#fff;--sage:#66766b;
+ --bg:var(--paper);--surface:var(--white);--tx:var(--forest);--mu:var(--sage);
+ --line:rgba(18,48,31,.12);--soft:rgba(18,48,31,.05);--accs:rgba(18,48,31,.05);
+ --pr:var(--forest);--pr2:#0b2015;--prt:#fff;--ring:var(--gold);--ok:var(--forest);
+ --gline:rgba(217,165,58,.5);--gl:rgba(217,165,58,.16);--goldd:#7a5a10;
+ --sh:none;--e1:none;--e2:0 14px 30px -18px rgba(18,48,31,.35);--e3:none;--lit:none;
+ --serif:'Noto Serif Thai','Noto Serif',Georgia,serif;
+ font-family:'IBM Plex Sans Thai','Noto Sans Thai',system-ui,sans-serif;background:var(--paper);background-attachment:scroll}
+body.shop :focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+body.shop .wrap{max-width:1120px;padding:20px 16px 130px}
+@media(min-width:900px){body.shop .wrap{padding:28px 24px 140px}}
+
+/* ---------- หัวเว็บ ---------- */
+body.shop .top{background:var(--forest);backdrop-filter:none;-webkit-backdrop-filter:none;box-shadow:none;border-bottom:1px solid rgba(217,165,58,.35)}
+body.shop .bar{padding:10px 16px;gap:12px}
+body.shop .logo-img{width:48px;height:48px;box-shadow:0 0 0 2px var(--gold);background:#fff}
+body.shop .top .brand .bn{gap:1px}
+body.shop .top .brand .bn .w{color:#fff}
+body.shop .top .brand .bn .w1,body.shop .top .brand .bn .w3{font-size:11.5px;letter-spacing:.04em;font-weight:500;color:var(--gold)}
+body.shop .top .brand .bn .w2{font-family:var(--serif);font-size:20px;font-weight:700;letter-spacing:0;background:none;-webkit-text-fill-color:#fff;color:#fff;filter:none;animation:wrise .6s var(--ease) .18s forwards}
+body.shop .top .brand{font-weight:700}
+body.shop .swbtn{background:transparent;border:1px solid rgba(255,255,255,.3);color:#fff;min-height:44px;border-radius:12px;font-weight:500;font-size:14.5px}
+body.shop .top .swbtn{background:transparent;color:#fff;border-color:rgba(255,255,255,.3)}
+body.shop .swbtn:hover{background:rgba(255,255,255,.1)}
+body.shop .cartbtn{background:var(--gold);border:0;color:var(--forest);min-height:44px;border-radius:12px;font-weight:700;box-shadow:none}
+body.shop .cartbtn:hover{background:#e6b54a;transform:none;box-shadow:none}
+body.shop .top .cartbtn{background:var(--gold);color:var(--forest)}
+body.shop .top .badge{background:var(--forest);color:#fff}
+@media(max-width:560px){
+ body.shop .top .brand .bn .w1,body.shop .top .brand .bn .w3{display:none}
+ body.shop .top .brand .bn .w2{font-size:17px;line-height:1.25}
+ body.shop .swbtn .t{display:none}body.shop .swbtn{padding:0;width:44px;justify-content:center}
+}
+
+/* ---------- ส่วนต้อนรับ (จุดเด่นของหน้า) ---------- */
+body.shop .hero,body.shop .hero.hc{background:var(--forest);border:0;border-radius:24px;padding:26px 22px 20px;margin-bottom:22px;box-shadow:none;color:#fff;position:relative;overflow:hidden}
+body.shop .hero::after{display:none}
+body.shop .hero::before{content:"";position:absolute;left:22px;top:0;width:56px;height:4px;background:var(--gold);border-radius:0 0 4px 4px}
+body.shop .hero .hero-in{display:grid;gap:6px}
+body.shop .hero.hc h2{font-family:var(--serif);font-size:25px;line-height:1.4;font-weight:700;color:#fff;max-width:20em;margin-top:6px}
+body.shop .hero.hc p{color:rgba(255,255,255,.74);font-size:15px;margin-top:2px}
+body.shop .hero.hc .hact{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:18px}
+body.shop .hero.hc .hact>*{background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:16px;min-height:72px;font-weight:500;font-size:13.5px;transition:background .15s,border-color .15s;box-shadow:none}
+body.shop .hero.hc .hact>*:hover{background:rgba(255,255,255,.13);border-color:var(--gold)}
+body.shop .hero.hc .hact .ic{color:var(--gold)}
+body.shop .hero.hc .hnote{color:rgba(255,255,255,.58);font-size:12.5px;margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.12)}
+@media(min-width:900px){
+ body.shop .hero,body.shop .hero.hc{padding:40px 44px 30px}
+ body.shop .hero::before{left:44px}
+ body.shop .hero .hero-in{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);column-gap:48px;align-items:end}
+ body.shop .hero.hc h2{font-size:36px;grid-column:1;grid-row:1}
+ body.shop .hero.hc p{grid-column:1;grid-row:2;font-size:16.5px}
+ body.shop .hero.hc .hact{grid-column:2;grid-row:1/3;margin:0}
+ body.shop .hero.hc .hnote{grid-column:1/-1}
+}
+
+/* ---------- ขั้นตอน ---------- */
+body.shop .prog{margin:0 0 18px}
+body.shop .segs i{height:3px;background:var(--line)}
+body.shop .segs i.d{background:var(--forest);opacity:1}
+body.shop .segs i.c{background:var(--gold)}
+body.shop .plabel{font-size:13.5px;color:var(--sage)}
+body.shop .h2{font-family:var(--serif);font-size:24px;font-weight:700;line-height:1.35;color:var(--forest);margin:4px 0 14px}
+body.shop .back{color:var(--sage);font-weight:500}
+
+/* ---------- ปุ่ม ---------- */
+body.shop .btn{border:1px solid var(--line);background:var(--white);color:var(--forest);font-weight:600;border-radius:14px;box-shadow:none;transition:background .15s,border-color .15s,color .15s}
+body.shop .btn:hover{background:var(--soft);border-color:rgba(18,48,31,.3)}
+body.shop .btn.pri,body.shop .btn.go,body.shop .card .btn.go{background:var(--forest);border-color:var(--forest);color:#fff;box-shadow:none;background-image:none}
+body.shop .btn.pri:hover,body.shop .btn.go:hover,body.shop .card .btn.go:hover{background:#0b2015;border-color:#0b2015;filter:none;background-image:none}
+body.shop .btn.go:active{transform:scale(.98);box-shadow:none}
+body.shop .btn.lg{min-height:56px;border-radius:16px;font-size:16.5px}
+body.shop .btn.dng{color:#a8281c}
+
+/* ---------- ค้นหา / หมวด ---------- */
+body.shop .search .inp{background:var(--white);border:1px solid var(--line);box-shadow:none;border-radius:16px;min-height:56px}
+body.shop .search .inp:focus,body.shop .inp:focus{border-color:var(--forest);box-shadow:0 0 0 3px rgba(217,165,58,.35)}
+body.shop .cats{padding:14px 0 4px;gap:8px}
+body.shop .cat{background:var(--white);border:1px solid var(--line);color:var(--forest);font-weight:500;box-shadow:none;min-height:42px}
+body.shop .cat[aria-pressed=true]{background:var(--forest);border-color:var(--forest);color:#fff;box-shadow:none;background-image:none}
+body.shop .cat[data-k]::before{display:none}
+body.shop .gmeta{color:var(--sage);font-size:14px;font-weight:400}
+
+/* ---------- สินค้าขายดี ---------- */
+body.shop .best{background:var(--white);border:1px solid var(--line);border-radius:24px;box-shadow:none;padding:20px 16px 16px;margin:18px 0 28px;position:relative}
+body.shop .best::before{display:none}
+body.shop .best-h{margin-bottom:14px}
+body.shop .best-ic{background:var(--gold);color:var(--forest);box-shadow:none;border-radius:12px;width:42px;height:42px}
+body.shop .best-ic .ic{fill:var(--forest)}
+body.shop .best-h h3{font-family:var(--serif);font-size:21px;font-weight:700;color:var(--forest)}
+body.shop .best-h p{color:var(--sage);font-size:14px}
+body.shop .b1{background:var(--paper);border:1px solid var(--line);border-left:4px solid var(--gold);border-radius:18px;box-shadow:none;padding:16px 14px 16px 18px}
+body.shop .b1 h4{font-family:var(--serif);font-size:21px;font-weight:700;color:var(--forest)}
+body.shop .bpic{background:var(--soft);color:var(--forest);box-shadow:none;border-radius:14px}
+body.shop .tagc{background:var(--gold);color:var(--forest);font-weight:600;font-size:12px;border-radius:6px;padding:2px 9px}
+body.shop .bm{background:var(--white);border:1px solid var(--line);box-shadow:none;border-radius:16px;transition:border-color .15s}
+body.shop .bm:hover{transform:none;border-color:var(--forest)}
+body.shop .bm h4{font-weight:600;color:var(--forest)}
+body.shop .medal{box-shadow:none;animation:none;font-family:var(--serif);font-weight:700}
+body.shop .m1{background:var(--gold);color:var(--forest)}
+body.shop .m2,body.shop .m3,body.shop .m4,body.shop .m5{background:var(--forest);color:#fff}
+body.shop .sold,body.shop .sold.big,body.shop .sold.sm{background:var(--gl);border:0;color:var(--goldd);font-weight:600}
+body.shop .sold .ic{color:var(--goldd);fill:none;stroke:var(--goldd)}
+body.shop .rsold{color:var(--goldd)}
+
+body.shop .sechead{margin:6px 0 0}
+body.shop .sechead h3{font-family:var(--serif);font-size:21px;font-weight:700;color:var(--forest)}
+body.shop .sechead::after{background:var(--line);height:1px}
+
+/* ---------- การ์ดสินค้า ---------- */
+body.shop .grid{gap:12px}
+body.shop .card{background:var(--white);border:1px solid var(--line);border-radius:20px;box-shadow:none;padding:14px;gap:14px;transition:border-color .18s,box-shadow .18s}
+body.shop .card:hover{transform:none;border-color:rgba(18,48,31,.35);box-shadow:var(--e2)}
+body.shop .card:active{transform:none}
+body.shop .card.hot{border-color:var(--gold)}
+body.shop .cimg{width:72px;height:72px;border-radius:16px;box-shadow:none;background:var(--soft)}
+body.shop .card:hover .cimg{transform:none}
+body.shop .ph{background:var(--soft);color:var(--forest)}
+body.shop .cbody h3{font-family:var(--serif);font-size:18px;font-weight:700;line-height:1.4;color:var(--forest)}
+body.shop .desc{color:var(--sage)}
+body.shop .plist .pv,body.shop .pv{color:var(--forest);font-weight:600}
+body.shop .card .btn.go{min-height:46px;border-radius:12px;font-size:15.5px;font-weight:600;padding:0 12px 0 16px}
+body.shop .star{background:var(--white);border:1px solid var(--line);color:var(--sage);backdrop-filter:none;-webkit-backdrop-filter:none}
+body.shop .star.on{background:var(--gl);border-color:var(--gold);color:var(--goldd)}
+body.shop .star.on .ic{fill:var(--gold);stroke:var(--goldd)}
+
+/* ---------- หน้าสินค้า / รายการสั่งซื้อ / ฟอร์ม ---------- */
+body.shop .sec{background:var(--white);border:1px solid var(--line);border-radius:20px;box-shadow:none;padding:18px}
+body.shop .sec h3{font-family:var(--serif);font-size:18px;font-weight:700;color:var(--forest)}
+body.shop .lbl{font-size:15.5px;font-weight:600;color:var(--forest)}
+body.shop .inp{background:var(--white);border:1px solid rgba(18,48,31,.22);border-radius:12px}
+body.shop .inp.bad{border-color:#a8281c}
+body.shop .err{color:#a8281c}
+body.shop .req{color:#a8281c}
+body.shop .note{background:var(--gl);border:0;border-radius:14px;color:var(--forest)}
+body.shop .note .ic{color:var(--goldd)}
+body.shop .opt{background:var(--white);border:1px solid var(--line);font-weight:600;border-radius:14px}
+body.shop .opt:hover{border-color:rgba(18,48,31,.4)}
+body.shop .opt[aria-checked=true],body.shop .opt[aria-checked="true"]{background:var(--white);border:2px solid var(--forest);box-shadow:none}
+body.shop .opt .radio{border-color:var(--sage)}
+body.shop .opt[aria-checked=true] .radio{border-color:var(--forest)}
+body.shop .opt[aria-checked=true] .radio::after{background:var(--forest)}
+body.shop .qty{border:1px solid rgba(18,48,31,.22);border-radius:14px}
+body.shop .qty button{background:var(--soft);color:var(--forest)}
+body.shop .qu{color:var(--forest)}
+body.shop .total{background:var(--forest);border:0;border-radius:16px;color:#fff;box-shadow:none}
+body.shop .total small{color:rgba(255,255,255,.7)}
+body.shop .total b{font-family:var(--serif);color:var(--gold)}
+body.shop .total.unk b{color:#fff}
+body.shop .line{background:var(--white);border:1px solid var(--line);border-radius:18px;box-shadow:none}
+body.shop .lprice b{color:var(--forest)}
+body.shop .sumrow{border-bottom:1px solid var(--line)}
+body.shop .hcard{background:var(--paper);border:1px solid var(--line);box-shadow:none}
+body.shop .chk input{accent-color:var(--forest)}
+body.shop .tel{color:var(--forest);font-weight:600}
+body.shop .stb.wait{background:var(--gl);color:var(--goldd)}
+body.shop .stb.ok{background:var(--forest);color:#fff}
+body.shop .ctab th{background:var(--soft)}
+
+/* ---------- หน้าส่งคำสั่งซื้อสำเร็จ ---------- */
+body.shop .okcard{text-align:center;display:grid;justify-items:center;gap:8px;padding:28px 18px;background:var(--forest);border:0;color:#fff}
+body.shop .okcard .h2{color:#fff;margin:6px 0 0}
+body.shop .okcard .mu{color:rgba(255,255,255,.74);max-width:26em}
+body.shop .okmark{background:var(--gold);color:var(--forest);animation:okp .55s both}
+body.shop .okmark::after{border-color:rgba(217,165,58,.6)}
+body.shop .oid{margin-top:10px;padding:10px 20px;border:1px dashed rgba(217,165,58,.7);border-radius:14px;display:grid;gap:0}
+body.shop .oid small{font-size:12.5px;color:rgba(255,255,255,.65)}
+body.shop .oid b{font-family:var(--serif);font-size:20px;color:var(--gold);letter-spacing:.02em}
+body.shop .adminlink{color:var(--sage)}
+body.shop .adminlink a{color:var(--forest)}
+
+/* ---------- ติดต่อ / ที่ตั้ง ---------- */
+body.shop .contact{margin-top:44px;padding-top:28px;border-top:1px solid var(--line)}
+body.shop .contact .sechead h3{font-size:22px}
+body.shop .cname{font-family:var(--serif);font-size:19px;color:var(--forest)}
+body.shop .cname2{color:var(--sage);font-size:14.5px}
+body.shop .crow2{background:var(--white);border:1px solid var(--line);color:var(--forest);font-weight:600;border-radius:14px}
+body.shop .crow2 .ic{color:var(--goldd)}
+body.shop .crow2:hover{transform:none;box-shadow:none;border-color:var(--forest)}
+body.shop .cmap{border:1px solid var(--line);box-shadow:none;border-radius:20px}
+
+/* ---------- ปุ่มลอย / แจ้งเตือน ---------- */
+body.shop .fab{background:var(--forest);background-image:none;color:#fff;border-radius:18px;box-shadow:0 18px 34px -14px rgba(18,48,31,.7);border:1px solid rgba(217,165,58,.5);font-weight:600}
+body.shop .fab span:last-child{color:var(--gold);font-weight:700}
+body.shop #toast{background:var(--forest);color:#fff;border:1px solid rgba(217,165,58,.5);border-radius:14px}
+
+@media(prefers-reduced-motion:reduce){body.shop *{animation:none!important;transition:none!important}}
+
+/* ---------- ราคาในการ์ด / ตารางสินค้า ---------- */
+body.shop .plist{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:4px 12px}
+body.shop .plist li{color:var(--forest);font-size:14.5px;padding:7px 0}
+body.shop .plist li+li{border-top:1px solid var(--line)}
+body.shop .plist .pv,body.shop .plist .pv b{color:var(--forest)}
+body.shop .plist .pv small{color:var(--sage)}
+body.shop .plist .pv.unk,body.shop .plist .pv.unk b,body.shop .oprice.unk,body.shop .oprice.unk b,body.shop .pq{color:var(--goldd)}
+body.shop .oprice{color:var(--forest)}
+body.shop .grid{grid-template-columns:minmax(0,1fr)}
+@media(min-width:600px){body.shop .grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}}
+@media(min-width:960px){body.shop .grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}}
+body.shop .cimgw{position:relative}
+body.shop .cimgw .cimg{width:100%;height:auto;aspect-ratio:16/10;border-radius:14px}
+body.shop .card.tile{flex-direction:column;align-items:stretch}
+body.shop .card.tile .btn.go{width:100%;justify-content:center}
+body.shop .phead .h2{font-size:26px}

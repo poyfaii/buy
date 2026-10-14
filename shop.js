@@ -1,4 +1,4 @@
-// shop.js — หน้าลูกค้า (ไม่แสดงราคา — คุยราคาในแชต Facebook)
+// shop.js — หน้าลูกค้า
 const PAGE=24;
 const SHOP_LAT=16.842186444945238,SHOP_LNG=99.93208137099553; // พิกัดที่ตั้งบริษัท (แก้ได้ที่นี่)
 const SHOP_TEL='091-383-0459'; // เบอร์โทรเพจ/ร้าน (แก้ได้ที่นี่)
@@ -9,7 +9,7 @@ try{const u=JSON.parse(localStorage.getItem(UKEY));if(u)Object.assign(cust,{name
 const saveCart=()=>{try{localStorage.setItem(CKEY,JSON.stringify(cart))}catch(e){}};
 const saveCust=()=>{try{localStorage.setItem(UKEY,JSON.stringify({name:cust.name,phone:cust.phone,prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:cust.zip,addr:cust.addr,taxName:cust.taxName,taxId:cust.taxId,taxAddr:cust.taxAddr}))}catch(e){}};
 const prod=id=>D&&D.products.find(p=>p.id===id);
-const priceNote=()=>'ราคาที่แสดงเป็นราคาโดยประมาณ ตัวเลือกที่แสดง $$$ บาท ราคาอยู่ระหว่างกำหนด ค่าจัดส่งและราคาสุดท้ายยืนยันกับบริษัทผ่านแชต Facebook';
+const priceNote=()=>'ราคาที่แสดงเป็นราคาโดยประมาณ ตัวเลือกที่แสดง $$$ บาท ราคาอยู่ระหว่างกำหนด ค่าจัดส่งและราคาสุดท้ายบริษัทจะยืนยันกับคุณอีกครั้งหลังรับคำสั่งซื้อ';
 const lineP=i=>hasP(i.v)?Number(i.v.price)*i.qty:null;
 const sumP=l=>l.reduce((t,i)=>t+(lineP(i)||0),0);
 const unkN=l=>l.filter(i=>lineP(i)==null).length;
@@ -50,7 +50,7 @@ const chrome=()=>{const n=count();$('#hdr').innerHTML=head();$('#fab').innerHTML
 const prog=()=>{const i=SI[view];if(i==null)return'';return `<div class="prog"><div class="segs">${STEPS.map((s,k)=>`<i class="${k<i?'d':k===i?'c':''}"></i>`).join('')}</div><div class="plabel">ขั้นที่ ${i+1} จาก 5 · <b>${STEPS[i]}</b></div></div>`};
 const hero=()=>{
  const nm=T(greet).replace(/^คุณ/,'').split(/\s+/)[0]; // แสดงชื่อเฉพาะหลังลูกค้าเลือกสั่งซ้ำรายการเดิม
- return `<section class="hero hc"><div class="hero-in"><h2>${nm?`ยินดีต้อนรับกลับ คุณ${esc(nm)}`:'ขนมทอดกรอบ จากกล้วย เผือก มัน มันฝรั่ง และฟักทอง'}</h2><p>${nm?'ปรับจำนวนรายการเดิม หรือเลือกสินค้าเพิ่มได้ตามต้องการ':'แม่ดอนรุ่งเรืองฟู้ดส์ · เลือกสินค้า จัดทำรายการ แล้วส่งให้บริษัทผ่านแชต Facebook'}</p>
+ return `<section class="hero hc"><div class="hero-in"><h2>${nm?`ยินดีต้อนรับกลับ คุณ${esc(nm)}`:'ขนมทอดกรอบ จากกล้วย เผือก มัน มันฝรั่ง และฟักทอง'}</h2><p>${nm?'ปรับจำนวนรายการเดิม หรือเลือกสินค้าเพิ่มได้ตามต้องการ':'แม่ดอนรุ่งเรืองฟู้ดส์ · เลือกสินค้า กรอกที่อยู่ แล้วส่งคำสั่งซื้อถึงบริษัทได้ทันที'}</p>
  <div class="hact"><button onclick="go('again')">${ic('copy',22)}<span>สั่งซ้ำ<br>รายการเดิม</span></button><button onclick="go('track')">${ic('search',22)}<span>ตรวจสอบ<br>สถานะ</span></button><a href="tel:${SHOP_TEL.replace(/\D/g,'')}">${ic('phone',22)}<span>โทร<br>${SHOP_TEL}</span></a></div>
  <span class="hnote">${ic('info',15)} <span>${priceNote()}</span></span></div></section>`;
 };
@@ -91,7 +91,7 @@ function contactHtml(){
  return `<section class="contact" id="contact" aria-label="ติดต่อบริษัท"><div class="sechead"><h3>ติดต่อและที่ตั้งบริษัท</h3></div>
  <div class="cgrid"><div class="cinfo"><b class="cname">${esc(COMPANY.name)}</b><p class="cname2"><b>${esc(COMPANY.branch)}</b><br>${esc(COMPANY.addr)}<br>เลขประจำตัวผู้เสียภาษี ${esc(COMPANY.taxId)}</p>
  <a class="crow2" href="tel:${SHOP_TEL.replace(/\D/g,'')}">${ic('phone',20)}<span><small>โทรศัพท์</small>${SHOP_TEL}</span></a>
- <a class="crow2" href="${MSG_URL}" target="_blank" rel="noopener">${ic('send',20)}<span><small>แชต Facebook Messenger</small>ส่งข้อความถึงบริษัท</span></a>
+ <a class="crow2" href="${esc(D&&D.fbUrl||FB_DEFAULT)}" target="_blank" rel="noopener">${ic('send',20)}<span><small>เพจ Facebook</small>แม่ดอนรุ่งเรืองฟู้ดส์</span></a>
  <a class="crow2" href="https://www.google.com/maps/search/?api=1&query=${ll}" target="_blank" rel="noopener">${ic('pin',20)}<span><small>พิกัดที่ตั้ง</small>${SHOP_LAT.toFixed(5)}, ${SHOP_LNG.toFixed(5)}</span></a>
  <a class="btn pri go lg" href="https://www.google.com/maps/dir/?api=1&destination=${ll}" target="_blank" rel="noopener">${ic('pin',18)} นำทางไปยังบริษัท</a></div>
  <div class="cmap"><iframe title="แผนที่ที่ตั้งบริษัท แม่ดอนรุ่งเรืองฟู้ดส์ จำกัด" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${ll}&z=15&output=embed"></iframe></div></div></section>`;
@@ -298,16 +298,6 @@ function toReview(){
 
 /* ---------- ตรวจสอบ / ข้อความ ---------- */
 const taxTxt=()=>cust.tax?`ชื่อ: ${T(cust.taxName)}\nเลขประจำตัวผู้เสียภาษี: ${T(cust.taxId).replace(/\D/g,'')}\nที่อยู่: ${T(cust.taxAddr)}`:'';
-const taxMsg=()=>cust.tax?`\n\n🧾 ขอใบกำกับภาษี\n\n${taxTxt()}`:'';
-function makeMsg(){
- const l=items();
- return `📦 ใบสั่งซื้อสินค้า\nบริษัท แม่ดอนรุ่งเรืองฟู้ดส์ จำกัด\n🧾 เลขที่: ${ord.id}\n\n👤 ข้อมูลผู้สั่งซื้อ\n\nชื่อ: ${T(cust.name)}\nโทร: ${T(cust.phone)}\n\n🛍️ รายการสินค้า\n\n`
- +l.map((i,n)=>{
-   const s=[T(i.v&&i.v.size),T(i.v&&i.v.size)?T(i.v.sizeUnit):''].filter(Boolean).join(' '),pk=i.v?T(i.v.packaging):'';
-   return `${n+1}. ${i.p.name}`+(s?`\n   ขนาด: ${s}`:'')+(pk?`\n   บรรจุภัณฑ์: ${pk}`:'')+`\n   จำนวน: ${i.qty}${qunit(i.v)?' '+qunit(i.v):''}`+(hasP(i.v)?`\n   ราคา: ${money(i.v.price)} x ${i.qty} = ${money(lineP(i))}`:'');
-  }).join('\n\n')
- +`\n\n📍 ที่อยู่จัดส่ง\n\n${fullAddr()}\n\n📝 หมายเหตุ\n\n${T(cust.note)||'-'}${taxMsg()}${unkN(l)||!l.length?'':`\n\n💰 ยอดรวมโดยประมาณ: ${money(sumP(l))}`}\n\n💬 ขอความกรุณายืนยันราคาและค่าจัดส่งในแชตนี้ (ราคาอาจมีการเปลี่ยนแปลง)`;
-}
 function reviewView(){
  return `<h2 class="h2">ตรวจสอบคำสั่งซื้อ</h2>
  <section class="sec"><h3>ข้อมูลผู้สั่ง</h3><p style="margin-top:8px"><b>${esc(cust.name)}</b></p><p class="mu">โทร ${esc(cust.phone)}</p><p style="margin-top:8px;white-space:pre-line">${esc(fullAddr())}</p>${T(cust.note)?`<p class="mu" style="margin-top:8px">หมายเหตุ: ${esc(cust.note)}</p>`:''}${cust.tax?`<p class="mu" style="margin-top:8px;white-space:pre-line">ขอใบกำกับภาษี\n${esc(taxTxt())}</p>`:''}</section>
@@ -325,7 +315,7 @@ async function viewDoc(){
  openDoc(docHtml({type:'quote',no:no,date:dmy(new Date()),
   buyer:t?{name:c.taxName,addr:c.taxAddr,taxId:String(c.taxId).replace(/\D/g,''),tel:c.phone}:{name:c.name,addr:c.fa,tel:c.phone},
   lines:doneItems.map(i=>({name:i.p.name,label:i.v?vlabel(i.v):'',qty:i.qty,unit:qunit(i.v)})),
-  note:'เอกสารนี้จัดทำจากคำสั่งซื้อทางเว็บไซต์ ราคาและค่าจัดส่งยืนยันกับบริษัทผ่านแชต Facebook'+(t?'\nผู้สั่งขอใบกำกับภาษี บริษัทจะออกให้เมื่อตกลงราคาและจัดส่งเรียบร้อย':'')}));
+  note:'เอกสารนี้จัดทำจากคำสั่งซื้อทางเว็บไซต์ ราคาและค่าจัดส่งยืนยันกับบริษัทอีกครั้งหลังรับคำสั่งซื้อ'+(t?'\nผู้สั่งขอใบกำกับภาษี บริษัทจะออกให้เมื่อตกลงราคาและจัดส่งเรียบร้อย':'')}));
  docBusy=false;toast('พร้อมแล้ว',600);
 }
 function calcHtml(){
@@ -333,13 +323,12 @@ function calcHtml(){
  return `<section class="sec calc"><h3>สรุปรายการและยอดโดยประมาณ</h3><table class="ctab"><thead><tr><th>สินค้า</th><th class="n">จำนวน</th><th class="n">ราคา/หน่วย</th><th class="n">รวม</th></tr></thead><tbody>${l.map(i=>`<tr><td><b>${esc(i.p.name)}</b>${i.v?`<small>${esc(vlabel(i.v))}</small>`:''}</td><td class="n">${i.qty}${qunit(i.v)?' '+qunit(i.v):''}</td><td class="n">${hasP(i.v)?Number(i.v.price).toLocaleString('th-TH'):'<span class="pq">$$$</span>'}</td><td class="n">${hasP(i.v)?lineP(i).toLocaleString('th-TH'):'<span class="pq">$$$</span>'}</td></tr>`).join('')}</tbody></table>${totalHtml(l)}<p class="hint">${priceNote()}</p></section>`;
 }
 function doneView(){
- return `<section class="sec" style="text-align:center;display:grid;justify-items:center;gap:6px"><div class="okmark">${ic('check',34)}</div><h2 class="h2" style="margin:6px 0 0">จัดทำคำสั่งซื้อเรียบร้อยแล้ว</h2><p class="mu">ระบบจัดทำข้อความคำสั่งซื้อให้เรียบร้อยแล้ว กรุณาส่งคำสั่งซื้อให้บริษัทผ่านเพจ Facebook ตามขั้นตอนด้านล่าง</p></section>
- ${ordHtml()}${calcHtml()}<section class="sec"><h3>ขั้นตอนการส่งคำสั่งซื้อ</h3><ol class="how"><li>กดปุ่ม “คัดลอกข้อความ”</li><li>กดปุ่ม “เปิดแชต Facebook” เพื่อเข้าสู่หน้าแชตของบริษัท</li><li>วางข้อความที่คัดลอกไว้ แล้วกดส่ง</li></ol><pre id="msgbox">${esc(msg)}</pre></section>
- <div class="stack"><button class="btn pri lg" onclick="copyMsg()">${ic('copy')} คัดลอกข้อความ</button>
- <a class="btn lg" href="${MSG_URL}" target="_blank" rel="noopener" onclick="copyMsg(1)">${ic('send')} เปิดแชต Facebook</a>
- <button class="btn" onclick="viewDoc()">ดูใบประมาณการราคา / บันทึกเป็น PDF</button>
- <button class="btn" onclick="cart=[];saveCart();msg='';view='shop';render();scrollTo(0,0)">กลับไปเลือกสินค้า</button></div>
- <p class="adminlink">สอบถามข้อมูลเพิ่มเติม ${telLink()}</p>`;
+ const ok=ord.st==='ok';
+ return `<section class="sec okcard"><div class="okmark">${ic('check',34)}</div><h2 class="h2">${ok||ord.st==='saving'?'ส่งคำสั่งซื้อให้บริษัทแล้ว':'ยังส่งคำสั่งซื้อไม่สำเร็จ'}</h2><p class="mu">${ord.st==='fail'?'กรุณากดลองส่งอีกครั้ง หรือโทรแจ้งบริษัทโดยตรง':'บริษัทจะติดต่อกลับเพื่อยืนยันราคา ค่าจัดส่ง และการชำระเงิน'}</p><div class="oid"><small>เลขที่คำสั่งซื้อ</small><b>${esc(ord.id)}</b></div></section>
+ ${ordHtml()}${calcHtml()}
+ <div class="stack"><button class="btn" onclick="viewDoc()">ดูใบประมาณการราคา / บันทึกเป็น PDF</button>
+ <button class="btn pri lg" onclick="cart=[];saveCart();msg='';view='shop';render();scrollTo(0,0)">กลับไปเลือกสินค้า</button></div>
+ <p class="adminlink">สอบถามข้อมูลเพิ่มเติม ${telLink()}${D&&D.fbUrl?`<br><a href="${esc(D.fbUrl)}" target="_blank" rel="noopener">เพจ Facebook</a>`:''}</p>`;
 }
 /* ---------- ตรวจสอบสถานะคำสั่งซื้อ (ชื่อ + เบอร์โทร ย้อนหลัง 3 วัน) ---------- */
 let tk={name:'',phone:'',busy:false,res:null,err:''};
@@ -355,12 +344,12 @@ function trackView(){
  <div class="fld"><label class="lbl" for="t_phone">เบอร์โทรศัพท์</label><input id="t_phone" class="inp" type="tel" inputmode="tel" autocomplete="tel" value="${esc(tk.phone)}" oninput="tk.phone=this.value"></div>
  ${tk.err?`<div class="err" role="alert">${esc(tk.err)}</div>`:''}
  <button class="btn pri lg w" style="margin-top:16px" onclick="doTrack()"${tk.busy?' disabled':''}>${tk.busy?'กำลังตรวจสอบ…':ic('search')+' ตรวจสอบสถานะ'}</button></section>
- ${r&&!r.found?`<div class="note">${ic('info',18)}<span>ไม่พบคำสั่งซื้อย้อนหลัง ${TRACK_DAYS} วันที่ตรงกับชื่อและเบอร์นี้ ตรวจสอบการสะกด หรือสอบถามทางแชต Facebook ${telLink('')}</span></div>`:''}
+ ${r&&!r.found?`<div class="note">${ic('info',18)}<span>ไม่พบคำสั่งซื้อย้อนหลัง ${TRACK_DAYS} วันที่ตรงกับชื่อและเบอร์นี้ ตรวจสอบการสะกด หรือโทรสอบถามบริษัท ${telLink('')}</span></div>`:''}
  ${os.map((o,n)=>{const sh=o.status===ST_SHIP;return `<section class="sec"><div class="hhead"><b>เลขที่ ${esc(o.orderId)}</b><span class="mu">${esc(fmtDate(o.createdAt))}</span></div>
   <div style="margin:6px 0 10px">${stBadge(o.status)} ${payBadge(o.payStatus)}</div>
   ${(o.items||[]).map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${esc(i.qty)}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}
-  ${sh?(allPriced(o.items)?`<div class="stack" style="margin-top:12px"><button class="btn pri" onclick="openAbb(${n})">ดูใบกำกับภาษีอย่างย่อ / บันทึกเป็น PDF</button></div>`:`<p class="hint">จัดส่งเรียบร้อยแล้ว หากต้องการใบกำกับภาษี สอบถามทางแชต Facebook</p>`)
-  :`<p class="hint">ทางร้านกำลังจัดเตรียมสินค้า ราคา ค่าจัดส่ง และการโอนเงินคุยต่อในแชต Facebook (ทางร้านจะบันทึกสถานะชำระเงินให้หลังได้รับเงิน) ใบกำกับภาษีอย่างย่อจะดูได้เมื่อสถานะเป็น "จัดส่งแล้ว"</p>`}</section>`}).join('')}`;
+  ${sh?(allPriced(o.items)?`<div class="stack" style="margin-top:12px"><button class="btn pri" onclick="openAbb(${n})">ดูใบกำกับภาษีอย่างย่อ / บันทึกเป็น PDF</button></div>`:`<p class="hint">จัดส่งเรียบร้อยแล้ว หากต้องการใบกำกับภาษี โทรสอบถามบริษัท</p>`)
+  :`<p class="hint">ทางร้านกำลังจัดเตรียมสินค้า บริษัทจะติดต่อกลับเพื่อยืนยันราคา ค่าจัดส่ง และการโอนเงิน (ทางร้านจะบันทึกสถานะชำระเงินให้หลังได้รับเงิน) ใบกำกับภาษีอย่างย่อจะดูได้เมื่อสถานะเป็น "จัดส่งแล้ว"</p>`}</section>`}).join('')}`;
 }
 async function doTrack(){
  if(tk.busy)return;
@@ -382,28 +371,19 @@ async function openAbb(n){
 
 /* ---------- บันทึกคำสั่งซื้อ ---------- */
 function ordHtml(){
- const m={saving:[`กำลังบันทึกคำสั่งซื้อ…`,'info'],ok:[REMOTE?`บันทึกคำสั่งซื้อเรียบร้อยแล้ว เลขที่ ${ord.id}`:`โหมดทดลอง: บันทึกในเครื่องนี้เท่านั้น (เลขที่ ${ord.id})`,REMOTE?'check':'info'],fail:[`บันทึกคำสั่งซื้อในระบบไม่สำเร็จ (${esc(ord.err)}) — ยังส่งข้อความทาง Facebook ได้ตามปกติ <a href="#" onclick="sendOrder();return false"><b>ลองบันทึกอีกครั้ง</b></a>`,'info']}[ord.st];
+ const m={saving:[`กำลังบันทึกคำสั่งซื้อ…`,'info'],ok:[REMOTE?`บริษัทได้รับคำสั่งซื้อเรียบร้อยแล้ว`:`โหมดทดลอง: บันทึกในเครื่องนี้เท่านั้น (เลขที่ ${ord.id})`,REMOTE?'check':'info'],fail:[`ส่งคำสั่งซื้อไม่สำเร็จ (${esc(ord.err)}) — <a href="#" onclick="sendOrder();return false"><b>ลองส่งอีกครั้ง</b></a>`,'info']}[ord.st];
  return `<div id="ordst" class="note" role="status">${m?ic(m[1],18)+'<span>'+m[0]+'</span>':''}</div>`.replace('<div id="ordst" class="note" role="status"></div>','<div id="ordst"></div>');
 }
 const paintOrd=()=>{const e=$('#ordst');if(e)e.outerHTML=ordHtml()};
-function confirmOrder(){doneItems=items();doneCust={...cust,fa:fullAddr().replace(/\n/g,' ')};greet='';ag={name:'',phone:'',busy:false,res:null,err:''};ord={id:newOrderId(),st:'',err:''};msg=makeMsg();view='done';render();scrollTo(0,0);sendOrder()}
+function confirmOrder(){doneItems=items();doneCust={...cust,fa:fullAddr().replace(/\n/g,' ')};greet='';ag={name:'',phone:'',busy:false,res:null,err:''};ord={id:newOrderId(),st:'',err:''};view='done';render();scrollTo(0,0);sendOrder()}
 let lastOrder=null;
 async function sendOrder(){
  const order=lastOrder&&ord.st==='fail'?lastOrder:{orderId:ord.id,name:T(cust.name),phone:normPhone(cust.phone),prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:T(cust.zip),addr:T(cust.addr),note:[T(cust.note),cust.tax?'[ขอใบกำกับภาษี] '+taxTxt().replace(/\n/g,' | '):''].filter(Boolean).join('\n'),
   items:items().map(i=>({pid:i.pid,vid:i.vid||'',name:i.p.name,label:i.v?vlabel(i.v):'',qty:i.qty,unit:qunit(i.v),price:hasP(i.v)?Number(i.v.price):''}))};
  lastOrder=order;ord.st='saving';ord.err='';paintOrd();
  try{await Service.placeOrder(order);ord.st='ok';setTimeout(refreshSales,800)}catch(e){ord.st='fail';ord.err=e.message||'ผิดพลาด'}
- paintOrd();
+ paintOrd();if(view==='done')render();
 }
-async function copyMsg(){
- try{await navigator.clipboard.writeText(msg);toast('คัดลอกข้อความแล้ว วางในแชต Facebook ได้เลย')}
- catch(e){
-  const t=document.createElement('textarea');t.value=msg;t.style.cssText='position:fixed;opacity:0';document.body.appendChild(t);t.select();
-  try{document.execCommand('copy');toast('คัดลอกข้อความแล้ว วางในแชต Facebook ได้เลย')}catch(x){toast('คัดลอกไม่ได้ กรุณากดค้างที่ข้อความเพื่อคัดลอก')}
-  t.remove();
- }
-}
-
 const verLine=()=>{const e=$('#verline');if(e)e.textContent=WEB_VER};
 // รีเฟรชยอดขาย/อันดับขายดีเป็นระยะ (ไม่โหลดสินค้าใหม่ ไม่กวนตอนกำลังพิมพ์)
 let salesBusy=false;
