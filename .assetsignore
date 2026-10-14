@@ -1,4 +1,5 @@
 worker
+worker.js
 wrangler.jsonc
 .assetsignore
 *.md
@@ -8,4 +9,3 @@ wrangler.jsonc
 .git
 .github
 node_modules
- 
