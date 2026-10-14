@@ -1,7 +1,7 @@
 // worker/index.js — หลังบ้านเว็บสั่งซื้อ "แม่ดอนรุ่งเรืองฟู้ดส์" บน Cloudflare Workers + D1
 // - ก่อนกดย้ายข้อมูล: ส่งต่อทุกคำขอ /api ไปที่ Apps Script (Google Sheets) เหมือนเดิม
 // - หลังกดย้ายข้อมูล: ใช้ฐานข้อมูล D1 (ตาราง SQLite) แทน — กดกลับไป Sheets ได้ในหน้าแอดมิน > ตั้งค่า
-const VERSION = 'd1-v21-2026-10-13';
+const VERSION = 'd1-v22-2026-10-14';
 const ST_WAIT = 'รอจัดเตรียมและจัดส่ง', ST_SHIP = 'จัดส่งแล้ว', ST_CANCEL = 'ยกเลิก';
 const ST_UNPAID = 'รอชำระเงิน', ST_PAID = 'ชำระแล้ว';
 const TRACK_DAYS = 3, MAX_ITEMS = 80, SALES_TTL = 60000;
@@ -268,22 +268,81 @@ async function track(env, b) {
  return { ok: true, found: orders.length > 0, orders, days: TRACK_DAYS };
 }
 async function setStatus(env, b) {
- const id = clean(b.orderId, 40), ship = b.status === 'ship';
+ const id = clean(b.orderId, 40), ship = b.status === 'ship', cancel = b.status === 'cancel';
  if (!id) throw fail('ไม่พบเลขที่คำสั่งซื้อ');
  const r = await one(env, 'SELECT status,shippedAt,itemsJson FROM orders WHERE orderId=?', id);
  if (!r) throw fail('ไม่พบคำสั่งซื้อนี้');
- const was = stKey(r.status);
+ const was = stKey(r.status), target = ship ? ST_SHIP : cancel ? ST_CANCEL : ST_WAIT;
  let shippedAt = str(r.shippedAt);
  if (ship && (was !== 'ship' || !shippedAt)) shippedAt = nowStr();
  if (!ship) shippedAt = '';
  let items = parseItems(r.itemsJson);
  if (Array.isArray(b.prices)) items.forEach((it, n) => { it.price = priceOf(b.prices[n]); });
  await env.DB.batch([
-  stmt(env, 'UPDATE orders SET status=?,shippedAt=?,itemsJson=? WHERE orderId=?', ship ? ST_SHIP : ST_WAIT, shippedAt, Array.isArray(b.prices) ? JSON.stringify(items) : str(r.itemsJson), id),
+  stmt(env, 'UPDATE orders SET status=?,shippedAt=?,itemsJson=? WHERE orderId=?', target, shippedAt, Array.isArray(b.prices) ? JSON.stringify(items) : str(r.itemsJson), id),
   dropSales(env)
  ]);
- return { ok: true, orderId: id, status: ship ? ST_SHIP : ST_WAIT, shippedAt, items };
+ return { ok: true, orderId: id, status: target, shippedAt, items };
 }
+// แก้รายการ/หมายเหตุ/ที่อยู่ของออเดอร์ที่สั่งไปแล้ว (เอกสารที่ออกไปแล้วไม่เปลี่ยน)
+async function editOrder(env, b) {
+ const id = clean(b.orderId, 40);
+ if (!id) throw fail('ไม่พบเลขที่คำสั่งซื้อ');
+ const r = await one(env, 'SELECT orderId FROM orders WHERE orderId=?', id);
+ if (!r) throw fail('ไม่พบคำสั่งซื้อนี้');
+ const src = Array.isArray(b.items) ? b.items.slice(0, MAX_ITEMS) : [];
+ if (!src.length) throw fail('ต้องมีรายการสินค้าอย่างน้อย 1 รายการ');
+ const items = [], lines = [];
+ src.forEach((i, n) => {
+  const q = Math.max(1, Math.min(999, parseInt(i.qty, 10) || 1));
+  const it = { pid: clean(i.pid, 40), vid: clean(i.vid, 40), name: clean(i.name, 150), label: clean(i.label, 80), qty: q, unit: clean(i.unit, 10), price: priceOf(i.price) };
+  if (!it.name) throw fail('รายการที่ ' + (n + 1) + ' ไม่มีชื่อสินค้า');
+  items.push(it);
+  lines.push((n + 1) + '. ' + it.name + (it.label ? ' (' + it.label + ')' : '') + ' x ' + q + (it.unit ? ' ' + it.unit : ''));
+ });
+ const note = clean(b.note, 500), addr = clean(b.addr, 300);
+ await env.DB.batch([
+  stmt(env, 'UPDATE orders SET items=?,itemsJson=?,note=?,address=? WHERE orderId=?', lines.join('\n'), JSON.stringify(items), note, addr, id),
+  dropSales(env)
+ ]);
+ return { ok: true, orderId: id, items, note, addr };
+}
+// ลบออเดอร์ถาวร: ไม่อนุญาตถ้าเคยออกเอกสารของออเดอร์นี้ (เลขเอกสารต้องคงอยู่ในทะเบียน) — ให้ใช้ "ยกเลิกออเดอร์" แทน
+async function deleteOrder(env, b) {
+ const id = clean(b.orderId, 40);
+ const o = await one(env, 'SELECT phone FROM orders WHERE orderId=?', id);
+ if (!o) throw fail('ไม่พบคำสั่งซื้อนี้');
+ const d = await one(env, 'SELECT COUNT(*) n FROM docs WHERE orderId=?', id);
+ if (d.n > 0) throw fail('ออเดอร์นี้มีเอกสารที่ออกแล้ว ' + d.n + ' ใบ ลบไม่ได้ (เลขเอกสารต้องคงอยู่ในทะเบียน) — ใช้ "ยกเลิกออเดอร์" แทน');
+ const p = o.phone;
+ await env.DB.batch([
+  stmt(env, 'DELETE FROM orders WHERE orderId=?', id),
+  stmt(env, `UPDATE customers SET orderCount=(SELECT COUNT(*) FROM orders WHERE phone=?1),
+    lastOrderId=COALESCE((SELECT orderId FROM orders WHERE phone=?1 ORDER BY rowid DESC LIMIT 1),lastOrderId),
+    lastOrderAt=COALESCE((SELECT createdAt FROM orders WHERE phone=?1 ORDER BY rowid DESC LIMIT 1),lastOrderAt),
+    lastItemsJson=COALESCE((SELECT itemsJson FROM orders WHERE phone=?1 ORDER BY rowid DESC LIMIT 1),lastItemsJson) WHERE phone=?1`, p),
+  stmt(env, 'DELETE FROM customers WHERE phone=?1 AND NOT EXISTS (SELECT 1 FROM orders WHERE phone=?1)', p),
+  dropSales(env)
+ ]);
+ return { ok: true, orderId: id };
+}
+async function listCustomers(env) {
+ const rows = await all(env, `SELECT c.phone,c.name,c.province,c.amphoe,c.tambon,c.zip,c.address,c.lastOrderAt,COALESCE(s.n,0) n,COALESCE(s.total,0) total
+  FROM customers c LEFT JOIN (
+   SELECT o.phone, COUNT(DISTINCT o.orderId) n, SUM(CAST(COALESCE(json_extract(j.value,'$.price'),0) AS REAL)*CAST(COALESCE(json_extract(j.value,'$.qty'),0) AS REAL)) total
+   FROM orders o, json_each(CASE WHEN json_valid(o.itemsJson) THEN o.itemsJson ELSE '[]' END) j WHERE trim(o.status)<>'ยกเลิก' GROUP BY o.phone) s ON s.phone=c.phone
+  ORDER BY c.lastOrderAt DESC LIMIT 500`);
+ return { ok: true, customers: rows.map(r => ({ phone: r.phone, name: str(r.name), prov: str(r.province), amp: str(r.amphoe), tam: str(r.tambon), zip: str(r.zip), addr: str(r.address), lastOrderAt: str(r.lastOrderAt), n: r.n, total: Math.round(num(r.total) * 100) / 100 })) };
+}
+// ล้างข้อมูลทดสอบทั้งหมด (ออเดอร์ ลูกค้า เอกสาร ตัวนับเลข) — สินค้าและการตั้งค่าไม่ถูกแตะ
+async function resetTest(env, b) {
+ if (b.confirm !== 'ล้างข้อมูลทั้งหมด') throw fail('ต้องพิมพ์ยืนยันให้ถูกต้อง');
+ const c = async t => (await one(env, `SELECT COUNT(*) n FROM ${t}`)).n;
+ const before = { orders: await c('orders'), customers: await c('customers'), docs: await c('docs') };
+ await env.DB.batch(['orders', 'customers', 'docs', 'counters'].map(t => stmt(env, `DELETE FROM ${t}`)).concat([dropSales(env)]));
+ return { ok: true, deleted: before };
+}
+
 async function setPay(env, b) {
  const id = clean(b.orderId, 40), paid = b.pay === 'paid';
  if (!id) throw fail('ไม่พบเลขที่คำสั่งซื้อ');
@@ -293,8 +352,9 @@ async function setPay(env, b) {
  await stmt(env, 'UPDATE orders SET payStatus=?,paidAt=?,payMethod=?,payAmount=?,payNote=? WHERE orderId=?', paid ? ST_PAID : ST_UNPAID, paid ? d : '', method, paid ? amt : '', note, id).run();
  return { ok: true, orderId: id, payStatus: paid ? ST_PAID : ST_UNPAID, paidAt: paid ? d : '', payMethod: method, payAmount: paid ? amt : '', payNote: note };
 }
-async function listOrders(env) {
- const rows = await all(env, 'SELECT * FROM orders ORDER BY rowid DESC LIMIT 200');
+async function listOrders(env, b) {
+ const ph = b && b.phone ? phoneOf(b.phone) : '';
+ const rows = ph ? await all(env, 'SELECT * FROM orders WHERE phone=? ORDER BY rowid DESC LIMIT 200', ph) : await all(env, 'SELECT * FROM orders ORDER BY rowid DESC LIMIT 200');
  return { ok: true, orders: rows.map(r => ({ orderId: r.orderId, createdAt: str(r.createdAt), name: str(r.name), phone: str(r.phone), prov: str(r.province), amp: str(r.amphoe), tam: str(r.tambon), zip: str(r.zip), addr: str(r.address), note: str(r.note), status: stText(r.status), shippedAt: str(r.shippedAt), payStatus: payText(r.payStatus), paidAt: str(r.paidAt), payMethod: str(r.payMethod), payAmount: str(r.payAmount), payNote: str(r.payNote), items: parseItems(r.itemsJson) })) };
 }
 
@@ -485,7 +545,10 @@ export default {
    if (action === 'dbinfo') return json(await dbinfo(env));
    const mode = await getMode(env);
    if (action === 'migrate') return json(await migrate(env, b, mode));
-   if (mode === 'sheets') return proxy(env, request, url, text);
+   if (mode === 'sheets') {
+    if (['editOrder', 'deleteOrder', 'listCustomers', 'resetTest'].includes(action) || (action === 'setStatus' && b.status === 'cancel')) return json({ ok: false, error: 'ฟังก์ชันนี้ใช้ได้เมื่อย้ายข้อมูลมาที่ D1 แล้วเท่านั้น' });
+    return proxy(env, request, url, text);
+   }
    // ---- โหมด D1 ----
    if (request.method !== 'POST') {
     if (action === 'list') return json(await readAll(env, false), 'public, max-age=10');
@@ -502,7 +565,11 @@ export default {
     case 'login': return json({ ok: true });
     case 'listAll': return json(await readAll(env, true));
     case 'save': return json(await saveAll(env, b.data));
-    case 'listOrders': return json(await listOrders(env));
+    case 'listOrders': return json(await listOrders(env, b));
+    case 'editOrder': return json(await editOrder(env, b));
+    case 'deleteOrder': return json(await deleteOrder(env, b));
+    case 'listCustomers': return json(await listCustomers(env));
+    case 'resetTest': return json(await resetTest(env, b));
     case 'setStatus': return json(await setStatus(env, b));
     case 'setPay': return json(await setPay(env, b));
     case 'issueDoc': return json(await issueDoc(env, b.type, b.orderId, 'admin', b.snapshot));

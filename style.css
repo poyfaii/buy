@@ -745,3 +745,10 @@ body{background:radial-gradient(900px 420px at 85% -80px,#fff4d6 0,rgba(255,244,
 .card.tile .cbody h3{line-height:1.3}
 
 .dtile .dt-n small{font-size:14px;font-weight:600;color:var(--mu);letter-spacing:0}
+
+/* v30: แก้ไขรายการในออเดอร์ / ปุ่มย่อย */
+.stack3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:4px}
+.elines{display:grid;gap:12px}
+.eline{display:grid;grid-template-columns:1.6fr 1fr 70px 70px 90px 40px;gap:8px;align-items:center;padding-bottom:12px;border-bottom:1px dashed var(--line,#e4dcc8)}
+.eline:last-child{border-bottom:0;padding-bottom:0}
+@media(max-width:640px){.eline{grid-template-columns:1fr 1fr 1fr 44px}.eline .en,.eline .el{grid-column:1/-1}.eline .eq,.eline .eu{grid-column:span 1}.eline .ep{grid-column:span 1}}

@@ -55,18 +55,18 @@ function render(){
   ?`<div class="awrap" style="padding-top:20px"><div class="empty">${ic('info',44)}<p>${esc(loadErr)}</p><button class="btn pri lg" onclick="loadAdmin()">ลองใหม่</button><button class="btn" onclick="logout()">ออกจากระบบ</button></div></div>`
   :`<div class="awrap" style="padding-top:20px"><div class="sk" style="aspect-ratio:auto;height:220px"></div></div>`;return}
  $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.gif" alt=""><h1 class="brand"><b>จัดการสินค้า</b></h1><a class="swbtn" href="index.html">${ic('store',18)}<span class="t">หน้าร้านลูกค้า</span></a><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ">${ic('logout')}</button></div></header>
- <main class="awrap">${tabs()}${aview==='edit'?editView():aview==='set'?setView():aview==='dash'?dashView():aview==='ord'?ordView():aview==='rep'?repView():aview==='dreg'?dregView():aview==='doc'?docView():aview==='ship'?shipView():aview==='pay'?payView():listView()}</main>`;
+ <main class="awrap">${tabs()}${aview==='edit'?editView():aview==='set'?setView():aview==='dash'?dashView():aview==='ord'?ordView():aview==='rep'?repView():aview==='dreg'?dregView():aview==='doc'?docView():aview==='ship'?shipView():aview==='pay'?payView():aview==='cus'?cusView():aview==='oedit'?editOrdView():listView()}</main>`;
  if(aview==='list')drawList();
  const on=document.querySelector('.tabs a.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'center',block:'nearest'})}catch(e){}
 }
 function tabs(){
  const list=aview==='list'||(aview==='edit'&&draft&&!draft.isNew),nw=aview==='edit'&&draft&&draft.isNew;
- return `<nav class="tabs" aria-label="เมนูผู้ดูแล"><a href="#" class="${aview==='dash'?'on':''}" onclick="return nav('dash')">ภาพรวม</a><a href="#" class="${list?'on':''}" onclick="return nav('list')">สินค้า</a><a href="#" class="${nw?'on':''}" onclick="return nav('new')">เพิ่มสินค้า</a><a href="#" class="${aview==='ord'?'on':''}" onclick="return nav('ord')">คำสั่งซื้อ</a><a href="#" class="${aview==='dreg'?'on':''}" onclick="return nav('dreg')">เอกสาร</a><a href="#" class="${aview==='rep'?'on':''}" onclick="return nav('rep')">รายงาน</a><a href="#" class="${aview==='set'?'on':''}" onclick="return nav('set')">ตั้งค่า</a></nav>`;
+ return `<nav class="tabs" aria-label="เมนูผู้ดูแล"><a href="#" class="${aview==='dash'?'on':''}" onclick="return nav('dash')">ภาพรวม</a><a href="#" class="${list?'on':''}" onclick="return nav('list')">สินค้า</a><a href="#" class="${nw?'on':''}" onclick="return nav('new')">เพิ่มสินค้า</a><a href="#" class="${aview==='ord'?'on':''}" onclick="return nav('ord')">คำสั่งซื้อ</a><a href="#" class="${aview==='cus'?'on':''}" onclick="return nav('cus')">ลูกค้า</a><a href="#" class="${aview==='dreg'?'on':''}" onclick="return nav('dreg')">เอกสาร</a><a href="#" class="${aview==='rep'?'on':''}" onclick="return nav('rep')">รายงาน</a><a href="#" class="${aview==='set'?'on':''}" onclick="return nav('set')">ตั้งค่า</a></nav>`;
 }
 function nav(t){
  if(aview==='edit'&&dirty&&!confirm('ยังไม่ได้บันทึกการเปลี่ยนแปลง ออกจากหน้านี้หรือไม่?'))return false;
  dirty=false;
- if(t==='new')newP();else{draft=null;aview=t;render();if(t==='ord'||t==='rep'||t==='dash')loadOrders();if(t==='dreg')loadDocList();if(t==='dash')loadDashDocs()}
+ if(t==='new')newP();else{draft=null;aview=t;render();if(t==='ord'||t==='rep'||t==='dash')loadOrders();if(t==='dreg')loadDocList();if(t==='cus')loadCus();if(t==='dash')loadDashDocs()}
  scrollTo(0,0);return false;
 }
 
@@ -220,7 +220,7 @@ function ordView(){
  const cn=k=>ords.filter(o=>ofMatch(o,k)).length;
  return `<div class="lhead"><h2 class="h2">คำสั่งซื้อล่าสุด</h2><button class="btn sm" onclick="loadOrders()">รีเฟรช</button></div>
  <div class="search">${ic('search')}<input class="inp" type="search" autocomplete="off" aria-label="ค้นหาคำสั่งซื้อ" placeholder="ค้นหาชื่อ / เบอร์ / เลขที่" value="${esc(oq)}" oninput="oq=this.value;$('#olist').innerHTML=ordRows()"></div>
- <div class="cats" role="group" aria-label="กรองสถานะ">${[['all','ทั้งหมด'],[ST_WAIT,ST_WAIT],[ST_SHIP,ST_SHIP],['unpaid','ส่งแล้วค้างชำระ']].map(c=>`<button class="cat" aria-pressed="${ofl===c[0]}" onclick="ofl='${c[0]}';render()">${esc(c[1])} (${cn(c[0])})</button>`).join('')}</div>
+ <div class="cats" role="group" aria-label="กรองสถานะ">${[['all','ทั้งหมด'],[ST_WAIT,ST_WAIT],[ST_SHIP,ST_SHIP],['unpaid','ส่งแล้วค้างชำระ'],['ยกเลิก','ยกเลิก']].map(c=>`<button class="cat" aria-pressed="${ofl===c[0]}" onclick="ofl='${c[0]}';render()">${esc(c[1])} (${cn(c[0])})</button>`).join('')}</div>
  <div class="gmeta">แสดง ${Math.min(l.length,200)} จาก ${ords.length} รายการ</div><div id="olist" class="alist">${ordRows()}</div>`;
 }
 const ofMatch=(o,k)=>k==='all'||(k==='unpaid'?(payText(o.payStatus)===ST_UNPAID&&stText(o.status)===ST_SHIP):stText(o.status)===k);
@@ -228,11 +228,11 @@ function fOrds(){const k=oq.trim().toLowerCase();return(ords||[]).filter(o=>ofMa
 function ordRows(){
  const l=fOrds();
  if(!l.length)return `<div class="empty">${ic('box',44)}<p>${ords&&ords.length?'ไม่พบรายการที่ค้นหา':'ยังไม่มีคำสั่งซื้อ'}</p></div>`;
- return l.map(o=>{const op=oopen===o.orderId,n=(o.items||[]).length;
+ return l.map(o=>{const op=oopen===o.orderId,n=(o.items||[]).length,cx=stText(o.status)==='ยกเลิก',oi=esc(o.orderId);
   return `<div class="aitem"><button class="rmain" style="width:100%;padding:12px" onclick="oopen=oopen==='${esc(o.orderId)}'?null:'${esc(o.orderId)}';$('#olist').innerHTML=ordRows()" aria-expanded="${op}"><span style="min-width:0"><span class="rname">${esc(o.name)} · ${esc(o.phone)}</span><span class="rmeta">${esc(o.orderId)} · ${esc(String(o.createdAt||'').slice(0,16))} · ${n} รายการ · ${stBadge(stText(o.status))} ${payBadge(o)}</span></span></button>
-  ${op?`<div class="racts" style="display:block;padding:0 14px 14px"><p class="mu">${esc(oaddr(o))}</p>${o.note?`<p class="mu" style="white-space:pre-line">หมายเหตุ: ${esc(o.note)}</p>`:''}${(o.items||[]).map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${esc(i.qty)}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}${payBlock(o)}<div class="stack" style="margin-top:12px">${stText(o.status)===ST_SHIP?`<p class="hint" style="margin:0">จัดส่งเมื่อ ${esc(String(o.shippedAt||'').slice(0,16))}</p><button class="btn" onclick="setWait('${esc(o.orderId)}')">ยกเลิกสถานะจัดส่ง (กลับเป็นรอจัดเตรียมและจัดส่ง)</button>`:`<button class="btn pri" onclick="startShip('${esc(o.orderId)}')">จัดส่งแล้ว (ตกลงราคา / ยืนยันราคา)</button>`}
+  ${op?`<div class="racts" style="display:block;padding:0 14px 14px"><p class="mu">${esc(oaddr(o))}</p>${o.note?`<p class="mu" style="white-space:pre-line">หมายเหตุ: ${esc(o.note)}</p>`:''}${(o.items||[]).map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${esc(i.qty)}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}${cx?'':payBlock(o)}<div class="stack" style="margin-top:12px">${cx?`<p class="hint" style="margin:0">ออเดอร์นี้ถูกยกเลิก (ไม่นับในยอดขาย และลูกค้าไม่เห็นในการตรวจสถานะ)</p><button class="btn" onclick="restoreOrd('${oi}')">กู้คืนออเดอร์</button><button class="btn dng" onclick="delOrd('${oi}')">ลบออเดอร์ถาวร</button>`:`${stText(o.status)===ST_SHIP?`<p class="hint" style="margin:0">จัดส่งเมื่อ ${esc(String(o.shippedAt||'').slice(0,16))}</p><button class="btn" onclick="setWait('${esc(o.orderId)}')">ยกเลิกสถานะจัดส่ง (กลับเป็นรอจัดเตรียมและจัดส่ง)</button>`:`<button class="btn pri" onclick="startShip('${esc(o.orderId)}')">จัดส่งแล้ว (ตกลงราคา / ยืนยันราคา)</button>`}
   <button class="btn" onclick="startDoc('${esc(o.orderId)}')">ออกเอกสาร</button>
-  <button class="btn" onclick="startDoc('${esc(o.orderId)}','taxabb')">ใบกำกับภาษีอย่างย่อ</button></div></div>`:''}</div>`}).join('');
+  <button class="btn" onclick="startDoc('${esc(o.orderId)}','taxabb')">ใบกำกับภาษีอย่างย่อ</button><div class="stack3"><button class="btn sm" onclick="startEditOrd('${oi}')">แก้ไขรายการ</button><button class="btn sm" onclick="cancelOrd('${oi}')">ยกเลิกออเดอร์</button><button class="btn sm dng" onclick="delOrd('${oi}')">ลบ</button></div>`}</div></div>`:''}</div>`}).join('');
 }
 
 /* ---------- ตั้งค่า ---------- */
@@ -267,7 +267,8 @@ function dbHtml(){
  const res=mg&&mg.done?`<div class="note" style="margin-top:10px">${ic('check',18)}<span>ย้ายเสร็จแล้ว: ${Object.keys(mg.counts).map(k=>k+' '+mg.counts[k]).join(' · ')}${mg.warn&&mg.warn.length?`<br>⚠ จำนวนต่างจากชีต: ${esc(mg.warn.join(', '))}`:''}</span></div>`:'';
  const err=mg&&mg.err?`<div class="err" role="alert" style="margin-top:10px">❌ ${esc(mg.err)}</div>`:'';
  if(dbi.mode==='d1')return`<section class="sec"><h3>ฐานข้อมูล: Cloudflare D1 <span class="hint">(ใช้งานอยู่)</span></h3><p class="sub">ข้อมูลทั้งหมดเก็บใน D1 — ย้ายเมื่อ ${esc(dbi.migratedAt||'-')} · Google Sheets ไม่ได้อัปเดตอีกแล้ว</p>${res}${err}
- <div class="stack" style="grid-template-columns:1fr 1fr;margin-top:12px"><button class="btn" onclick="dlDb()">ดาวน์โหลดข้อมูลสำรองทั้งหมด</button><button class="btn dng" onclick="rbDb()">กลับไปใช้ Google Sheets</button></div></section>`;
+ <div class="stack" style="grid-template-columns:1fr 1fr;margin-top:12px"><button class="btn" onclick="dlDb()">ดาวน์โหลดข้อมูลสำรองทั้งหมด</button><button class="btn dng" onclick="rbDb()">กลับไปใช้ Google Sheets</button></div></section>
+ <section class="sec" style="border-color:#f3b8b2"><h3>ล้างข้อมูลทดสอบ</h3><p class="sub">ใช้ก่อนเปิดขายจริง: ลบคำสั่งซื้อ ลูกค้า เอกสาร และตัวนับเลขที่เอกสารทั้งหมด เลขเริ่มนับใหม่จาก 0001 (สินค้าและการตั้งค่าไม่ถูกลบ)</p><button class="btn dng" onclick="resetTestData()">ล้างข้อมูลทดสอบทั้งหมด</button></section>`;
  if(!dbi.hasDB)return`<section class="sec"><h3>ฐานข้อมูล: Google Sheets</h3><p class="sub">ยังไม่ได้ผูกฐานข้อมูล D1 กับเว็บ — ดูคู่มือติดตั้งขั้นที่ 1–3 (ใส่ database_id ในไฟล์ wrangler.jsonc)</p></section>`;
  return`<section class="sec"><h3>ฐานข้อมูล: Google Sheets <span class="hint">(ใช้งานอยู่)</span></h3><p class="sub">พร้อมย้ายไป Cloudflare D1 แล้ว — ใช้เวลาไม่กี่นาที ระหว่างย้ายลูกค้ายังสั่งซื้อได้ปกติ แต่ออเดอร์ที่เข้าระหว่างย้ายจะไม่ถูกนับ แนะนำให้ทำตอนเงียบๆ</p>${res}${err}
  <button class="btn pri" style="margin-top:12px" onclick="runMigrate()">ย้ายข้อมูลไป D1</button></section>`;
@@ -302,6 +303,13 @@ async function dlDb(){
 async function rbDb(){
  if(!confirm('กลับไปใช้ Google Sheets?\n\nออเดอร์/เอกสารที่เกิดขึ้นหลังย้ายมา D1 จะไม่อยู่ใน Google Sheets\nแนะนำให้กด "ดาวน์โหลดข้อมูลสำรองทั้งหมด" ไว้ก่อน'))return;
  try{await Service.rollback();mg=null;dbi=undefined;toast('กลับไปใช้ Google Sheets แล้ว');render()}catch(e){toast(friendly(e.message),4000)}
+}
+async function resetTestData(){
+ if(!confirm('ล้างข้อมูลทดสอบทั้งหมด?\n\nจะลบ: คำสั่งซื้อ ลูกค้า เอกสาร และตัวนับเลขที่เอกสารทั้งหมด (สินค้าและการตั้งค่าไม่ถูกลบ) กู้คืนไม่ได้\n\nแนะนำให้ดาวน์โหลดข้อมูลสำรองก่อน'))return;
+ const t=prompt('พิมพ์คำว่า  ล้างข้อมูลทั้งหมด  เพื่อยืนยัน');
+ if(t===null)return;
+ if(T(t)!=='ล้างข้อมูลทั้งหมด'){toast('พิมพ์ไม่ตรง ยกเลิกการล้างข้อมูล');return}
+ try{await Service.resetTest();ords=null;cus=null;toast('ล้างข้อมูลทดสอบแล้ว เลขเอกสารเริ่มนับใหม่');render()}catch(e){toast(friendly(e.message),6000)}
 }
 function setView(){
  const used=JSON.stringify(D).length,pct=Math.min(100,Math.round(used/5000000*100));
@@ -345,7 +353,7 @@ async function init(){if(authed)await loadAdmin();else render()}
 init();
 
 /* ---------- ยืนยันราคา + จัดส่ง / ออกเอกสารเป็นขั้นตอน ---------- */
-const stBadge=st=>`<span class="stb ${st===ST_SHIP?'ok':'wait'}">${esc(st)}</span>`;
+const stBadge=st=>`<span class="stb ${st===ST_SHIP?'ok':st==='ยกเลิก'?'bad':'wait'}">${esc(st)}</span>`;
 const payBadge=o=>{const p=payText(o.payStatus);return `<span class="stb ${p===ST_PAID?'ok':'wait'}">${p===ST_PAID?'ชำระแล้ว':'รอชำระเงิน'}</span>`};
 const okN=x=>x!==''&&x!=null&&!isNaN(Number(x));
 function findV(i){
@@ -416,6 +424,95 @@ async function unPay(id){
  catch(e){toast('ทำรายการไม่สำเร็จ: '+friendly(e.message),6000)}
  render();
 }
+
+/* ---------- ยกเลิก / ลบ / แก้ไขรายการในออเดอร์ ---------- */
+async function cancelOrd(id){
+ if(!confirm('ยกเลิกออเดอร์นี้หรือไม่?\n\nออเดอร์จะไม่นับในยอดขาย/รายงาน และลูกค้าจะไม่เห็นในการตรวจสถานะ (กู้คืนได้ภายหลัง)'))return;
+ try{const r=await Service.setStatus(id,'cancel');const o=ordOf(id);if(o){o.status=r.status;o.shippedAt=''}toast('ยกเลิกออเดอร์แล้ว')}
+ catch(e){toast('ทำรายการไม่สำเร็จ: '+friendly(e.message),6000)}
+ render();
+}
+async function restoreOrd(id){
+ try{const r=await Service.setStatus(id,'wait');const o=ordOf(id);if(o){o.status=r.status}toast('กู้คืนออเดอร์แล้ว')}
+ catch(e){toast('ทำรายการไม่สำเร็จ: '+friendly(e.message),6000)}
+ render();
+}
+async function delOrd(id){
+ if(!confirm('ลบออเดอร์ '+id+' ถาวร?\n\nลบแล้วกู้คืนไม่ได้ (ถ้าเคยออกเอกสารของออเดอร์นี้ จะลบไม่ได้ ให้ใช้ "ยกเลิกออเดอร์" แทน)'))return;
+ try{await Service.deleteOrder(id);ords=(ords||[]).filter(x=>x.orderId!==id);if(oopen===id)oopen=null;toast('ลบออเดอร์แล้ว')}
+ catch(e){toast(friendly(e.message),7000)}
+ render();
+}
+let ed=null,edBusy=false;
+function startEditOrd(id){
+ const o=ordOf(id);if(!o)return;
+ ed={oid:id,name:o.name,note:o.note||'',addr:o.addr||'',lines:(o.items||[]).map(i=>({pid:i.pid||'',vid:i.vid||'',name:i.name||'',label:i.label||'',qty:String(i.qty||1),unit:i.unit||'',price:okN(i.price)?String(i.price):''}))};
+ aview='oedit';pushAdm();render();scrollTo(0,0);
+}
+function editOrdView(){
+ if(!ed)return'';
+ const opts=sorted().map(p=>`<optgroup label="${esc(p.name)}">${(p.variants||[]).map(v=>`<option value="${esc(p.id)}|${esc(v.id)}">${esc(p.name)} · ${esc(vlabel(v))}</option>`).join('')}</optgroup>`).join('');
+ return `<div class="lhead"><h2 class="h2">แก้ไขรายการในออเดอร์</h2><button class="btn sm" onclick="backOrd()">← กลับ</button></div>
+ <p class="mu" style="margin:6px 0 12px">คำสั่งซื้อ ${esc(ed.oid)} · ${esc(ed.name)}<br>แก้จำนวน ราคา เพิ่ม/ลบรายการ ได้ที่นี่ — <b>เอกสารที่ออกไปแล้วจะไม่เปลี่ยน</b> ถ้าต้องการให้ตรง ให้กด "ยกเลิกแล้วออกใหม่" ในหน้าออกเอกสาร</p>
+ <section class="sec"><div class="elines">${ed.lines.map((l,i)=>`<div class="eline"><input class="inp en" aria-label="ชื่อสินค้า" placeholder="ชื่อสินค้า" value="${esc(l.name)}" oninput="ed.lines[${i}].name=this.value">
+  <input class="inp el" aria-label="ขนาด" placeholder="ขนาด" value="${esc(l.label)}" oninput="ed.lines[${i}].label=this.value">
+  <input class="inp eq" inputmode="numeric" aria-label="จำนวน" placeholder="จำนวน" value="${esc(l.qty)}" oninput="ed.lines[${i}].qty=this.value">
+  <input class="inp eu" aria-label="หน่วย" placeholder="หน่วย" value="${esc(l.unit)}" oninput="ed.lines[${i}].unit=this.value">
+  <input class="inp ep" inputmode="decimal" aria-label="ราคาต่อหน่วย" placeholder="ราคา" value="${esc(l.price)}" oninput="ed.lines[${i}].price=this.value">
+  <button class="iconbtn" aria-label="ลบรายการนี้" onclick="edDel(${i})">${ic('x',16)}</button></div>`).join('')||'<div class="hint">ไม่มีรายการ — เพิ่มอย่างน้อย 1 รายการ</div>'}</div>
+  <div class="addrow" style="margin-top:12px"><select class="inp" id="edsel" aria-label="เลือกสินค้าที่จะเพิ่ม"><option value="">เลือกสินค้าที่จะเพิ่ม…</option><option value="custom">รายการอื่นๆ (พิมพ์ชื่อเอง)</option>${opts}</select><button class="btn" onclick="edAdd()">เพิ่ม</button></div></section>
+ <section class="sec"><div class="fld"><label class="lbl" for="ed_n">หมายเหตุ</label><textarea id="ed_n" class="inp" rows="3" oninput="ed.note=this.value">${esc(ed.note)}</textarea></div>
+ <div class="fld"><label class="lbl" for="ed_a">ที่อยู่จัดส่ง (บรรทัดที่อยู่)</label><input id="ed_a" class="inp" value="${esc(ed.addr)}" oninput="ed.addr=this.value"></div></section>
+ <div class="stack"><button class="btn pri lg" onclick="saveEditOrd()"${edBusy?' disabled':''}>${edBusy?'กำลังบันทึก…':'บันทึกการแก้ไข'}</button></div>`;
+}
+function edDel(i){ed.lines.splice(i,1);render()}
+function edAdd(){
+ const v=($('#edsel')||{}).value;if(!v)return;
+ if(v==='custom'){ed.lines.push({pid:'',vid:'',name:'',label:'',qty:'1',unit:'',price:''})}
+ else{const [pid,vid]=v.split('|'),p=D.products.find(x=>x.id===pid),x=p&&(p.variants||[]).find(y=>y.id===vid);if(!p||!x)return;
+  ed.lines.push({pid:p.id,vid:x.id,name:p.name,label:vlabel(x),qty:'1',unit:qunit(x)||'',price:hasP(x)?String(x.price):''})}
+ render();
+}
+async function saveEditOrd(){
+ if(!ed||edBusy)return;
+ if(!ed.lines.length){toast('ต้องมีรายการสินค้าอย่างน้อย 1 รายการ');return}
+ for(const [i,l] of ed.lines.entries()){
+  if(!T(l.name)){toast('รายการที่ '+(i+1)+' ยังไม่มีชื่อสินค้า');return}
+  if(!/^\d+$/.test(T(l.qty))||Number(l.qty)<1){toast('จำนวนของ "'+T(l.name)+'" ต้องเป็นเลขจำนวนเต็มตั้งแต่ 1');return}
+  if(T(l.price)!==''&&!okN(T(l.price))){toast('ราคาของ "'+T(l.name)+'" ต้องเป็นตัวเลข');return}
+ }
+ edBusy=true;render();
+ try{
+  const r=await Service.editOrder(ed.oid,{items:ed.lines.map(l=>({pid:l.pid,vid:l.vid,name:T(l.name),label:T(l.label),qty:Number(l.qty),unit:T(l.unit),price:T(l.price)===''?'':Number(T(l.price))})),note:T(ed.note),addr:T(ed.addr)});
+  const o=ordOf(ed.oid);if(o){o.items=r.items;o.note=r.note;o.addr=r.addr}
+  toast('บันทึกการแก้ไขแล้ว');edBusy=false;backOrd();return;
+ }catch(e){toast('บันทึกไม่สำเร็จ: '+friendly(e.message),6000)}
+ edBusy=false;render();
+}
+
+/* ---------- ลูกค้า ---------- */
+let cus=null,cerr='',cq='',copen=null;
+async function loadCus(){
+ cerr='';cus=null;render();
+ try{cus=await Service.listCustomers()}catch(e){if(e.message==='unauthorized'){logout();return}cerr=friendly(e.message)||'โหลดรายชื่อลูกค้าไม่ได้'}
+ if(aview==='cus')render();
+}
+const fmtB=n=>Number(n||0).toLocaleString('th-TH',{maximumFractionDigits:2});
+function fCus(){const k=cq.trim().toLowerCase();return(cus||[]).filter(c=>!k||[c.name,c.phone,c.prov].some(x=>String(x||'').toLowerCase().includes(k)))}
+function cusRows(){
+ const l=fCus();
+ if(!l.length)return `<div class="empty">${ic('box',44)}<p>${cus&&cus.length?'ไม่พบรายการที่ค้นหา':'ยังไม่มีลูกค้า'}</p></div>`;
+ return l.map(c=>{const op=copen===c.phone;
+  return `<div class="aitem"><button class="rmain" style="width:100%;padding:12px" onclick="copen=copen==='${esc(c.phone)}'?null:'${esc(c.phone)}';$('#clist').innerHTML=cusRows()" aria-expanded="${op}"><span style="min-width:0"><span class="rname">${esc(c.name)} · ${esc(c.phone)}</span><span class="rmeta">${esc(c.prov||'-')} · ${c.n} ออเดอร์ · ยอดรวม ${fmtB(c.total)} บาท · ล่าสุด ${esc(String(c.lastOrderAt||'').slice(0,10))}</span></span></button>
+  ${op?`<div class="racts" style="display:block;padding:0 14px 14px"><p class="mu">${esc(oaddr(c)||'ไม่มีที่อยู่')}</p><div class="stack" style="margin-top:10px"><button class="btn pri" onclick="oq='${esc(c.phone)}';ofl='all';nav('ord')">ดูออเดอร์ของลูกค้านี้</button></div></div>`:''}</div>`}).join('');
+}
+function cusView(){
+ if(cerr)return `<div class="empty">${ic('info',44)}<p>${esc(cerr)}</p><button class="btn pri" onclick="loadCus()">ลองใหม่</button></div>`;
+ if(!cus)return `<div class="sk" style="aspect-ratio:auto;height:160px;margin-top:14px"></div>`;
+ return `<div class="lhead"><h2 class="h2">ลูกค้า</h2><button class="btn sm" onclick="loadCus()">รีเฟรช</button></div>
+ <div class="search">${ic('search')}<input class="inp" type="search" autocomplete="off" aria-label="ค้นหาลูกค้า" placeholder="ค้นหาชื่อ / เบอร์ / จังหวัด" value="${esc(cq)}" oninput="cq=this.value;$('#clist').innerHTML=cusRows()"></div>
+ <div class="gmeta">ลูกค้าทั้งหมด ${cus.length} ราย · ยอดรวมไม่นับออเดอร์ที่ยกเลิก</div><div id="clist" class="alist">${cusRows()}</div>`;
+}
 // ----- ออกเอกสาร: ขั้น 1 เลือกประเภท > ขั้น 2 กรอก/ตรวจข้อมูล > ขั้น 3 ตัวอย่าง พิมพ์ / PDF -----
 let dd=null;
 // ย้อนกลับจากหน้าย่อย (ตกลงราคา/ออกเอกสาร) ไปรายการคำสั่งซื้อ — ใช้ร่วมกับปุ่มย้อนกลับของมือถือ/เบราว์เซอร์
@@ -423,7 +520,7 @@ function pushAdm(){try{history.pushState({mdAdm:1},'')}catch(e){}}
 function backOrd(){if(history.state&&history.state.mdAdm){history.back();return}aview='ord';render();scrollTo(0,0)}
 window.addEventListener('popstate',()=>{
  if(history.state&&history.state.mdAdm)return; // ยังอยู่ในหน้าย่อย (เช่น เพิ่งปิดตัวอย่างเอกสาร)
- if(aview==='doc'||aview==='ship'||aview==='pay'){aview='ord';render();scrollTo(0,0)}
+ if(aview==='doc'||aview==='ship'||aview==='pay'||aview==='oedit'){aview='ord';render();scrollTo(0,0)}
 });
 function startDoc(id,type){
  const o=ordOf(id);if(!o)return;

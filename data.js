@@ -1,6 +1,6 @@
 // data.js — ข้อมูลและฟังก์ชันที่ใช้ร่วมกัน (หน้าร้าน + หน้าผู้ดูแล)
 // ถ้าจะเปลี่ยนที่เก็บข้อมูลเป็น Google Sheets / Firebase / ฐานข้อมูล ให้แก้เฉพาะ Service ด้านล่าง
-const WEB_VER='v29';
+const WEB_VER='v30';
 const IS_ADMIN=/admin/i.test(location.pathname);
 const KEY='mdr_data_v1',CKEY='mdr_cart_v1',UKEY='mdr_cust_v1',MAXV=5;
 const MSG_URL='https://m.me/61573351996765'; // ลิงก์เปิดแชต Messenger ของเพจโดยตรง (ลูกค้ากดแล้วเข้าหน้าแชตเลย)
@@ -201,6 +201,45 @@ const Service={
   if(!REMOTE)return{local:true};
   return api(Object.assign({action:'diag'},CRED));
  },
+ // ----- แก้ออเดอร์ / ลบออเดอร์ / รายชื่อลูกค้า / ล้างข้อมูลทดสอบ -----
+ async editOrder(orderId,f){
+  if(!REMOTE){
+   const a=localOrders(),o=a.find(x=>x.orderId===orderId);if(!o)throw new Error('ไม่พบคำสั่งซื้อนี้');
+   if(!f.items.length)throw new Error('ต้องมีรายการสินค้าอย่างน้อย 1 รายการ');
+   o.items=f.items.map(i=>({pid:i.pid||'',vid:i.vid||'',name:T(i.name),label:T(i.label),qty:Math.max(1,Math.min(999,parseInt(i.qty,10)||1)),unit:T(i.unit),price:i.price===''||i.price==null||isNaN(Number(i.price))?'':Number(i.price)}));
+   o.note=T(f.note);o.addr=T(f.addr);
+   try{localStorage.setItem(ORDKEY,JSON.stringify(a))}catch(e){throw new Error('พื้นที่เก็บข้อมูลเต็ม')}
+   return{ok:true,orderId,items:o.items,note:o.note,addr:o.addr};
+  }
+  try{return await api(Object.assign({action:'editOrder',orderId:orderId},f,CRED))}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
+ },
+ async deleteOrder(orderId){
+  if(!REMOTE){
+   if(localDocs.all().some(x=>x.orderId===orderId))throw new Error('ออเดอร์นี้มีเอกสารที่ออกแล้ว ลบไม่ได้ — ใช้ "ยกเลิกออเดอร์" แทน');
+   const a=localOrders().filter(x=>x.orderId!==orderId);
+   try{localStorage.setItem(ORDKEY,JSON.stringify(a))}catch(e){}
+   return{ok:true,orderId};
+  }
+  try{return await api(Object.assign({action:'deleteOrder',orderId:orderId},CRED))}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
+ },
+ async listCustomers(){
+  if(!REMOTE){
+   const m={};
+   localOrders().forEach(o=>{const p=normPhone(o.phone);if(!p)return;const c=m[p]||(m[p]={phone:p,name:o.name,prov:o.prov||'',amp:o.amp||'',tam:o.tam||'',zip:o.zip||'',addr:o.addr||'',lastOrderAt:'',n:0,total:0});
+    c.name=o.name;c.prov=o.prov||'';c.amp=o.amp||'';c.tam=o.tam||'';c.zip=o.zip||'';c.addr=o.addr||'';c.lastOrderAt=o.createdAt||'';
+    if(o.status==='ยกเลิก')return;c.n++;(o.items||[]).forEach(i=>{c.total+=(Number(i.price)||0)*(Number(i.qty)||0)})});
+   return Object.values(m).sort((a,b)=>a.lastOrderAt<b.lastOrderAt?1:-1);
+  }
+  try{return(await api(Object.assign({action:'listCustomers'},CRED))).customers||[]}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
+ },
+ async resetTest(){
+  if(!REMOTE){localStorage.removeItem(ORDKEY);localStorage.removeItem(DOCKEY);return{ok:true,deleted:{}}}
+  try{return await api(Object.assign({action:'resetTest',confirm:'ล้างข้อมูลทั้งหมด'},CRED))}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
+ },
  // ----- ย้ายฐานข้อมูล Google Sheets -> Cloudflare D1 (ทำงานเมื่อ API_URL='/api' และ Worker ผูก D1 แล้ว) -----
  async dbinfo(){
   if(!REMOTE)return null;
@@ -280,7 +319,7 @@ const Service={
  async setStatus(orderId,status,prices){
   if(!REMOTE){
    const a=localOrders(),o=a.find(x=>x.orderId===orderId);if(!o)throw new Error('ไม่พบคำสั่งซื้อนี้');
-   o.status=status==='ship'?ST_SHIP:ST_WAIT;
+   o.status=status==='ship'?ST_SHIP:status==='cancel'?'ยกเลิก':ST_WAIT;
    const now=new Date().toISOString().slice(0,19).replace('T',' ');
    o.shippedAt=status==='ship'?(o.shippedAt||now):'';
    if(Array.isArray(prices))(o.items||[]).forEach((it,n)=>{const v=prices[n];it.price=v===''||v==null||isNaN(Number(v))?'':Number(v)});
