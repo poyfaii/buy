@@ -1,7 +1,7 @@
 // worker/index.js — หลังบ้านเว็บสั่งซื้อ "แม่ดอนรุ่งเรืองฟู้ดส์" บน Cloudflare Workers + D1
 // - ก่อนกดย้ายข้อมูล: ส่งต่อทุกคำขอ /api ไปที่ Apps Script (Google Sheets) เหมือนเดิม
 // - หลังกดย้ายข้อมูล: ใช้ฐานข้อมูล D1 (ตาราง SQLite) แทน — กดกลับไป Sheets ได้ในหน้าแอดมิน > ตั้งค่า
-const VERSION = 'd1-v22-2026-10-14';
+const VERSION = 'd1-v23-2026-10-14';
 const ST_WAIT = 'รอจัดเตรียมและจัดส่ง', ST_SHIP = 'จัดส่งแล้ว', ST_CANCEL = 'ยกเลิก';
 const ST_UNPAID = 'รอชำระเงิน', ST_PAID = 'ชำระแล้ว';
 const TRACK_DAYS = 3, MAX_ITEMS = 80, SALES_TTL = 60000;
@@ -210,8 +210,33 @@ async function saveAll(env, data) {
  return { ok: true, images };
 }
 
+/* ---------- แจ้งเตือนออเดอร์ใหม่เข้า LINE (LINE Official Account / Messaging API) ----------
+ * ตั้ง Secret ใน Cloudflare: LINE_TOKEN = Channel access token, LINE_TO = userId หรือ groupId (ใส่หลายค่าคั่นด้วย , ได้) */
+const lineOn = env => !!(env.LINE_TOKEN && env.LINE_TO);
+async function linePush(env, text) {
+ const tos = String(env.LINE_TO).split(',').map(x => x.trim()).filter(Boolean);
+ return Promise.all(tos.map(async to => {
+  try {
+   const r = await fetch('https://api.line.me/v2/bot/message/push', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + env.LINE_TOKEN }, body: JSON.stringify({ to, messages: [{ type: 'text', text: text.slice(0, 4900) }] }) });
+   let body = ''; try { body = (await r.text()).slice(0, 300); } catch (e) { /* ไม่มีเนื้อหา */ }
+   return { to: to.slice(0, 6) + '…', status: r.status, ok: r.ok, body };
+  } catch (e) { return { to: to.slice(0, 6) + '…', status: 0, ok: false, body: String((e && e.message) || e) }; }
+ }));
+}
+async function notifyLine(env, text) {
+ if (!lineOn(env)) return null;
+ let res;
+ try { res = await linePush(env, text); } catch (e) { res = [{ ok: false, status: 0, body: String((e && e.message) || e) }]; }
+ try { await stmt(env, "INSERT OR REPLACE INTO meta(key,value) VALUES('lineLast',?)", JSON.stringify({ at: nowStr(), ok: res.every(x => x.ok), res })).run(); } catch (e) { /* ข้าม */ }
+ return res;
+}
+function orderText(o) {
+ const lines = o.lines.length > 30 ? o.lines.slice(0, 30).concat(['…และอีก ' + (o.lines.length - 30) + ' รายการ']) : o.lines;
+ return ['🛒 ออเดอร์ใหม่ ' + o.id, o.name + ' · ' + o.phone, '', lines.join('\n'), '', [o.addr, o.tam, o.amp, o.prov, o.zip].filter(Boolean).join(' '), o.note ? 'หมายเหตุ: ' + o.note : '', 'เปิดดู: ' + o.origin + '/admin.html'].filter((x, i, a) => x !== '' || (a[i - 1] !== '' && i > 0)).join('\n');
+}
+
 /* ---------- คำสั่งซื้อ ---------- */
-async function saveOrder(env, o) {
+async function saveOrder(env, o, ctx, origin) {
  o = o || {};
  const phone = phoneOf(o.phone), name = clean(o.name, 100);
  if (!name || !/^\d{9,10}$/.test(phone)) throw fail('ข้อมูลผู้สั่งไม่ครบ');
@@ -242,6 +267,10 @@ async function saveOrder(env, o) {
  } catch (e) {
   if (/UNIQUE|constraint/i.test(String(e && e.message))) return { ok: true, orderId: id, duplicate: true };
   throw e;
+ }
+ if (lineOn(env)) {
+  const p = notifyLine(env, orderText({ id, name, phone, lines, addr: f.address, tam: f.tambon && 'ต.' + f.tambon, amp: f.amphoe && 'อ.' + f.amphoe, prov: f.province && 'จ.' + f.province, zip: f.zip, note: clean(o.note, 200), origin: origin || '' }));
+  if (ctx && ctx.waitUntil) ctx.waitUntil(p); else await p;
  }
  return { ok: true, orderId: id };
 }
@@ -438,7 +467,7 @@ async function backupAll(env) {
  return out;
 }
 async function dbinfo(env) {
- const info = { ok: true, version: VERSION, hasDB: !!env.DB, hasApps: !!env.APPS_URL, mode: 'sheets', migratedAt: '' };
+ const info = { ok: true, version: VERSION, hasDB: !!env.DB, hasApps: !!env.APPS_URL, mode: 'sheets', migratedAt: '', line: lineOn(env) };
  if (env.DB) { info.mode = await getMode(env); info.migratedAt = (await metaGet(env, 'migratedAt')) || ''; }
  return info;
 }
@@ -526,7 +555,7 @@ async function proxy(env, request, url, text) {
 
 /* ---------- ทางเข้า ---------- */
 export default {
- async fetch(request, env) {
+ async fetch(request, env, ctx) {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api')) return env.ASSETS ? env.ASSETS.fetch(request) : new Response('Not found', { status: 404 });
   try {
@@ -556,7 +585,7 @@ export default {
     if (action === 'ping') return json({ ok: true, version: VERSION, db: 'd1', features: ['sales', 'history3', 'price-always', 'variant-names', 'track', 'status', 'docno', 'docsnap', 'pay', 'export', 'd1'] });
     return json({ ok: false, error: 'unknown action' });
    }
-   if (action === 'order') return json(await saveOrder(env, b.order));
+   if (action === 'order') return json(await saveOrder(env, b.order, ctx, url.origin));
    if (action === 'lookup') return json(await lookup(env, b));
    if (action === 'track') return json(await track(env, b));
    if (action === 'docNo') return json(await publicDocNo(env, b));
@@ -576,6 +605,12 @@ export default {
     case 'voidDoc': return json(await voidDoc(env, b));
     case 'listDocs': return json(await listDocs(env, b));
     case 'diag': return json(await diag(env));
+    case 'notifyInfo': { let last = null; try { last = JSON.parse((await metaGet(env, 'lineLast')) || 'null'); } catch (e) { /* ไม่มี */ } return json({ ok: true, configured: lineOn(env), last }); }
+    case 'notifyTest': {
+     if (!lineOn(env)) throw fail('ยังไม่ได้ตั้งค่า LINE_TOKEN และ LINE_TO ใน Cloudflare (ดูคู่มือแจ้งเตือน LINE)');
+     const res = await notifyLine(env, '✅ ทดสอบแจ้งเตือนจากเว็บแม่ดอนรุ่งเรืองฟู้ดส์\nถ้าเห็นข้อความนี้ แปลว่าการแจ้งเตือนออเดอร์ใหม่ใช้งานได้แล้ว');
+     return json({ ok: true, results: res, allOk: res.every(x => x.ok) });
+    }
     case 'backup': return json(await backupAll(env));
     case 'rollback': return json(await rollback(env));
    }

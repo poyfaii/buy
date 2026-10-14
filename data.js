@@ -1,6 +1,6 @@
 // data.js — ข้อมูลและฟังก์ชันที่ใช้ร่วมกัน (หน้าร้าน + หน้าผู้ดูแล)
 // ถ้าจะเปลี่ยนที่เก็บข้อมูลเป็น Google Sheets / Firebase / ฐานข้อมูล ให้แก้เฉพาะ Service ด้านล่าง
-const WEB_VER='v30';
+const WEB_VER='v31';
 const IS_ADMIN=/admin/i.test(location.pathname);
 const KEY='mdr_data_v1',CKEY='mdr_cart_v1',UKEY='mdr_cust_v1',MAXV=5;
 const MSG_URL='https://m.me/61573351996765'; // ลิงก์เปิดแชต Messenger ของเพจโดยตรง (ลูกค้ากดแล้วเข้าหน้าแชตเลย)
@@ -200,6 +200,14 @@ const Service={
  async diag(){
   if(!REMOTE)return{local:true};
   return api(Object.assign({action:'diag'},CRED));
+ },
+ async notifyInfo(){
+  if(!REMOTE)return null;
+  try{return await api(Object.assign({action:'notifyInfo'},CRED))}catch(e){if(e.message==='unauthorized')Service.logout();return null}
+ },
+ async notifyTest(){
+  try{return await api(Object.assign({action:'notifyTest'},CRED))}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
  },
  // ----- แก้ออเดอร์ / ลบออเดอร์ / รายชื่อลูกค้า / ล้างข้อมูลทดสอบ -----
  async editOrder(orderId,f){

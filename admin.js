@@ -304,6 +304,24 @@ async function rbDb(){
  if(!confirm('กลับไปใช้ Google Sheets?\n\nออเดอร์/เอกสารที่เกิดขึ้นหลังย้ายมา D1 จะไม่อยู่ใน Google Sheets\nแนะนำให้กด "ดาวน์โหลดข้อมูลสำรองทั้งหมด" ไว้ก่อน'))return;
  try{await Service.rollback();mg=null;dbi=undefined;toast('กลับไปใช้ Google Sheets แล้ว');render()}catch(e){toast(friendly(e.message),4000)}
 }
+/* ---------- แจ้งเตือนออเดอร์ใหม่ทาง LINE ---------- */
+let ntf,ntBusy=false,ntRes=null;
+async function loadNtf(){ntf=null;ntf=(await Service.notifyInfo())||{configured:false,last:null,err:true};render()}
+function lineHtml(){
+ if(!(REMOTE&&dbi&&dbi.mode==='d1'))return'';
+ if(ntf===undefined){loadNtf();return''}
+ if(ntf===null)return`<section class="sec"><h3>แจ้งเตือนออเดอร์ใหม่ทาง LINE</h3><p class="sub">กำลังตรวจสอบ…</p></section>`;
+ const l=ntf.last,lt=l?`<p class="hint" style="margin-top:8px">ส่งล่าสุด ${esc(l.at)} — ${l.ok?'สำเร็จ':'<b style="color:#a53520">ไม่สำเร็จ</b> ('+esc((l.res||[]).map(x=>x.status+' '+x.body).join('; ').slice(0,200))+')'}</p>`:'';
+ const rs=ntRes?`<div class="${ntRes.allOk?'note':'err'}" style="margin-top:10px" role="alert">${ntRes.allOk?ic('check',18)+'<span>ส่งข้อความทดสอบแล้ว ตรวจใน LINE ของคุณ</span>':'❌ ส่งไม่สำเร็จ: '+esc((ntRes.results||[]).filter(x=>!x.ok).map(x=>x.status+' '+x.body).join('; ').slice(0,260)||ntRes.err||'')}</div>`:'';
+ return`<section class="sec"><h3>แจ้งเตือนออเดอร์ใหม่ทาง LINE <span class="hint">(${ntf.configured?'ตั้งค่าแล้ว':'ยังไม่ได้ตั้งค่า'})</span></h3>
+ <p class="sub">${ntf.configured?'เมื่อมีลูกค้าสั่งซื้อ ระบบจะส่งข้อความสรุปออเดอร์เข้า LINE ให้ทันที':'ยังไม่ได้ตั้งค่า — ทำตาม "คู่มือแจ้งเตือน LINE" (ตั้ง LINE_TOKEN และ LINE_TO ใน Cloudflare) แล้วกลับมากดทดสอบที่นี่'}</p>${lt}${rs}
+ <button class="btn pri" style="margin-top:12px" onclick="testLine()"${ntBusy||!ntf.configured?' disabled':''}>${ntBusy?'กำลังส่ง…':'ส่งข้อความทดสอบ'}</button></section>`;
+}
+async function testLine(){
+ if(ntBusy)return;ntBusy=true;ntRes=null;render();
+ try{ntRes=await Service.notifyTest()}catch(e){ntRes={allOk:false,err:friendly(e.message)}}
+ ntBusy=false;ntf=undefined;render();
+}
 async function resetTestData(){
  if(!confirm('ล้างข้อมูลทดสอบทั้งหมด?\n\nจะลบ: คำสั่งซื้อ ลูกค้า เอกสาร และตัวนับเลขที่เอกสารทั้งหมด (สินค้าและการตั้งค่าไม่ถูกลบ) กู้คืนไม่ได้\n\nแนะนำให้ดาวน์โหลดข้อมูลสำรองก่อน'))return;
  const t=prompt('พิมพ์คำว่า  ล้างข้อมูลทั้งหมด  เพื่อยืนยัน');
@@ -318,7 +336,7 @@ function setView(){
   :`<section class="sec"><h3>สำรองข้อมูลสินค้า</h3><p class="sub">ข้อมูลสินค้าเก็บอยู่ในเครื่อง/เบราว์เซอร์นี้ ควรดาวน์โหลดไฟล์สำรองไว้เป็นระยะ และใช้ย้ายข้อมูลไปเครื่องอื่นได้</p>
  <div class="hint">พื้นที่ที่ใช้ไป ${(used/1e6).toFixed(1)} MB จากประมาณ 5 MB</div><div class="meter" role="img" aria-label="ใช้พื้นที่ ${pct}%"><i style="width:${pct}%"></i></div>
  <div class="stack" style="grid-template-columns:1fr 1fr"><button class="btn" onclick="backup()">ดาวน์โหลดไฟล์สำรอง</button><label class="btn">กู้คืนจากไฟล์สำรอง<input class="sr" type="file" accept=".json,application/json" onchange="restore(this)"></label></div></section>`;
- return `<div class="edit"><h2 class="h2">ตั้งค่า</h2>${diagHtml()}${dbHtml()}
+ return `<div class="edit"><h2 class="h2">ตั้งค่า</h2>${diagHtml()}${dbHtml()}${lineHtml()}
  <section class="sec"><h3>ลิงก์ Facebook Page ของบริษัท</h3><label class="sr" for="fb">ลิงก์ Facebook Page</label><input id="fb" class="inp" type="url" style="margin-top:10px" value="${esc(D.fbUrl)}" placeholder="https://www.facebook.com/ชื่อเพจ"><p class="hint">ลูกค้าจะถูกพาไปที่ลิงก์นี้หลังคัดลอกข้อความสั่งซื้อ</p><button class="btn pri" style="margin-top:12px" onclick="saveFb()">${ic('check')} บันทึก</button></section>
  <section class="sec"><h3>หน่วยและบรรจุภัณฑ์ที่ใช้บ่อย</h3><p class="sub">ช่วยให้กรอกสินค้าเร็วขึ้น (เลือกจากรายการได้เลยตอนเพิ่มสินค้า)</p>${chipSet('units','หน่วยขนาด')}${chipSet('packs','บรรจุภัณฑ์')}</section>
  ${bk}
