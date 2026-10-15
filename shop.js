@@ -314,6 +314,7 @@ function reviewView(){
  return `<h2 class="h2">ตรวจสอบคำสั่งซื้อ</h2>
  <section class="sec"><h3>ข้อมูลผู้สั่ง</h3><p style="margin-top:8px"><b>${esc(cust.name)}</b></p><p class="mu">โทร ${esc(cust.phone)}</p><p style="margin-top:8px;white-space:pre-line">${esc(fullAddr())}</p>${T(cust.note)?`<p class="mu" style="margin-top:8px">หมายเหตุ: ${esc(cust.note)}</p>`:''}<p style="margin-top:8px"><b>ชำระเงิน:</b> ${cust.pay==='ปลายทาง'?'เก็บเงินปลายทาง':'โอนเงิน'}</p>${cust.tax?`<p class="mu" style="margin-top:8px;white-space:pre-line">ขอใบกำกับภาษี\n${esc(taxTxt())}</p>`:''}</section>
  <section class="sec"><h3>รายการสินค้า</h3>${items().map(i=>`<div class="sumrow"><div><b>${esc(i.p.name)}</b>${i.v?`<div class="mu">${esc(vlabel(i.v))}</div>`:''}</div><b>× ${i.qty}${qunit(i.v)?' '+qunit(i.v):''}<div class="mu" style="font-weight:600">${hasP(i.v)?money(lineP(i)):'$$$ บาท'}</div></b></div>`).join('')}${totalHtml(items())}</section>
+ ${cust.pay==='ปลายทาง'?`<section class="sec paycard"><h3>เก็บเงินปลายทาง</h3><p class="mu">จ่ายเมื่อรับสินค้า</p></section>`:`<section class="sec paycard"><h3>โอนเงิน</h3>${bankBlock()}<p class="mu" style="margin-top:8px">โอนแล้วแนบสลิปได้เลย หรือกดส่งก่อนแล้วโอนทีหลังก็ได้ ยอดสุดท้ายรวมค่าส่ง บริษัทจะแจ้งยืนยัน</p><div id="slipbox">${slipInner()}</div></section>`}
  <div class="note">${ic('info',18)}<span>${priceNote()}</span></div>
  <div class="stack"><button class="btn pri lg" onclick="confirmOrder()">ยืนยันคำสั่งซื้อ</button><button class="btn" onclick="go('info')">แก้ไขข้อมูล</button></div>`;
 }
@@ -334,14 +335,15 @@ function calcHtml(){
  const l=doneItems;if(!l.length)return'';
  return `<section class="sec calc"><h3>สรุปรายการและยอดโดยประมาณ</h3><table class="ctab"><thead><tr><th>สินค้า</th><th class="n">จำนวน</th><th class="n">ราคา/หน่วย</th><th class="n">รวม</th></tr></thead><tbody>${l.map(i=>`<tr><td><b>${esc(i.p.name)}</b>${i.v?`<small>${esc(vlabel(i.v))}</small>`:''}</td><td class="n">${i.qty}${qunit(i.v)?' '+qunit(i.v):''}</td><td class="n">${hasP(i.v)?Number(i.v.price).toLocaleString('th-TH'):'<span class="pq">$$$</span>'}</td><td class="n">${hasP(i.v)?lineP(i).toLocaleString('th-TH'):'<span class="pq">$$$</span>'}</td></tr>`).join('')}</tbody></table>${totalHtml(l)}<p class="hint">${priceNote()}</p></section>`;
 }
-let slip={st:'',err:'',prev:''};
+let slip={st:'',err:'',prev:''},slipPend='';
 const slipInner=()=>{
- const sending=slip.st==='sending',okd=slip.st==='ok',can=ord.st==='ok';
+ const pre=view==='review',sending=slip.st==='sending',okd=pre?!!slipPend:(slip.st==='ok'&&ord.st==='ok'),can=pre||ord.st==='ok';
+ slip.prev=pre?slipPend:slip.prev;
  return `<div class="slipbox"><b>แนบสลิปโอน <small class="mu" style="font-weight:400">(ไม่บังคับ)</small></b>
  ${slip.prev?`<img class="slipimg" src="${slip.prev}" alt="สลิปที่แนบ">`:''}
- ${okd?`<p class="mu" style="color:var(--forest)">${ic('check',16)} แนบสลิปแล้ว บริษัทจะตรวจสอบ</p>`:''}${slip.err?`<div class="err" role="alert">${esc(slip.err)}</div>`:''}
+ ${okd?`<p class="mu" style="color:var(--forest)">${ic('check',16)} ${pre?'แนบสลิปแล้ว จะส่งพร้อมคำสั่งซื้อ':'แนบสลิปแล้ว บริษัทจะตรวจสอบ'}</p>`:''}${slip.err?`<div class="err" role="alert">${esc(slip.err)}</div>`:''}
  <label class="btn sm slipbtn${sending||!can?' dis':''}">${ic('copy',16)} ${sending?'กำลังส่งรูป…':okd?'เปลี่ยนรูป':'เลือก / ถ่ายรูปสลิป'}<input type="file" accept="image/*" class="sr" onchange="pickSlip(this)"${sending||!can?' disabled':''}></label>
- ${can?'':'<p class="mu" style="margin-top:6px">รอบันทึกคำสั่งซื้อให้เสร็จก่อน จึงแนบสลิปได้</p>'}</div>`;
+ ${can?'':'<p class="mu" style="margin-top:6px">รอบันทึกคำสั่งซื้อให้เสร็จก่อน จึงแนบสลิปได้</p>'}${pre&&slipPend?`<button type="button" class="btn sm" onclick="slipPend='';paintSlip()">เอารูปออก</button>`:''}</div>`;
 };
 const paintSlip=()=>{const e=$('#slipbox');if(e)e.innerHTML=slipInner()};
 function shrink(file,max=1280){
@@ -358,16 +360,20 @@ function shrink(file,max=1280){
 }
 async function pickSlip(inp){
  const f=inp.files&&inp.files[0];if(!f||slip.st==='sending')return;
+ if(view==='review'){slip.err='';try{slipPend=await shrink(f)}catch(e){slip.err=e.message||'เลือกรูปไม่สำเร็จ'}paintSlip();return}
  slip.st='sending';slip.err='';paintSlip();
  try{const img=await shrink(f);await Service.sendSlip(ord.id,normPhone(doneCust.phone),img);slip.st='ok';slip.prev=img}
  catch(e){slip.st='';slip.err=e.message||'แนบสลิปไม่สำเร็จ'}
  paintSlip();
 }
+function bankBlock(){
+ const b=(D&&D.bank)||{};
+ return T(b.no)?`<div class="bank"><small>${esc(b.name||'ธนาคาร')}</small><b class="bno" id="bno">${esc(b.no)}</b>${b.holder?`<span>ชื่อบัญชี ${esc(b.holder)}</span>`:''}</div><button type="button" class="btn sm" onclick="copyBank()">${ic('copy',16)} คัดลอกเลขบัญชี</button>${b.note?`<p class="mu" style="margin-top:8px">${esc(b.note)}</p>`:''}`:`<p class="mu">บริษัทจะแจ้งเลขบัญชีให้ทางโทรศัพท์</p>`;
+}
 function payHtml(){
  const cod=doneCust&&doneCust.pay==='ปลายทาง';
  if(cod)return `<section class="sec paycard"><h3>เก็บเงินปลายทาง</h3><p class="mu">เตรียมเงินสดไว้จ่ายเมื่อรับสินค้า</p></section>`;
- const b=(D&&D.bank)||{},has=T(b.no);
- return `<section class="sec paycard"><h3>โอนเงิน</h3>${has?`<div class="bank"><small>${esc(b.name||'ธนาคาร')}</small><b class="bno" id="bno">${esc(b.no)}</b>${b.holder?`<span>ชื่อบัญชี ${esc(b.holder)}</span>`:''}</div><button class="btn sm" onclick="copyBank()">${ic('copy',16)} คัดลอกเลขบัญชี</button>${b.note?`<p class="mu" style="margin-top:8px">${esc(b.note)}</p>`:''}<p class="mu" style="margin-top:8px">โอนแล้วแนบสลิปด้านล่าง หรือแจ้งบริษัทเพื่อจัดส่ง</p>`:`<p class="mu">บริษัทจะแจ้งเลขบัญชีให้ทางโทรศัพท์</p>`}<div id="slipbox">${slipInner()}</div></section>`;
+ return `<section class="sec paycard"><h3>โอนเงิน</h3>${bankBlock()}<p class="mu" style="margin-top:8px">ยังไม่ได้โอน? โอนแล้วแนบสลิปด้านล่างได้</p><div id="slipbox">${slipInner()}</div></section>`;
 }
 async function copyBank(){const t=T(D&&D.bank&&D.bank.no);try{await navigator.clipboard.writeText(t);toast('คัดลอกเลขบัญชีแล้ว')}catch(e){toast('กดค้างที่เลขบัญชีเพื่อคัดลอก')}}
 function doneView(){
@@ -423,13 +429,13 @@ function ordHtml(){
  return `<div id="ordst" class="note" role="status">${m?ic(m[1],18)+'<span>'+m[0]+'</span>':''}</div>`.replace('<div id="ordst" class="note" role="status"></div>','<div id="ordst"></div>');
 }
 const paintOrd=()=>{const e=$('#ordst');if(e)e.outerHTML=ordHtml();paintSlip()};
-function confirmOrder(){doneItems=items();doneCust={...cust,fa:fullAddr().replace(/\n/g,' ')};greet='';ag={name:'',phone:'',busy:false,res:null,err:''};ord={id:newOrderId(),st:'',err:''};slip={st:'',err:'',prev:''};view='done';render();scrollTo(0,0);sendOrder()}
+function confirmOrder(){doneItems=items();doneCust={...cust,fa:fullAddr().replace(/\n/g,' ')};greet='';ag={name:'',phone:'',busy:false,res:null,err:''};ord={id:newOrderId(),st:'',err:''};slip={st:cust.pay==='โอน'&&slipPend?'ok':'',err:'',prev:cust.pay==='โอน'?slipPend:''};view='done';render();scrollTo(0,0);sendOrder()}
 let lastOrder=null;
 async function sendOrder(){
- const order=lastOrder&&ord.st==='fail'?lastOrder:{orderId:ord.id,name:T(cust.name),phone:normPhone(cust.phone),prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:T(cust.zip),addr:T(cust.addr),payType:cust.pay==='ปลายทาง'?'ปลายทาง':'โอน',note:[T(cust.note),cust.tax?'[ขอใบกำกับภาษี] '+taxTxt().replace(/\n/g,' | '):''].filter(Boolean).join('\n'),
+ const order=lastOrder&&ord.st==='fail'?lastOrder:{orderId:ord.id,name:T(cust.name),phone:normPhone(cust.phone),prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:T(cust.zip),addr:T(cust.addr),payType:cust.pay==='ปลายทาง'?'ปลายทาง':'โอน',slip:cust.pay==='โอน'&&slipPend?slipPend:undefined,note:[T(cust.note),cust.tax?'[ขอใบกำกับภาษี] '+taxTxt().replace(/\n/g,' | '):''].filter(Boolean).join('\n'),
   items:items().map(i=>({pid:i.pid,vid:i.vid||'',name:i.p.name,label:i.v?vlabel(i.v):'',qty:i.qty,unit:qunit(i.v),price:hasP(i.v)?Number(i.v.price):''}))};
  lastOrder=order;ord.st='saving';ord.err='';paintOrd();
- try{await Service.placeOrder(order);ord.st='ok';setTimeout(refreshSales,800)}catch(e){ord.st='fail';ord.err=e.message||'ผิดพลาด'}
+ try{await Service.placeOrder(order);ord.st='ok';slipPend='';setTimeout(refreshSales,800)}catch(e){ord.st='fail';ord.err=e.message||'ผิดพลาด'}
  paintOrd();if(view==='done')render();
 }
 const verLine=()=>{const e=$('#verline');if(e)e.textContent=WEB_VER};

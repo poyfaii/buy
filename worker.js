@@ -217,17 +217,18 @@ async function saveAll(env, data) {
 /* ---------- แจ้งเตือนออเดอร์ใหม่เข้า LINE (LINE Official Account / Messaging API) ----------
  * ตั้ง Secret ใน Cloudflare: LINE_TOKEN = Channel access token, LINE_TO = userId หรือ groupId (ใส่หลายค่าคั่นด้วย , ได้) */
 const lineOn = env => !!(env.LINE_TOKEN && env.LINE_TO);
-async function linePush(env, text) {
+async function linePush(env, content) {
+ const msgs = Array.isArray(content) ? content : [{ type: 'text', text: String(content).slice(0, 4900) }];
  const tos = String(env.LINE_TO).split(',').map(x => x.trim()).filter(Boolean);
  return Promise.all(tos.map(async to => {
   try {
-   const r = await fetch('https://api.line.me/v2/bot/message/push', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + env.LINE_TOKEN }, body: JSON.stringify({ to, messages: [{ type: 'text', text: text.slice(0, 4900) }] }) });
+   const r = await fetch('https://api.line.me/v2/bot/message/push', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + env.LINE_TOKEN }, body: JSON.stringify({ to, messages: msgs }) });
    let body = ''; try { body = (await r.text()).slice(0, 300); } catch (e) { /* ไม่มีเนื้อหา */ }
    return { to: to.slice(0, 6) + '…', status: r.status, ok: r.ok, body };
   } catch (e) { return { to: to.slice(0, 6) + '…', status: 0, ok: false, body: String((e && e.message) || e) }; }
  }));
 }
-async function notifyLine(env, text) {
+async function notifyLine(env, text) { // text = ข้อความ หรืออาร์เรย์ข้อความ LINE (ข้อความ + รูป)
  if (!lineOn(env)) return null;
  let res;
  try { res = await linePush(env, text); } catch (e) { res = [{ ok: false, status: 0, body: String((e && e.message) || e) }]; }
@@ -273,13 +274,16 @@ async function saveOrder(env, o, ctx, origin) {
  const at = nowStr();
  const f = { province: clean(o.prov, 60), amphoe: clean(o.amp, 80), tambon: clean(o.tam, 80), zip: clean(o.zip, 5), address: clean(o.addr, 300) };
  const itemsJson = JSON.stringify(js);
+ let sl = null;
+ if (o.slip && ptOf(o.payType) === PT_TR) { try { sl = parseSlip(o.slip); } catch (e) { sl = null; /* สลิปใช้ไม่ได้: ข้าม ไม่ให้ออเดอร์ล้ม */ } }
  try {
   await env.DB.batch([
-   stmt(env, `INSERT INTO orders(orderId,createdAt,name,phone,province,amphoe,tambon,zip,address,note,items,itemsJson,status,shippedAt,payStatus,paidAt,payMethod,payAmount,payNote,payType) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'',?,'','','','',?)`,
-    id, at, name, phone, f.province, f.amphoe, f.tambon, f.zip, f.address, clean(o.note, 500), lines.join('\n'), itemsJson, ST_WAIT, ST_UNPAID, ptOf(o.payType)),
+   stmt(env, `INSERT INTO orders(orderId,createdAt,name,phone,province,amphoe,tambon,zip,address,note,items,itemsJson,status,shippedAt,payStatus,paidAt,payMethod,payAmount,payNote,payType,slipId) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'',?,'','','','',?,?)`,
+    id, at, name, phone, f.province, f.amphoe, f.tambon, f.zip, f.address, clean(o.note, 500), lines.join('\n'), itemsJson, ST_WAIT, ST_UNPAID, ptOf(o.payType), sl ? sl.id : ''),
    stmt(env, `INSERT INTO customers(phone,name,province,amphoe,tambon,zip,address,lastOrderId,lastOrderAt,lastItemsJson,orderCount) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,1)
     ON CONFLICT(phone) DO UPDATE SET name=?2,province=?3,amphoe=?4,tambon=?5,zip=?6,address=?7,lastOrderId=?8,lastOrderAt=?9,lastItemsJson=?10,orderCount=COALESCE(customers.orderCount,0)+1`,
     phone, name, f.province, f.amphoe, f.tambon, f.zip, f.address, id, at, itemsJson),
+   ...(sl ? [stmt(env, 'INSERT INTO images(id,mime,data,createdAt) VALUES(?,?,?,?)', sl.id, sl.mime, sl.data, at)] : []),
    dropSales(env)
   ]);
  } catch (e) {
@@ -287,7 +291,8 @@ async function saveOrder(env, o, ctx, origin) {
   throw e;
  }
  if (lineOn(env)) {
-  const p = notifyLine(env, orderText({ id, at, name, phone, items: js, addr: f.address, tam: f.tambon && 'ต.' + f.tambon, amp: f.amphoe && 'อ.' + f.amphoe, prov: f.province && 'จ.' + f.province, zip: f.zip, note: clean(o.note, 200), payType: ptOf(o.payType), origin: origin || '' }));
+  const txt = orderText({ id, at, name, phone, items: js, addr: f.address, tam: f.tambon && 'ต.' + f.tambon, amp: f.amphoe && 'อ.' + f.amphoe, prov: f.province && 'จ.' + f.province, zip: f.zip, note: clean(o.note, 200), payType: ptOf(o.payType), origin: origin || '' });
+  const p = notifyLine(env, sl ? [{ type: 'text', text: txt.slice(0, 4900) }].concat(slipMsgs('', sl, origin || '').slice(1)) : txt);
   if (ctx && ctx.waitUntil) ctx.waitUntil(p); else await p;
  }
  return { ok: true, orderId: id };
@@ -333,10 +338,7 @@ async function dailySummary(env) {
    if (list.length > cap) o.push('…อีก ' + (list.length - cap) + ' รายการ ดูในแอดมิน');
    return o;
   };
-  const nw = newY.concat(newT);
   const out = ['📋 สรุปออเดอร์ประจำวัน', [today.slice(8), today.slice(5, 7), +today.slice(0, 4) + 543].join('/'), BAR, 'ออเดอร์ใหม่เมื่อวาน ' + newY.length + ' · วันนี้ ' + newT.length];
-  nw.slice(0, cap).forEach(x => out.push('• ' + x.orderId + ' · ' + x.name + money(total(x)) + ' · ' + (cod(x) ? 'ปลายทาง' : 'โอน') + (dOf(x) === today ? ' · วันนี้' : ' · เมื่อวาน')));
-  if (nw.length > cap) out.push('…อีก ' + (nw.length - cap) + ' รายการ ดูในแอดมิน');
   const a = sec('📦 ค้างจัดส่ง', toShip, x => { const d = ageDays(x.createdAt, today); return (d >= 2 ? '⚠️ ' : '• ') + x.orderId + ' · ' + x.name + ' · ' + (d ? d + ' วัน' : 'วันนี้') + ' · ' + (cod(x) ? '💵 ปลายทาง' : paid(x) ? '✅ โอนแล้ว' : str(x.slipId) ? '📎 มีสลิป รอตรวจ' : '⏳ รอโอน'); });
   const c = sec('💵 รอเก็บเงินปลายทาง', codWait, x => { const d = ageDays(x.shippedAt || x.createdAt, today); return (d >= 2 ? '⚠️ ' : '• ') + x.orderId + ' · ' + x.name + money(total(x)) + ' · ส่งแล้ว ' + (d ? d + ' วัน' : 'วันนี้'); });
   const e = sec('⚠️ ส่งแล้วแต่ยังไม่ได้รับโอน', oddWait, x => '• ' + x.orderId + ' · ' + x.name + money(total(x)));
@@ -434,22 +436,29 @@ async function setPay(env, b) {
  await stmt(env, 'UPDATE orders SET payStatus=?,paidAt=?,payMethod=?,payAmount=?,payNote=? WHERE orderId=?', paid ? ST_PAID : ST_UNPAID, paid ? d : '', method, paid ? amt : '', note, id).run();
  return { ok: true, orderId: id, payStatus: paid ? ST_PAID : ST_UNPAID, paidAt: paid ? d : '', payMethod: method, payAmount: paid ? amt : '', payNote: note };
 }
+const SLIP_RE = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/;
+function parseSlip(v) {
+ const m = SLIP_RE.exec(str(v));
+ if (!m) throw fail('ไฟล์ต้องเป็นรูปภาพ (JPG/PNG)');
+ if (m[2].length > 900000) throw fail('รูปใหญ่เกินไป');
+ return { mime: m[1], data: m[2], id: 'slip~' + crypto.randomUUID().replace(/-/g, '') };
+}
+// ข้อความ LINE สำหรับสลิป: ข้อความระบุออเดอร์ + รูป (รูปส่งได้เฉพาะ JPG/PNG)
+const slipMsgs = (head, slip, origin) => [{ type: 'text', text: head }].concat(slip.mime === 'image/webp' ? [] : [{ type: 'image', originalContentUrl: origin + '/api/img/' + slip.id, previewImageUrl: origin + '/api/img/' + slip.id }]);
 // ลูกค้าแนบสลิป (ไม่บังคับ): ต้องมีเลขออเดอร์ + เบอร์ตรงกัน, รูปย่อแล้ว ≤ ~900KB, แทนรูปเดิมได้
-async function slipUpload(env, b) {
+async function slipUpload(env, b, ctx, origin) {
  const id = clean(b.orderId, 40), phone = phoneOf(b.phone);
- const o = id && (await one(env, 'SELECT phone,slipId,status FROM orders WHERE orderId=?', id));
+ const o = id && (await one(env, 'SELECT phone,name,slipId,status FROM orders WHERE orderId=?', id));
  if (!o || o.phone !== phone) throw fail('ไม่พบคำสั่งซื้อนี้');
  if (stKey(o.status) === 'cancel') throw fail('ออเดอร์นี้ถูกยกเลิกแล้ว');
  if (!(await limit(env, 'slip' + id, 5, 3600))) throw fail('แนบสลิปบ่อยเกินไป กรุณาลองใหม่ภายหลัง');
- const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(str(b.image));
- if (!m) throw fail('ไฟล์ต้องเป็นรูปภาพ (JPG/PNG)');
- if (m[2].length > 900000) throw fail('รูปใหญ่เกินไป');
- const iid = 'slip~' + crypto.randomUUID().replace(/-/g, '');
+ const sl = parseSlip(b.image);
  await env.DB.batch([
-  stmt(env, 'INSERT INTO images(id,mime,data,createdAt) VALUES(?,?,?,?)', iid, m[1], m[2], nowStr()),
+  stmt(env, 'INSERT INTO images(id,mime,data,createdAt) VALUES(?,?,?,?)', sl.id, sl.mime, sl.data, nowStr()),
   stmt(env, 'DELETE FROM images WHERE id=?', str(o.slipId) || '-'),
-  stmt(env, 'UPDATE orders SET slipId=? WHERE orderId=?', iid, id)
+  stmt(env, 'UPDATE orders SET slipId=? WHERE orderId=?', sl.id, id)
  ]);
+ if (lineOn(env)) { const p = notifyLine(env, slipMsgs('📎 ลูกค้าแนบสลิปโอน\nเลขที่ ' + id + '\n' + str(o.name), sl, origin || '')); if (ctx && ctx.waitUntil) ctx.waitUntil(p); else await p; }
  return { ok: true, orderId: id };
 }
 async function setPayType(env, b) {
@@ -666,7 +675,7 @@ export default {
    if (action === 'lookup') return json(await lookup(env, b));
    if (action === 'track') return json(await track(env, b));
    if (action === 'docNo') return json(await publicDocNo(env, b));
-   if (action === 'slip') return json(await slipUpload(env, b));
+   if (action === 'slip') return json(await slipUpload(env, b, ctx, url.origin));
    await checkAuth(env, b);
    switch (action) {
     case 'login': return json({ ok: true });
