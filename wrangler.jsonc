@@ -19,4 +19,5 @@
   "vars": {
     "APPS_URL": "https://script.google.com/macros/s/AKfycbwpyOWsntMprTiFuwFIh174PJw-RZnMgD2YFlbPPdUCzu5JmRjQVUbXbesLw0jqmw99/exec"   // URL เดิมที่เคยอยู่ใน config.js
   }
+"triggers": { "crons": ["0 10 * * *"] },
 }
