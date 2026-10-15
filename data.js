@@ -204,6 +204,10 @@ const Service={
   if(!REMOTE)return null;
   try{return await api(Object.assign({action:'notifyInfo'},CRED))}catch(e){if(e.message==='unauthorized')Service.logout();return null}
  },
+ async notifySummary(){
+  try{return await api(Object.assign({action:'notifySummary'},CRED))}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
+ },
  async notifyTest(){
   try{return await api(Object.assign({action:'notifyTest'},CRED))}
   catch(e){if(e.message==='unauthorized')Service.logout();throw e}

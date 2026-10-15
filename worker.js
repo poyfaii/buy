@@ -309,6 +309,29 @@ async function track(env, b) {
   .map(r => ({ orderId: r.orderId, createdAt: r.createdAt, name: str(r.name), phone, status: stText(r.status), shippedAt: str(r.shippedAt), payStatus: payText(r.payStatus), items: parseItems(r.itemsJson) }));
  return { ok: true, found: orders.length > 0, orders, days: TRACK_DAYS };
 }
+const ageDays = (at, today) => Math.max(0, Math.round((Date.parse(today + 'T00:00:00Z') - Date.parse(str(at).slice(0, 10) + 'T00:00:00Z')) / 864e5));
+// สรุปรายวัน: ออเดอร์ค้าง แยกตามสถานะ (ไม่รวมที่ยกเลิก)
+async function dailySummary(env) {
+ const today = nowStr().slice(0, 10), yest = new Date(Date.parse(today + 'T00:00:00Z') - 864e5).toISOString().slice(0, 10);
+ const rows = await all(env, "SELECT orderId,createdAt,name,status,payStatus,itemsJson FROM orders WHERE status<>? ORDER BY rowid", ST_CANCEL);
+ const total = r => parseItems(r.itemsJson).reduce((t, i) => t + (typeof i.price === 'number' ? i.price * i.qty : 0), 0);
+ const wait = rows.filter(x => stKey(x.status) === 'wait'), shipUnpaid = rows.filter(x => stKey(x.status) === 'ship' && payText(x.payStatus) !== ST_PAID), waitPaid = wait.filter(x => payText(x.payStatus) === ST_PAID);
+ const newY = rows.filter(x => str(x.createdAt).slice(0, 10) === yest).length, newT = rows.filter(x => str(x.createdAt).slice(0, 10) === today).length;
+ const done = rows.filter(x => stKey(x.status) === 'ship' && payText(x.payStatus) === ST_PAID && str(x.createdAt).slice(0, 10) >= yest).length;
+ const BAR = '━━━━━━━━━━━━━━';
+ const sec = (title, list) => {
+  if (!list.length) return [];
+  const o = [BAR, title + ' (' + list.length + ')'];
+  list.slice(0, 12).forEach(x => { const d = ageDays(x.createdAt, today), t = total(x); o.push((d >= 2 ? '⚠️ ' : '• ') + x.orderId + ' · ' + x.name + (t ? ' · ' + t.toLocaleString('en-US') + ' บาท' : '') + (d ? ' · ' + d + ' วัน' : ' · วันนี้')); });
+  if (list.length > 12) o.push('…และอีก ' + (list.length - 12) + ' รายการ');
+  return o;
+ };
+ const out = ['📋 สรุปออเดอร์ประจำวัน', [today.slice(8), today.slice(5, 7), +today.slice(0, 4) + 543].join('/'), BAR, 'ออเดอร์ใหม่เมื่อวาน ' + newY + ' · วันนี้ ' + newT, 'ปิดงานแล้ว (ส่ง+จ่าย) ' + done]
+  .concat(sec('📦 รอจัดส่ง', wait), sec('💸 ส่งแล้ว ยังไม่ชำระ', shipUnpaid));
+ if (waitPaid.length) out.push(BAR, 'หมายเหตุ: ' + waitPaid.length + ' รายการจ่ายแล้วแต่ยังไม่จัดส่ง');
+ if (!wait.length && !shipUnpaid.length) out.push(BAR, '✅ ไม่มีออเดอร์ค้าง');
+ return out.join('\n');
+}
 async function setStatus(env, b) {
  const id = clean(b.orderId, 40), ship = b.status === 'ship', cancel = b.status === 'cancel';
  if (!id) throw fail('ไม่พบเลขที่คำสั่งซื้อ');
@@ -388,7 +411,8 @@ async function resetTest(env, b) {
 async function setPay(env, b) {
  const id = clean(b.orderId, 40), paid = b.pay === 'paid';
  if (!id) throw fail('ไม่พบเลขที่คำสั่งซื้อ');
- if (!(await one(env, 'SELECT 1 x FROM orders WHERE orderId=?', id))) throw fail('ไม่พบคำสั่งซื้อนี้');
+ const prev = await one(env, 'SELECT name,status,payStatus FROM orders WHERE orderId=?', id);
+ if (!prev) throw fail('ไม่พบคำสั่งซื้อนี้');
  const d = /^\d{4}-\d{2}-\d{2}$/.test(str(b.paidAt)) ? str(b.paidAt) : nowStr().slice(0, 10);
  const amt = str(priceOf(b.amount)), method = paid ? clean(b.method, 40) : '', note = paid ? clean(b.note, 200) : '';
  await stmt(env, 'UPDATE orders SET payStatus=?,paidAt=?,payMethod=?,payAmount=?,payNote=? WHERE orderId=?', paid ? ST_PAID : ST_UNPAID, paid ? d : '', method, paid ? amt : '', note, id).run();
@@ -624,6 +648,11 @@ export default {
      const res = await notifyLine(env, '✅ ทดสอบแจ้งเตือนจากเว็บแม่ดอนรุ่งเรืองฟู้ดส์\nถ้าเห็นข้อความนี้ แปลว่าการแจ้งเตือนออเดอร์ใหม่ใช้งานได้แล้ว');
      return json({ ok: true, results: res, allOk: res.every(x => x.ok) });
     }
+    case 'notifySummary': {
+     if (!lineOn(env)) throw fail('ยังไม่ได้ตั้งค่า LINE_TOKEN และ LINE_TO ใน Cloudflare');
+     const res = await notifyLine(env, await dailySummary(env));
+     return json({ ok: true, results: res, allOk: res.every(x => x.ok) });
+    }
     case 'backup': return json(await backupAll(env));
     case 'rollback': return json(await rollback(env));
    }
@@ -631,5 +660,10 @@ export default {
   } catch (err) {
    return json({ ok: false, error: String((err && err.message) || err) });
   }
+ },
+ // Cron Trigger: ส่งสรุปประจำวันเข้า LINE (ตั้งเวลาใน wrangler.jsonc)
+ async scheduled(event, env, ctx) {
+  if (!lineOn(env) || !env.DB) return;
+  ctx.waitUntil((async () => { await ensureSchema(env); if ((await getMode(env)) !== 'd1') return; await notifyLine(env, await dailySummary(env)); })());
  }
 };

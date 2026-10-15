@@ -310,16 +310,16 @@ async function loadNtf(){ntf=null;ntf=(await Service.notifyInfo())||{configured:
 function lineHtml(){
  if(!(REMOTE&&dbi&&dbi.mode==='d1'))return'';
  if(ntf===undefined){loadNtf();return''}
- if(ntf===null)return`<section class="sec"><h3>แจ้งเตือนออเดอร์ใหม่ทาง LINE</h3><p class="sub">กำลังตรวจสอบ…</p></section>`;
+ if(ntf===null)return`<section class="sec"><h3>แจ้งเตือนทาง LINE</h3><p class="sub">กำลังตรวจสอบ…</p></section>`;
  const l=ntf.last,lt=l?`<p class="hint" style="margin-top:8px">ส่งล่าสุด ${esc(l.at)} — ${l.ok?'สำเร็จ':'<b style="color:#a53520">ไม่สำเร็จ</b> ('+esc((l.res||[]).map(x=>x.status+' '+x.body).join('; ').slice(0,200))+')'}</p>`:'';
- const rs=ntRes?`<div class="${ntRes.allOk?'note':'err'}" style="margin-top:10px" role="alert">${ntRes.allOk?ic('check',18)+'<span>ส่งข้อความทดสอบแล้ว ตรวจใน LINE ของคุณ</span>':'❌ ส่งไม่สำเร็จ: '+esc((ntRes.results||[]).filter(x=>!x.ok).map(x=>x.status+' '+x.body).join('; ').slice(0,260)||ntRes.err||'')}</div>`:'';
- return`<section class="sec"><h3>แจ้งเตือนออเดอร์ใหม่ทาง LINE <span class="hint">(${ntf.configured?'ตั้งค่าแล้ว':'ยังไม่ได้ตั้งค่า'})</span></h3>
- <p class="sub">${ntf.configured?'เมื่อมีลูกค้าสั่งซื้อ ระบบจะส่งข้อความสรุปออเดอร์เข้า LINE ให้ทันที':'ยังไม่ได้ตั้งค่า — ทำตาม "คู่มือแจ้งเตือน LINE" (ตั้ง LINE_TOKEN และ LINE_TO ใน Cloudflare) แล้วกลับมากดทดสอบที่นี่'}</p>${lt}${rs}
- <button class="btn pri" style="margin-top:12px" onclick="testLine()"${ntBusy||!ntf.configured?' disabled':''}>${ntBusy?'กำลังส่ง…':'ส่งข้อความทดสอบ'}</button></section>`;
+ const rs=ntRes?`<div class="${ntRes.allOk?'note':'err'}" style="margin-top:10px" role="alert">${ntRes.allOk?ic('check',18)+'<span>ส่งแล้ว ตรวจใน LINE ของคุณ</span>':'❌ ส่งไม่สำเร็จ: '+esc((ntRes.results||[]).filter(x=>!x.ok).map(x=>x.status+' '+x.body).join('; ').slice(0,260)||ntRes.err||'')}</div>`:'';
+ return`<section class="sec"><h3>แจ้งเตือนทาง LINE <span class="hint">(${ntf.configured?'ตั้งค่าแล้ว':'ยังไม่ได้ตั้งค่า'})</span></h3>
+ <p class="sub">${ntf.configured?'แจ้งทันทีเมื่อมีออเดอร์ใหม่ และสรุปออเดอร์ค้างทุกวัน 17:00':'ยังไม่ได้ตั้งค่า — ทำตาม "คู่มือแจ้งเตือน LINE" (ตั้ง LINE_TOKEN และ LINE_TO ใน Cloudflare) แล้วกลับมากดทดสอบที่นี่'}</p>${lt}${rs}
+ <button class="btn pri" style="margin-top:12px" onclick="testLine()"${ntBusy||!ntf.configured?' disabled':''}>${ntBusy?'กำลังส่ง…':'ส่งข้อความทดสอบ'}</button> <button class="btn" style="margin-top:12px" onclick="testLine(1)"${ntBusy||!ntf.configured?' disabled':''}>ส่งสรุปประจำวันตอนนี้</button></section>`;
 }
-async function testLine(){
+async function testLine(sum){
  if(ntBusy)return;ntBusy=true;ntRes=null;render();
- try{ntRes=await Service.notifyTest()}catch(e){ntRes={allOk:false,err:friendly(e.message)}}
+ try{ntRes=await(sum?Service.notifySummary():Service.notifyTest())}catch(e){ntRes={allOk:false,err:friendly(e.message)}}
  ntBusy=false;ntf=undefined;render();
 }
 async function resetTestData(){
