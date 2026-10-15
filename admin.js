@@ -220,17 +220,26 @@ function ordView(){
  const cn=k=>ords.filter(o=>ofMatch(o,k)).length;
  return `<div class="lhead"><h2 class="h2">คำสั่งซื้อล่าสุด</h2><button class="btn sm" onclick="loadOrders()">รีเฟรช</button></div>
  <div class="search">${ic('search')}<input class="inp" type="search" autocomplete="off" aria-label="ค้นหาคำสั่งซื้อ" placeholder="ค้นหาชื่อ / เบอร์ / เลขที่" value="${esc(oq)}" oninput="oq=this.value;$('#olist').innerHTML=ordRows()"></div>
- <div class="cats" role="group" aria-label="กรองสถานะ">${[['all','ทั้งหมด'],[ST_WAIT,ST_WAIT],[ST_SHIP,ST_SHIP],['unpaid','ส่งแล้วค้างชำระ'],['ยกเลิก','ยกเลิก']].map(c=>`<button class="cat" aria-pressed="${ofl===c[0]}" onclick="ofl='${c[0]}';render()">${esc(c[1])} (${cn(c[0])})</button>`).join('')}</div>
+ <div class="cats" role="group" aria-label="กรองสถานะ">${[['all','ทั้งหมด'],['new','ออเดอร์ใหม่'],['prep','รอจัดส่ง'],['cod','รอเก็บเงินปลายทาง'],['done','เสร็จสิ้น'],['cx','ยกเลิก']].map(c=>`<button class="cat oc" data-c="${c[0]}" aria-pressed="${ofl===c[0]}" onclick="ofl='${c[0]}';render()">${esc(c[1])} (${cn(c[0])})</button>`).join('')}</div>
  <div class="gmeta">แสดง ${Math.min(l.length,200)} จาก ${ords.length} รายการ</div><div id="olist" class="alist">${ordRows()}</div>`;
 }
-const ofMatch=(o,k)=>k==='all'||(k==='unpaid'?(payText(o.payStatus)===ST_UNPAID&&stText(o.status)===ST_SHIP):stText(o.status)===k);
+// สีสถานะ: แดง=ออเดอร์ใหม่ · ส้ม=รอจัดส่ง (โอนแล้ว/ปลายทาง) · เหลือง=ส่งปลายทางแล้วรอรับเงิน · เขียว=เสร็จ · เทา=ยกเลิก
+const OC={new:'ออเดอร์ใหม่',prep:'รอจัดส่ง',cod:'รอเก็บเงินปลายทาง',done:'เสร็จสิ้น',cx:'ยกเลิก'};
+function oc(o){
+ const st=stText(o.status),paid=payText(o.payStatus)===ST_PAID;
+ if(st==='ยกเลิก')return'cx';
+ if(st===ST_SHIP)return paid?'done':'cod';
+ return paid||o.payType==='ปลายทาง'?'prep':'new';
+}
+const ocBadge=o=>`<span class="stb c-${oc(o)}">${OC[oc(o)]}</span>`;
+const ofMatch=(o,k)=>k==='all'||oc(o)===k;
 function fOrds(){const k=oq.trim().toLowerCase();return(ords||[]).filter(o=>ofMatch(o,ofl)&&(!k||[o.name,o.phone,o.orderId].some(x=>String(x||'').toLowerCase().includes(k))))}
 function ordRows(){
  const l=fOrds();
  if(!l.length)return `<div class="empty">${ic('box',44)}<p>${ords&&ords.length?'ไม่พบรายการที่ค้นหา':'ยังไม่มีคำสั่งซื้อ'}</p></div>`;
  return l.map(o=>{const op=oopen===o.orderId,n=(o.items||[]).length,cx=stText(o.status)==='ยกเลิก',oi=esc(o.orderId);
-  return `<div class="aitem"><button class="rmain" style="width:100%;padding:12px" onclick="oopen=oopen==='${esc(o.orderId)}'?null:'${esc(o.orderId)}';$('#olist').innerHTML=ordRows()" aria-expanded="${op}"><span style="min-width:0"><span class="rname">${esc(o.name)} · ${esc(o.phone)}</span><span class="rmeta">${esc(o.orderId)} · ${esc(String(o.createdAt||'').slice(0,16))} · ${n} รายการ · ${stBadge(stText(o.status))} ${payBadge(o)} ${ptBadge(o)}</span></span></button>
-  ${op?`<div class="racts" style="display:block;padding:0 14px 14px"><p class="mu">${esc(oaddr(o))}</p>${o.note?`<p class="mu" style="white-space:pre-line">หมายเหตุ: ${esc(o.note)}</p>`:''}${(o.items||[]).map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${esc(i.qty)}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}${cx?'':ptSel(o)+payBlock(o)}<div class="stack" style="margin-top:12px">${cx?`<p class="hint" style="margin:0">ออเดอร์นี้ถูกยกเลิก (ไม่นับในยอดขาย และลูกค้าไม่เห็นในการตรวจสถานะ)</p><button class="btn" onclick="restoreOrd('${oi}')">กู้คืนออเดอร์</button><button class="btn dng" onclick="delOrd('${oi}')">ลบออเดอร์ถาวร</button>`:`${stText(o.status)===ST_SHIP?`<p class="hint" style="margin:0">จัดส่งเมื่อ ${esc(String(o.shippedAt||'').slice(0,16))}</p><button class="btn" onclick="setWait('${esc(o.orderId)}')">ยกเลิกสถานะจัดส่ง (กลับเป็นรอจัดเตรียมและจัดส่ง)</button>`:`<button class="btn pri" onclick="startShip('${esc(o.orderId)}')">จัดส่งแล้ว (ตกลงราคา / ยืนยันราคา)</button>`}
+  return `<div class="aitem oc-${oc(o)}"><button class="rmain" style="width:100%;padding:12px" onclick="oopen=oopen==='${esc(o.orderId)}'?null:'${esc(o.orderId)}';$('#olist').innerHTML=ordRows()" aria-expanded="${op}"><span style="min-width:0"><span class="rname">${esc(o.name)} · ${esc(o.phone)}</span><span class="rmeta">${esc(o.orderId)} · ${esc(String(o.createdAt||'').slice(0,16))} · ${n} รายการ · ${ocBadge(o)} ${ptBadge(o)}${o.slip?' <span class="stb c-slip">📎 สลิป</span>':''}</span></span></button>
+  ${op?`<div class="racts" style="display:block;padding:0 14px 14px"><p class="mu">${esc(oaddr(o))}</p>${o.note?`<p class="mu" style="white-space:pre-line">หมายเหตุ: ${esc(o.note)}</p>`:''}${(o.items||[]).map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${esc(i.qty)}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}${cx?'':ptSel(o)+slipBlock(o)+payBlock(o)}<div class="stack" style="margin-top:12px">${cx?`<p class="hint" style="margin:0">ออเดอร์นี้ถูกยกเลิก (ไม่นับในยอดขาย และลูกค้าไม่เห็นในการตรวจสถานะ)</p><button class="btn" onclick="restoreOrd('${oi}')">กู้คืนออเดอร์</button><button class="btn dng" onclick="delOrd('${oi}')">ลบออเดอร์ถาวร</button>`:`${stText(o.status)===ST_SHIP?`<p class="hint" style="margin:0">จัดส่งเมื่อ ${esc(String(o.shippedAt||'').slice(0,16))}</p><button class="btn" onclick="setWait('${esc(o.orderId)}')">ยกเลิกสถานะจัดส่ง (กลับเป็นรอจัดเตรียมและจัดส่ง)</button>`:`<button class="btn pri" onclick="startShip('${esc(o.orderId)}')">จัดส่งแล้ว (ตกลงราคา / ยืนยันราคา)</button>`}
   <button class="btn" onclick="startDoc('${esc(o.orderId)}')">ออกเอกสาร</button>
   <button class="btn" onclick="startDoc('${esc(o.orderId)}','taxabb')">ใบกำกับภาษีอย่างย่อ</button><div class="stack3"><button class="btn sm" onclick="startEditOrd('${oi}')">แก้ไขรายการ</button><button class="btn sm" onclick="cancelOrd('${oi}')">ยกเลิกออเดอร์</button><button class="btn sm dng" onclick="delOrd('${oi}')">ลบ</button></div>`}</div></div>`:''}</div>`}).join('');
 }
@@ -339,6 +348,7 @@ function setView(){
  <div class="stack" style="grid-template-columns:1fr 1fr"><button class="btn" onclick="backup()">ดาวน์โหลดไฟล์สำรอง</button><label class="btn">กู้คืนจากไฟล์สำรอง<input class="sr" type="file" accept=".json,application/json" onchange="restore(this)"></label></div></section>`;
  return `<div class="edit"><h2 class="h2">ตั้งค่า</h2>${diagHtml()}${dbHtml()}${lineHtml()}
  <section class="sec"><h3>ลิงก์ Facebook Page ของบริษัท</h3><label class="sr" for="fb">ลิงก์ Facebook Page</label><input id="fb" class="inp" type="url" style="margin-top:10px" value="${esc(D.fbUrl)}" placeholder="https://www.facebook.com/ชื่อเพจ"><p class="hint">แสดงเป็นลิงก์เพจในหน้าลูกค้า (ติดต่อบริษัทและหน้าสรุปหลังสั่งซื้อ)</p><button class="btn pri" style="margin-top:12px" onclick="saveFb()">${ic('check')} บันทึก</button></section>
+ ${pioHtml()}
  <section class="sec"><h3>บัญชีธนาคารรับโอน</h3><p class="sub">แสดงให้ลูกค้าที่เลือก "โอนเงิน" หลังกดสั่งซื้อ (ลูกค้าที่เลือกปลายทางจะไม่เห็น) เว้นว่างได้ ระบบจะแจ้งว่าบริษัทจะแจ้งบัญชีทางโทรศัพท์</p>
  <div class="fld"><label class="lbl" for="bk_name">ธนาคาร</label><input id="bk_name" class="inp" value="${esc((D.bank||{}).name||'')}" placeholder="เช่น กสิกรไทย"></div>
  <div class="fld"><label class="lbl" for="bk_no">เลขบัญชี</label><input id="bk_no" class="inp" inputmode="numeric" value="${esc((D.bank||{}).no||'')}" placeholder="000-0-00000-0"></div>
@@ -381,6 +391,7 @@ init();
 const stBadge=st=>`<span class="stb ${st===ST_SHIP?'ok':st==='ยกเลิก'?'bad':'wait'}">${esc(st)}</span>`;
 const ptBadge=o=>`<span class="stb ${o.payType==='ปลายทาง'?'wait':'ok'}">${o.payType==='ปลายทาง'?'ปลายทาง':'โอน'}</span>`;
 const ptSel=o=>`<div class="fld" style="margin:10px 0 0"><label class="lbl" for="pt_${esc(o.orderId)}">วิธีชำระเงินที่ลูกค้าเลือก</label><select id="pt_${esc(o.orderId)}" class="inp" onchange="setPT('${esc(o.orderId)}',this.value)"><option value="โอน"${o.payType==='ปลายทาง'?'':' selected'}>โอนเงิน</option><option value="ปลายทาง"${o.payType==='ปลายทาง'?' selected':''}>เก็บเงินปลายทาง</option></select></div>`;
+const slipBlock=o=>o.slip?`<div class="slipa"><b>สลิปที่ลูกค้าแนบ</b><a href="${esc(o.slip)}" target="_blank" rel="noopener"><img src="${esc(o.slip)}" alt="สลิปโอนของ ${esc(o.orderId)}" loading="lazy"></a><p class="hint" style="margin:0">กดที่รูปเพื่อดูขนาดเต็ม ตรวจยอดแล้วกด \"ชำระแล้ว\" ด้านล่าง</p></div>`:'';
 async function setPT(id,v){const o=ordOf(id);if(!o)return;try{await Service.setPayType(id,v);o.payType=v;toast('บันทึกแล้ว',1200)}catch(e){toast(friendly(e.message)||'บันทึกไม่สำเร็จ',4000)}$('#olist').innerHTML=ordRows()}
 const payBadge=o=>{const p=payText(o.payStatus);return `<span class="stb ${p===ST_PAID?'ok':'wait'}">${p===ST_PAID?'ชำระแล้ว':'รอชำระเงิน'}</span>`};
 const okN=x=>x!==''&&x!=null&&!isNaN(Number(x));

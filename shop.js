@@ -334,11 +334,40 @@ function calcHtml(){
  const l=doneItems;if(!l.length)return'';
  return `<section class="sec calc"><h3>สรุปรายการและยอดโดยประมาณ</h3><table class="ctab"><thead><tr><th>สินค้า</th><th class="n">จำนวน</th><th class="n">ราคา/หน่วย</th><th class="n">รวม</th></tr></thead><tbody>${l.map(i=>`<tr><td><b>${esc(i.p.name)}</b>${i.v?`<small>${esc(vlabel(i.v))}</small>`:''}</td><td class="n">${i.qty}${qunit(i.v)?' '+qunit(i.v):''}</td><td class="n">${hasP(i.v)?Number(i.v.price).toLocaleString('th-TH'):'<span class="pq">$$$</span>'}</td><td class="n">${hasP(i.v)?lineP(i).toLocaleString('th-TH'):'<span class="pq">$$$</span>'}</td></tr>`).join('')}</tbody></table>${totalHtml(l)}<p class="hint">${priceNote()}</p></section>`;
 }
+let slip={st:'',err:'',prev:''};
+const slipInner=()=>{
+ const sending=slip.st==='sending',okd=slip.st==='ok',can=ord.st==='ok';
+ return `<div class="slipbox"><b>แนบสลิปโอน <small class="mu" style="font-weight:400">(ไม่บังคับ)</small></b>
+ ${slip.prev?`<img class="slipimg" src="${slip.prev}" alt="สลิปที่แนบ">`:''}
+ ${okd?`<p class="mu" style="color:var(--forest)">${ic('check',16)} แนบสลิปแล้ว บริษัทจะตรวจสอบ</p>`:''}${slip.err?`<div class="err" role="alert">${esc(slip.err)}</div>`:''}
+ <label class="btn sm slipbtn${sending||!can?' dis':''}">${ic('copy',16)} ${sending?'กำลังส่งรูป…':okd?'เปลี่ยนรูป':'เลือก / ถ่ายรูปสลิป'}<input type="file" accept="image/*" class="sr" onchange="pickSlip(this)"${sending||!can?' disabled':''}></label>
+ ${can?'':'<p class="mu" style="margin-top:6px">รอบันทึกคำสั่งซื้อให้เสร็จก่อน จึงแนบสลิปได้</p>'}</div>`;
+};
+const paintSlip=()=>{const e=$('#slipbox');if(e)e.innerHTML=slipInner()};
+function shrink(file,max=1280){
+ return new Promise((res,rej)=>{
+  const u=URL.createObjectURL(file),im=new Image();
+  im.onload=()=>{
+   const k=Math.min(1,max/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*k);c.height=Math.round(im.height*k);
+   const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);
+   let q=.75,out=c.toDataURL('image/jpeg',q);while(out.length>700000&&q>.35){q-=.1;out=c.toDataURL('image/jpeg',q)}
+   out.length>850000?rej(new Error('รูปใหญ่เกินไป ลองถ่ายหรือเลือกรูปใหม่')):res(out);
+  };
+  im.onerror=()=>{URL.revokeObjectURL(u);rej(new Error('เปิดรูปไม่ได้ กรุณาเลือกไฟล์รูปภาพ'))};im.src=u;
+ });
+}
+async function pickSlip(inp){
+ const f=inp.files&&inp.files[0];if(!f||slip.st==='sending')return;
+ slip.st='sending';slip.err='';paintSlip();
+ try{const img=await shrink(f);await Service.sendSlip(ord.id,normPhone(doneCust.phone),img);slip.st='ok';slip.prev=img}
+ catch(e){slip.st='';slip.err=e.message||'แนบสลิปไม่สำเร็จ'}
+ paintSlip();
+}
 function payHtml(){
  const cod=doneCust&&doneCust.pay==='ปลายทาง';
  if(cod)return `<section class="sec paycard"><h3>เก็บเงินปลายทาง</h3><p class="mu">เตรียมเงินสดไว้จ่ายเมื่อรับสินค้า</p></section>`;
  const b=(D&&D.bank)||{},has=T(b.no);
- return `<section class="sec paycard"><h3>โอนเงิน</h3>${has?`<div class="bank"><small>${esc(b.name||'ธนาคาร')}</small><b class="bno" id="bno">${esc(b.no)}</b>${b.holder?`<span>ชื่อบัญชี ${esc(b.holder)}</span>`:''}</div><button class="btn sm" onclick="copyBank()">${ic('copy',16)} คัดลอกเลขบัญชี</button>${b.note?`<p class="mu" style="margin-top:8px">${esc(b.note)}</p>`:''}<p class="mu" style="margin-top:8px">โอนแล้วแจ้งบริษัทเพื่อจัดส่ง</p>`:`<p class="mu">บริษัทจะแจ้งเลขบัญชีให้ทางโทรศัพท์</p>`}</section>`;
+ return `<section class="sec paycard"><h3>โอนเงิน</h3>${has?`<div class="bank"><small>${esc(b.name||'ธนาคาร')}</small><b class="bno" id="bno">${esc(b.no)}</b>${b.holder?`<span>ชื่อบัญชี ${esc(b.holder)}</span>`:''}</div><button class="btn sm" onclick="copyBank()">${ic('copy',16)} คัดลอกเลขบัญชี</button>${b.note?`<p class="mu" style="margin-top:8px">${esc(b.note)}</p>`:''}<p class="mu" style="margin-top:8px">โอนแล้วแนบสลิปด้านล่าง หรือแจ้งบริษัทเพื่อจัดส่ง</p>`:`<p class="mu">บริษัทจะแจ้งเลขบัญชีให้ทางโทรศัพท์</p>`}<div id="slipbox">${slipInner()}</div></section>`;
 }
 async function copyBank(){const t=T(D&&D.bank&&D.bank.no);try{await navigator.clipboard.writeText(t);toast('คัดลอกเลขบัญชีแล้ว')}catch(e){toast('กดค้างที่เลขบัญชีเพื่อคัดลอก')}}
 function doneView(){
@@ -393,8 +422,8 @@ function ordHtml(){
  const m={saving:[`กำลังบันทึกคำสั่งซื้อ…`,'info'],ok:[REMOTE?`บริษัทได้รับคำสั่งซื้อเรียบร้อยแล้ว`:`โหมดทดลอง: บันทึกในเครื่องนี้เท่านั้น (เลขที่ ${ord.id})`,REMOTE?'check':'info'],fail:[`ส่งคำสั่งซื้อไม่สำเร็จ (${esc(ord.err)}) — <a href="#" onclick="sendOrder();return false"><b>ลองส่งอีกครั้ง</b></a>`,'info']}[ord.st];
  return `<div id="ordst" class="note" role="status">${m?ic(m[1],18)+'<span>'+m[0]+'</span>':''}</div>`.replace('<div id="ordst" class="note" role="status"></div>','<div id="ordst"></div>');
 }
-const paintOrd=()=>{const e=$('#ordst');if(e)e.outerHTML=ordHtml()};
-function confirmOrder(){doneItems=items();doneCust={...cust,fa:fullAddr().replace(/\n/g,' ')};greet='';ag={name:'',phone:'',busy:false,res:null,err:''};ord={id:newOrderId(),st:'',err:''};view='done';render();scrollTo(0,0);sendOrder()}
+const paintOrd=()=>{const e=$('#ordst');if(e)e.outerHTML=ordHtml();paintSlip()};
+function confirmOrder(){doneItems=items();doneCust={...cust,fa:fullAddr().replace(/\n/g,' ')};greet='';ag={name:'',phone:'',busy:false,res:null,err:''};ord={id:newOrderId(),st:'',err:''};slip={st:'',err:'',prev:''};view='done';render();scrollTo(0,0);sendOrder()}
 let lastOrder=null;
 async function sendOrder(){
  const order=lastOrder&&ord.st==='fail'?lastOrder:{orderId:ord.id,name:T(cust.name),phone:normPhone(cust.phone),prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:T(cust.zip),addr:T(cust.addr),payType:cust.pay==='ปลายทาง'?'ปลายทาง':'โอน',note:[T(cust.note),cust.tax?'[ขอใบกำกับภาษี] '+taxTxt().replace(/\n/g,' | '):''].filter(Boolean).join('\n'),

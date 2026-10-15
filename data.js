@@ -1,6 +1,6 @@
 // data.js — ข้อมูลและฟังก์ชันที่ใช้ร่วมกัน (หน้าร้าน + หน้าผู้ดูแล)
 // ถ้าจะเปลี่ยนที่เก็บข้อมูลเป็น Google Sheets / Firebase / ฐานข้อมูล ให้แก้เฉพาะ Service ด้านล่าง
-const WEB_VER='v34';
+const WEB_VER='v35';
 const IS_ADMIN=/admin/i.test(location.pathname);
 const KEY='mdr_data_v1',CKEY='mdr_cart_v1',UKEY='mdr_cust_v1',MAXV=5;
 const FB_DEFAULT='https://www.facebook.com/share/1C4DTWS3ef/?mibextid=wwXIfr'; // ลิงก์เพจ Facebook ของบริษัท
@@ -365,6 +365,14 @@ const Service={
   catch(e){if(e.message==='unauthorized')Service.logout();throw e}
  },
  // แอดมินบันทึกรับชำระเงิน: info={pay:'paid'|'unpaid',method,paidAt,amount,note}
+ async sendSlip(orderId,phone,image){
+  if(!REMOTE){
+   const a=localOrders(),o=a.find(x=>x.orderId===orderId);if(!o)throw new Error('ไม่พบคำสั่งซื้อนี้');
+   o.slip=image;try{localStorage.setItem(ORDKEY,JSON.stringify(a))}catch(e){throw new Error('พื้นที่เก็บข้อมูลเต็ม')}
+   return{ok:true,orderId};
+  }
+  try{return await api({action:'slip',orderId,phone,image})}catch(e){throw new Error(friendly(e.message))}
+ },
  async setPayType(orderId,payType){
   if(!REMOTE){
    const a=localOrders(),o=a.find(x=>x.orderId===orderId);if(!o)throw new Error('ไม่พบคำสั่งซื้อนี้');

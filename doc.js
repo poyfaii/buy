@@ -47,7 +47,7 @@ function docHtml(o){
  const meta=[['เลขที่',o.no],['วันที่',o.date],o.due?['ครบกำหนด',o.due]:null,o.seller?['ผู้ขาย',o.seller]:null].filter(Boolean).map(x=>`<dt>${x[0]}</dt><dd>${dcEsc(x[1])}</dd>`).join('');
  const note=[o.note,P&&T0.vat?'ราคาสินค้าทุกรายการรวมภาษีมูลค่าเพิ่มแล้ว':''].filter(Boolean).join('\n');
  const stampSg=o.stamp?`<img class="dc-stamp" src="stamp.png" alt="" width="104" height="104">${o.seller?`<em class="dc-signame">${dcEsc(o.seller)}</em>`:''}`:'';
- return `<div class="dc-sheet"><div class="dc-top"><img src="logo.png" alt="" width="84" height="84"><div class="dc-title"><h2>${dcEsc(T0.t)}</h2><p>${dcEsc(T0.s)}</p></div></div>
+ return `<div class="dc-sheet dc-t-${T0.k}"><div class="dc-top"><img src="logo.png" alt="" width="84" height="84"><div class="dc-title"><h2>${dcEsc(T0.t)}</h2><p>${dcEsc(T0.s)}</p></div></div>
  <div class="dc-grid"><div class="dc-seller"><b>${dcEsc(COMPANY.name)} (${dcEsc(COMPANY.branch)})</b>${dcEsc(COMPANY.addr)}<br>เลขประจำตัวผู้เสียภาษี ${dcEsc(COMPANY.taxId)}<br>โทร. ${dcEsc(COMPANY.tel)}</div><dl class="dc-meta">${meta}</dl></div>
  <div class="dc-cust"><span class="dc-lab">ลูกค้า</span><b>${dcEsc(bn)}</b>${b.addr?dcEsc(b.addr)+'<br>':''}${b.taxId?`เลขประจำตัวผู้เสียภาษี ${dcEsc(b.taxId)}<br>`:''}${b.tel?`โทร. ${dcEsc(b.tel)}`:''}</div>
  <div class="dc-tw"><table class="dc-tab${P?'':' np'}"><thead><tr><th class="c">ลำดับ</th><th>รายละเอียด</th><th class="n">จำนวน</th>${P?'<th class="n">ราคา/หน่วย (รวมภาษี)</th><th class="n">ยอดรวม</th>':''}</tr></thead><tbody>${rows}</tbody></table></div>

@@ -752,3 +752,36 @@ body{background:radial-gradient(900px 420px at 85% -80px,#fff4d6 0,rgba(255,244,
 .eline{display:grid;grid-template-columns:1.6fr 1fr 70px 70px 90px 40px;gap:8px;align-items:center;padding-bottom:12px;border-bottom:1px dashed var(--line,#e4dcc8)}
 .eline:last-child{border-bottom:0;padding-bottom:0}
 @media(max-width:640px){.eline{grid-template-columns:1fr 1fr 1fr 44px}.eline .en,.eline .el{grid-column:1/-1}.eline .eq,.eline .eu{grid-column:span 1}.eline .ep{grid-column:span 1}}
+
+/* v37: สีเอกสารแยกตามประเภท (แถบบน หัวตาราง ยอดรวม) */
+.dc-sheet{--dc:#1d4f91;--dct:#e8f0fb;position:relative;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.dc-t-quote{--dc:#1d4f91;--dct:#e8f0fb}
+.dc-t-delivery{--dc:#6b3fa0;--dct:#f1eafa}
+.dc-t-receipt{--dc:#0e7490;--dct:#e0f2f7}
+.dc-t-taxabb{--dc:#1e7a3c;--dct:#e6f4ea}
+.dc-t-taxfull{--dc:#b45309;--dct:#fdf0e0}
+.dc-sheet::before{content:"";position:absolute;left:0;right:0;top:0;height:10px;background:var(--dc)}
+.dc-sheet .dc-top{border-bottom-color:var(--dc);margin-top:6px}
+.dc-sheet .dc-title h2{color:var(--dc)}
+.dc-sheet .dc-tab th{background:var(--dc)}
+.dc-sheet .dc-meta{background:var(--dct)}
+.dc-sheet .dc-sum .g{background:var(--dct);color:var(--dc)}
+.dc-sheet .dc-cust{border-color:var(--dc)}
+
+/* v37: สีสถานะออเดอร์ (แอดมิน) */
+:root{--c-new:#d92d20;--c-prep:#ea7a0b;--c-cod:#e0a800;--c-done:#1e8a4c;--c-cx:#8a8f98}
+.aitem.oc-new{border-left:6px solid var(--c-new)}
+.aitem.oc-prep{border-left:6px solid var(--c-prep)}
+.aitem.oc-cod{border-left:6px solid var(--c-cod)}
+.aitem.oc-done{border-left:6px solid var(--c-done)}
+.aitem.oc-cx{border-left:6px solid var(--c-cx);opacity:.75}
+.stb.c-new{background:#fde4e1;color:#b42318}
+.stb.c-prep{background:#ffe9cf;color:#a85205}
+.stb.c-cod{background:#fff3b8;color:#7a5b00}
+.stb.c-done{background:#d9f2e2;color:#12633a}
+.stb.c-cx{background:#e8e9ec;color:#555b66}
+.stb.c-slip{background:#e7eefb;color:#1d4f91}
+.cat.oc::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;background:#bbb;vertical-align:baseline}
+.cat.oc[data-c=new]::before{background:var(--c-new)}.cat.oc[data-c=prep]::before{background:var(--c-prep)}.cat.oc[data-c=cod]::before{background:var(--c-cod)}.cat.oc[data-c=done]::before{background:var(--c-done)}.cat.oc[data-c=cx]::before{background:var(--c-cx)}
+.cat.oc[data-c=all]::before{display:none}
+.slipa{display:grid;gap:6px;margin:12px 0;padding:12px;border:1px solid #bcd0f0;background:#f3f7fd;border-radius:12px}.slipa img{max-width:220px;max-height:280px;border-radius:10px;border:1px solid var(--line);display:block}

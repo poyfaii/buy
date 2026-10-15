@@ -69,6 +69,7 @@ async function ensureSchema(env) {
  if (schemaOk) return;
  await env.DB.batch(DDL.map(s => env.DB.prepare(s)));
  try { await env.DB.prepare("ALTER TABLE orders ADD COLUMN payType TEXT DEFAULT ''").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
+ try { await env.DB.prepare("ALTER TABLE orders ADD COLUMN slipId TEXT DEFAULT ''").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
  schemaOk = true;
 }
 async function metaGet(env, k) { const r = await one(env, 'SELECT value FROM meta WHERE key=?', k); return r ? r.value : null; }
@@ -208,7 +209,7 @@ async function saveAll(env, data) {
   stmt(env, 'DELETE FROM variants'), stmt(env, 'DELETE FROM products'), stmt(env, 'DELETE FROM settings'),
   ...insJson(env, 'products', prows), ...insJson(env, 'variants', vrows), ...insJson(env, 'settings', setRows),
   ...imgStmts,
-  stmt(env, "DELETE FROM images WHERE '/api/img/'||id NOT IN (SELECT image FROM products WHERE image IS NOT NULL)")
+  stmt(env, "DELETE FROM images WHERE '/api/img/'||id NOT IN (SELECT image FROM products WHERE image IS NOT NULL) AND id NOT LIKE 'slip~%'")
  ]);
  return { ok: true, images };
 }
@@ -317,7 +318,7 @@ const ageDays = (at, today) => Math.max(0, Math.round((Date.parse(today + 'T00:0
 // สรุปรายวัน: ออเดอร์ใหม่ + ค้างจัดส่ง + รอเก็บเงินปลายทาง (ออเดอร์หนึ่งอยู่หมวดเดียว)
 async function dailySummary(env) {
  const today = nowStr().slice(0, 10), yest = new Date(Date.parse(today + 'T00:00:00Z') - 864e5).toISOString().slice(0, 10);
- const rows = await all(env, "SELECT orderId,createdAt,name,status,shippedAt,payStatus,payType,itemsJson FROM orders WHERE status<>? ORDER BY rowid", ST_CANCEL);
+ const rows = await all(env, "SELECT orderId,createdAt,name,status,shippedAt,payStatus,payType,slipId,itemsJson FROM orders WHERE status<>? ORDER BY rowid", ST_CANCEL);
  const total = r => parseItems(r.itemsJson).reduce((t, i) => t + (typeof i.price === 'number' ? i.price * i.qty : 0), 0);
  const cod = r => ptOf(r.payType) === PT_COD, paid = r => payText(r.payStatus) === ST_PAID, shipped = r => stKey(r.status) === 'ship';
  const dOf = r => str(r.createdAt).slice(0, 10);
@@ -336,7 +337,7 @@ async function dailySummary(env) {
   const out = ['📋 สรุปออเดอร์ประจำวัน', [today.slice(8), today.slice(5, 7), +today.slice(0, 4) + 543].join('/'), BAR, 'ออเดอร์ใหม่เมื่อวาน ' + newY.length + ' · วันนี้ ' + newT.length];
   nw.slice(0, cap).forEach(x => out.push('• ' + x.orderId + ' · ' + x.name + money(total(x)) + ' · ' + (cod(x) ? 'ปลายทาง' : 'โอน') + (dOf(x) === today ? ' · วันนี้' : ' · เมื่อวาน')));
   if (nw.length > cap) out.push('…อีก ' + (nw.length - cap) + ' รายการ ดูในแอดมิน');
-  const a = sec('📦 ค้างจัดส่ง', toShip, x => { const d = ageDays(x.createdAt, today); return (d >= 2 ? '⚠️ ' : '• ') + x.orderId + ' · ' + x.name + ' · ' + (d ? d + ' วัน' : 'วันนี้') + ' · ' + (cod(x) ? '💵 ปลายทาง' : paid(x) ? '✅ โอนแล้ว' : '⏳ รอโอน'); });
+  const a = sec('📦 ค้างจัดส่ง', toShip, x => { const d = ageDays(x.createdAt, today); return (d >= 2 ? '⚠️ ' : '• ') + x.orderId + ' · ' + x.name + ' · ' + (d ? d + ' วัน' : 'วันนี้') + ' · ' + (cod(x) ? '💵 ปลายทาง' : paid(x) ? '✅ โอนแล้ว' : str(x.slipId) ? '📎 มีสลิป รอตรวจ' : '⏳ รอโอน'); });
   const c = sec('💵 รอเก็บเงินปลายทาง', codWait, x => { const d = ageDays(x.shippedAt || x.createdAt, today); return (d >= 2 ? '⚠️ ' : '• ') + x.orderId + ' · ' + x.name + money(total(x)) + ' · ส่งแล้ว ' + (d ? d + ' วัน' : 'วันนี้'); });
   const e = sec('⚠️ ส่งแล้วแต่ยังไม่ได้รับโอน', oddWait, x => '• ' + x.orderId + ' · ' + x.name + money(total(x)));
   const res = out.concat(a, c, e);
@@ -395,6 +396,7 @@ async function deleteOrder(env, b) {
  if (d.n > 0) throw fail('ออเดอร์นี้มีเอกสารที่ออกแล้ว ' + d.n + ' ใบ ลบไม่ได้ (เลขเอกสารต้องคงอยู่ในทะเบียน) — ใช้ "ยกเลิกออเดอร์" แทน');
  const p = o.phone;
  await env.DB.batch([
+  stmt(env, "DELETE FROM images WHERE id=(SELECT slipId FROM orders WHERE orderId=?)", id),
   stmt(env, 'DELETE FROM orders WHERE orderId=?', id),
   stmt(env, `UPDATE customers SET orderCount=(SELECT COUNT(*) FROM orders WHERE phone=?1),
     lastOrderId=COALESCE((SELECT orderId FROM orders WHERE phone=?1 ORDER BY rowid DESC LIMIT 1),lastOrderId),
@@ -418,7 +420,7 @@ async function resetTest(env, b) {
  if (b.confirm !== 'ล้างข้อมูลทั้งหมด') throw fail('ต้องพิมพ์ยืนยันให้ถูกต้อง');
  const c = async t => (await one(env, `SELECT COUNT(*) n FROM ${t}`)).n;
  const before = { orders: await c('orders'), customers: await c('customers'), docs: await c('docs') };
- await env.DB.batch(['orders', 'customers', 'docs', 'counters'].map(t => stmt(env, `DELETE FROM ${t}`)).concat([dropSales(env)]));
+ await env.DB.batch(['orders', 'customers', 'docs', 'counters'].map(t => stmt(env, `DELETE FROM ${t}`)).concat([stmt(env, "DELETE FROM images WHERE id LIKE 'slip~%'"), dropSales(env)]));
  return { ok: true, deleted: before };
 }
 
@@ -432,6 +434,24 @@ async function setPay(env, b) {
  await stmt(env, 'UPDATE orders SET payStatus=?,paidAt=?,payMethod=?,payAmount=?,payNote=? WHERE orderId=?', paid ? ST_PAID : ST_UNPAID, paid ? d : '', method, paid ? amt : '', note, id).run();
  return { ok: true, orderId: id, payStatus: paid ? ST_PAID : ST_UNPAID, paidAt: paid ? d : '', payMethod: method, payAmount: paid ? amt : '', payNote: note };
 }
+// ลูกค้าแนบสลิป (ไม่บังคับ): ต้องมีเลขออเดอร์ + เบอร์ตรงกัน, รูปย่อแล้ว ≤ ~900KB, แทนรูปเดิมได้
+async function slipUpload(env, b) {
+ const id = clean(b.orderId, 40), phone = phoneOf(b.phone);
+ const o = id && (await one(env, 'SELECT phone,slipId,status FROM orders WHERE orderId=?', id));
+ if (!o || o.phone !== phone) throw fail('ไม่พบคำสั่งซื้อนี้');
+ if (stKey(o.status) === 'cancel') throw fail('ออเดอร์นี้ถูกยกเลิกแล้ว');
+ if (!(await limit(env, 'slip' + id, 5, 3600))) throw fail('แนบสลิปบ่อยเกินไป กรุณาลองใหม่ภายหลัง');
+ const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(str(b.image));
+ if (!m) throw fail('ไฟล์ต้องเป็นรูปภาพ (JPG/PNG)');
+ if (m[2].length > 900000) throw fail('รูปใหญ่เกินไป');
+ const iid = 'slip~' + crypto.randomUUID().replace(/-/g, '');
+ await env.DB.batch([
+  stmt(env, 'INSERT INTO images(id,mime,data,createdAt) VALUES(?,?,?,?)', iid, m[1], m[2], nowStr()),
+  stmt(env, 'DELETE FROM images WHERE id=?', str(o.slipId) || '-'),
+  stmt(env, 'UPDATE orders SET slipId=? WHERE orderId=?', iid, id)
+ ]);
+ return { ok: true, orderId: id };
+}
 async function setPayType(env, b) {
  const id = clean(b.orderId, 40);
  if (!id || !(await one(env, 'SELECT 1 x FROM orders WHERE orderId=?', id))) throw fail('ไม่พบคำสั่งซื้อนี้');
@@ -441,7 +461,7 @@ async function setPayType(env, b) {
 async function listOrders(env, b) {
  const ph = b && b.phone ? phoneOf(b.phone) : '';
  const rows = ph ? await all(env, 'SELECT * FROM orders WHERE phone=? ORDER BY rowid DESC LIMIT 200', ph) : await all(env, 'SELECT * FROM orders ORDER BY rowid DESC LIMIT 200');
- return { ok: true, orders: rows.map(r => ({ orderId: r.orderId, createdAt: str(r.createdAt), name: str(r.name), phone: str(r.phone), prov: str(r.province), amp: str(r.amphoe), tam: str(r.tambon), zip: str(r.zip), addr: str(r.address), note: str(r.note), status: stText(r.status), shippedAt: str(r.shippedAt), payStatus: payText(r.payStatus), paidAt: str(r.paidAt), payMethod: str(r.payMethod), payAmount: str(r.payAmount), payNote: str(r.payNote), payType: ptOf(r.payType), items: parseItems(r.itemsJson) })) };
+ return { ok: true, orders: rows.map(r => ({ orderId: r.orderId, createdAt: str(r.createdAt), name: str(r.name), phone: str(r.phone), prov: str(r.province), amp: str(r.amphoe), tam: str(r.tambon), zip: str(r.zip), addr: str(r.address), note: str(r.note), status: stText(r.status), shippedAt: str(r.shippedAt), payStatus: payText(r.payStatus), paidAt: str(r.paidAt), payMethod: str(r.payMethod), payAmount: str(r.payAmount), payNote: str(r.payNote), payType: ptOf(r.payType), slip: str(r.slipId) ? '/api/img/' + str(r.slipId) : '', items: parseItems(r.itemsJson) })) };
 }
 
 /* ---------- เลขที่เอกสาร: แจกเลขในธุรกรรมเดียว (เลขกับทะเบียนสำเร็จพร้อมกัน ไม่มีเลขข้าม/ซ้ำ) ---------- */
@@ -623,7 +643,7 @@ export default {
     if (!r) return new Response('Not found', { status: 404 });
     const bin = atob(r.data), buf = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
-    return new Response(buf, { headers: { 'content-type': r.mime, 'cache-control': 'public, max-age=31536000, immutable' } });
+    return new Response(buf, { headers: { 'content-type': r.mime, 'cache-control': r.mime && String(decodeURIComponent(url.pathname.slice(9))).startsWith('slip~') ? 'private, max-age=86400' : 'public, max-age=31536000, immutable' } });
    }
    let b = null, text = '', action;
    if (request.method === 'POST') { text = await request.text(); b = JSON.parse(text); action = b && b.action; }
@@ -646,6 +666,7 @@ export default {
    if (action === 'lookup') return json(await lookup(env, b));
    if (action === 'track') return json(await track(env, b));
    if (action === 'docNo') return json(await publicDocNo(env, b));
+   if (action === 'slip') return json(await slipUpload(env, b));
    await checkAuth(env, b);
    switch (action) {
     case 'login': return json({ ok: true });
