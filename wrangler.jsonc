@@ -18,5 +18,5 @@
   "vars": {
     "APPS_URL": "https://script.google.com/macros/s/AKfycbwpyOWsntMprTiFuwFIh174PJw-RZnMgD2YFlbPPdUCzu5JmRjQVUbXbesLw0jqmw99/exec"
   },
-  "triggers": { "crons": ["0 10 * * *"] }
+  "triggers": { "crons": ["0 9 * * *"] }
 }
