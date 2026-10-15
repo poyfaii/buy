@@ -3,7 +3,7 @@ const PAGE=24;
 const SHOP_LAT=16.842186444945238,SHOP_LNG=99.93208137099553; // พิกัดที่ตั้งบริษัท (แก้ได้ที่นี่)
 const SHOP_TEL='091-383-0459'; // เบอร์โทรเพจ/ร้าน (แก้ได้ที่นี่)
 const telLink=(c='')=>`<a class="tel ${c}" href="tel:${SHOP_TEL.replace(/\D/g,'')}">${ic('phone',18)} โทร ${SHOP_TEL}</a>`;
-let onlyFav=false,greet='',cat='',shownN=0,anim=false,ord={id:'',st:'',err:''},ag={name:'',phone:'',busy:false,res:null,err:''},loadErr='',cart=[],q='',view='shop',pv=null,shopY=0,errs={},msg='',limit=PAGE,cust={name:'',phone:'',prov:'',amp:'',tam:'',zip:'',addr:'',note:'',tax:false,taxName:'',taxId:'',taxAddr:''};
+let onlyFav=false,greet='',cat='',shownN=0,anim=false,ord={id:'',st:'',err:''},ag={name:'',phone:'',busy:false,res:null,err:''},loadErr='',cart=[],q='',view='shop',pv=null,shopY=0,errs={},msg='',limit=PAGE,cust={name:'',phone:'',prov:'',amp:'',tam:'',zip:'',addr:'',note:'',tax:false,taxName:'',taxId:'',taxAddr:'',pay:'โอน'};
 try{cart=JSON.parse(localStorage.getItem(CKEY))||[]}catch(e){}
 try{const u=JSON.parse(localStorage.getItem(UKEY));if(u)Object.assign(cust,{name:u.name||'',phone:u.phone||'',prov:u.prov||'',amp:u.amp||'',tam:u.tam||'',zip:u.zip||'',addr:u.addr||'',taxName:u.taxName||'',taxId:u.taxId||'',taxAddr:u.taxAddr||''})}catch(e){}
 const saveCart=()=>{try{localStorage.setItem(CKEY,JSON.stringify(cart))}catch(e){}};
@@ -285,6 +285,7 @@ function infoView(){
  <div class="fld"><label class="lbl" for="c_zip">รหัสไปรษณีย์ <span class="req" aria-hidden="true">*</span></label><input id="c_zip" class="inp${errs.zip?' bad':''}" inputmode="numeric" maxlength="5" autocomplete="postal-code" value="${esc(cust.zip)}" oninput="this.value=this.value.replace(/\D/g,'');cust.zip=this.value;clrE('zip')">${errs.zip?`<div class="err" id="e_zip" role="alert">${errs.zip}</div>`:''}</div>
  ${field('addr','บ้านเลขที่ / หมู่ / ซอย / ถนน',{req:1,area:1,ac:'address-line1'})}</section>
  <section class="sec">${field('note','หมายเหตุเพิ่มเติม (ไม่บังคับ)',{area:1})}</section>
+ <section class="sec"><h3>วิธีชำระเงิน</h3><div class="opts payopts" role="radiogroup" aria-label="วิธีชำระเงิน">${[['โอน','โอนเงิน','โอนก่อนจัดส่ง'],['ปลายทาง','เก็บปลายทาง','จ่ายเมื่อรับสินค้า']].map(x=>`<button type="button" class="opt" role="radio" aria-checked="${cust.pay===x[0]}" onclick="cust.pay='${x[0]}';render()"><span class="radio"></span><span class="olab">${x[1]}<small class="mu" style="display:block;font-weight:400">${x[2]}</small></span></button>`).join('')}</div></section>
  <section class="sec"><label class="chk"><input type="checkbox" ${cust.tax?'checked':''} onchange="cust.tax=this.checked;render()"> <span><b>ต้องการใบกำกับภาษี</b><small class="mu" style="display:block">กรอกข้อมูลสำหรับออกใบกำกับภาษี (ไม่บังคับ)</small></span></label>
  ${cust.tax?`<div style="margin-top:10px">${field('taxName','ชื่อ-นามสกุล / ชื่อบริษัท ตามใบกำกับภาษี',{req:1})}${field('taxId','เลขประจำตัวผู้เสียภาษี 13 หลัก',{req:1,t:'tel'})}${field('taxAddr','ที่อยู่ตามใบกำกับภาษี',{req:1,area:1})}</div>`:''}</section>
  <div class="stack"><button class="btn pri lg" onclick="toReview()">ถัดไป: ตรวจสอบคำสั่งซื้อ</button></div>`;
@@ -311,7 +312,7 @@ function toReview(){
 const taxTxt=()=>cust.tax?`ชื่อ: ${T(cust.taxName)}\nเลขประจำตัวผู้เสียภาษี: ${T(cust.taxId).replace(/\D/g,'')}\nที่อยู่: ${T(cust.taxAddr)}`:'';
 function reviewView(){
  return `<h2 class="h2">ตรวจสอบคำสั่งซื้อ</h2>
- <section class="sec"><h3>ข้อมูลผู้สั่ง</h3><p style="margin-top:8px"><b>${esc(cust.name)}</b></p><p class="mu">โทร ${esc(cust.phone)}</p><p style="margin-top:8px;white-space:pre-line">${esc(fullAddr())}</p>${T(cust.note)?`<p class="mu" style="margin-top:8px">หมายเหตุ: ${esc(cust.note)}</p>`:''}${cust.tax?`<p class="mu" style="margin-top:8px;white-space:pre-line">ขอใบกำกับภาษี\n${esc(taxTxt())}</p>`:''}</section>
+ <section class="sec"><h3>ข้อมูลผู้สั่ง</h3><p style="margin-top:8px"><b>${esc(cust.name)}</b></p><p class="mu">โทร ${esc(cust.phone)}</p><p style="margin-top:8px;white-space:pre-line">${esc(fullAddr())}</p>${T(cust.note)?`<p class="mu" style="margin-top:8px">หมายเหตุ: ${esc(cust.note)}</p>`:''}<p style="margin-top:8px"><b>ชำระเงิน:</b> ${cust.pay==='ปลายทาง'?'เก็บเงินปลายทาง':'โอนเงิน'}</p>${cust.tax?`<p class="mu" style="margin-top:8px;white-space:pre-line">ขอใบกำกับภาษี\n${esc(taxTxt())}</p>`:''}</section>
  <section class="sec"><h3>รายการสินค้า</h3>${items().map(i=>`<div class="sumrow"><div><b>${esc(i.p.name)}</b>${i.v?`<div class="mu">${esc(vlabel(i.v))}</div>`:''}</div><b>× ${i.qty}${qunit(i.v)?' '+qunit(i.v):''}<div class="mu" style="font-weight:600">${hasP(i.v)?money(lineP(i)):'$$$ บาท'}</div></b></div>`).join('')}${totalHtml(items())}</section>
  <div class="note">${ic('info',18)}<span>${priceNote()}</span></div>
  <div class="stack"><button class="btn pri lg" onclick="confirmOrder()">ยืนยันคำสั่งซื้อ</button><button class="btn" onclick="go('info')">แก้ไขข้อมูล</button></div>`;
@@ -333,10 +334,17 @@ function calcHtml(){
  const l=doneItems;if(!l.length)return'';
  return `<section class="sec calc"><h3>สรุปรายการและยอดโดยประมาณ</h3><table class="ctab"><thead><tr><th>สินค้า</th><th class="n">จำนวน</th><th class="n">ราคา/หน่วย</th><th class="n">รวม</th></tr></thead><tbody>${l.map(i=>`<tr><td><b>${esc(i.p.name)}</b>${i.v?`<small>${esc(vlabel(i.v))}</small>`:''}</td><td class="n">${i.qty}${qunit(i.v)?' '+qunit(i.v):''}</td><td class="n">${hasP(i.v)?Number(i.v.price).toLocaleString('th-TH'):'<span class="pq">$$$</span>'}</td><td class="n">${hasP(i.v)?lineP(i).toLocaleString('th-TH'):'<span class="pq">$$$</span>'}</td></tr>`).join('')}</tbody></table>${totalHtml(l)}<p class="hint">${priceNote()}</p></section>`;
 }
+function payHtml(){
+ const cod=doneCust&&doneCust.pay==='ปลายทาง';
+ if(cod)return `<section class="sec paycard"><h3>เก็บเงินปลายทาง</h3><p class="mu">เตรียมเงินสดไว้จ่ายเมื่อรับสินค้า</p></section>`;
+ const b=(D&&D.bank)||{},has=T(b.no);
+ return `<section class="sec paycard"><h3>โอนเงิน</h3>${has?`<div class="bank"><small>${esc(b.name||'ธนาคาร')}</small><b class="bno" id="bno">${esc(b.no)}</b>${b.holder?`<span>ชื่อบัญชี ${esc(b.holder)}</span>`:''}</div><button class="btn sm" onclick="copyBank()">${ic('copy',16)} คัดลอกเลขบัญชี</button>${b.note?`<p class="mu" style="margin-top:8px">${esc(b.note)}</p>`:''}<p class="mu" style="margin-top:8px">โอนแล้วแจ้งบริษัทเพื่อจัดส่ง</p>`:`<p class="mu">บริษัทจะแจ้งเลขบัญชีให้ทางโทรศัพท์</p>`}</section>`;
+}
+async function copyBank(){const t=T(D&&D.bank&&D.bank.no);try{await navigator.clipboard.writeText(t);toast('คัดลอกเลขบัญชีแล้ว')}catch(e){toast('กดค้างที่เลขบัญชีเพื่อคัดลอก')}}
 function doneView(){
  const ok=ord.st==='ok';
  return `<section class="sec okcard"><div class="okmark">${ic('check',34)}</div><h2 class="h2">${ok||ord.st==='saving'?'ส่งคำสั่งซื้อให้บริษัทแล้ว':'ยังส่งคำสั่งซื้อไม่สำเร็จ'}</h2><p class="mu">${ord.st==='fail'?'กดลองส่งอีกครั้ง หรือโทรหาบริษัท':'บริษัทจะติดต่อกลับเพื่อยืนยันราคาและค่าส่ง'}</p><div class="oid"><small>เลขที่คำสั่งซื้อ</small><b>${esc(ord.id)}</b></div></section>
- ${ordHtml()}${calcHtml()}
+ ${ordHtml()}${payHtml()}${calcHtml()}
  <div class="stack"><button class="btn" onclick="viewDoc()">ดูใบประมาณการราคา / บันทึกเป็น PDF</button>
  <button class="btn pri lg" onclick="cart=[];saveCart();msg='';view='shop';render();scrollTo(0,0)">กลับไปเลือกสินค้า</button></div>
  <p class="adminlink">สอบถามข้อมูลเพิ่มเติม ${telLink()}${D&&D.fbUrl?`<br><a href="${esc(D.fbUrl)}" target="_blank" rel="noopener">เพจ Facebook</a>`:''}</p>`;
@@ -389,7 +397,7 @@ const paintOrd=()=>{const e=$('#ordst');if(e)e.outerHTML=ordHtml()};
 function confirmOrder(){doneItems=items();doneCust={...cust,fa:fullAddr().replace(/\n/g,' ')};greet='';ag={name:'',phone:'',busy:false,res:null,err:''};ord={id:newOrderId(),st:'',err:''};view='done';render();scrollTo(0,0);sendOrder()}
 let lastOrder=null;
 async function sendOrder(){
- const order=lastOrder&&ord.st==='fail'?lastOrder:{orderId:ord.id,name:T(cust.name),phone:normPhone(cust.phone),prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:T(cust.zip),addr:T(cust.addr),note:[T(cust.note),cust.tax?'[ขอใบกำกับภาษี] '+taxTxt().replace(/\n/g,' | '):''].filter(Boolean).join('\n'),
+ const order=lastOrder&&ord.st==='fail'?lastOrder:{orderId:ord.id,name:T(cust.name),phone:normPhone(cust.phone),prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:T(cust.zip),addr:T(cust.addr),payType:cust.pay==='ปลายทาง'?'ปลายทาง':'โอน',note:[T(cust.note),cust.tax?'[ขอใบกำกับภาษี] '+taxTxt().replace(/\n/g,' | '):''].filter(Boolean).join('\n'),
   items:items().map(i=>({pid:i.pid,vid:i.vid||'',name:i.p.name,label:i.v?vlabel(i.v):'',qty:i.qty,unit:qunit(i.v),price:hasP(i.v)?Number(i.v.price):''}))};
  lastOrder=order;ord.st='saving';ord.err='';paintOrd();
  try{await Service.placeOrder(order);ord.st='ok';setTimeout(refreshSales,800)}catch(e){ord.st='fail';ord.err=e.message||'ผิดพลาด'}

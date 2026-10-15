@@ -1,6 +1,6 @@
 // data.js — ข้อมูลและฟังก์ชันที่ใช้ร่วมกัน (หน้าร้าน + หน้าผู้ดูแล)
 // ถ้าจะเปลี่ยนที่เก็บข้อมูลเป็น Google Sheets / Firebase / ฐานข้อมูล ให้แก้เฉพาะ Service ด้านล่าง
-const WEB_VER='v33';
+const WEB_VER='v34';
 const IS_ADMIN=/admin/i.test(location.pathname);
 const KEY='mdr_data_v1',CKEY='mdr_cart_v1',UKEY='mdr_cust_v1',MAXV=5;
 const FB_DEFAULT='https://www.facebook.com/share/1C4DTWS3ef/?mibextid=wwXIfr'; // ลิงก์เพจ Facebook ของบริษัท
@@ -133,7 +133,7 @@ const api=async body=>{
  return j;
 };
 const norm=d=>{ // เติมค่าที่ขาดให้ครบ
- const r=Object.assign({fbUrl:'',units:[],packs:[],products:[],sales:{}},d);r.hasSales=!!(d&&d.sales&&typeof d.sales==='object');r.showPrice=true;if(!r.sales||typeof r.sales!=='object')r.sales={};
+ const r=Object.assign({fbUrl:'',bank:{},units:[],packs:[],products:[],sales:{}},d);r.bank=Object.assign({name:'',no:'',holder:'',note:''},r.bank||{});r.hasSales=!!(d&&d.sales&&typeof d.sales==='object');r.showPrice=true;if(!r.sales||typeof r.sales!=='object')r.sales={};
  if(!T(r.fbUrl)||r.fbUrl==='https://www.facebook.com/')r.fbUrl=FB_DEFAULT;
  r.products.forEach(p=>{p.variants=p.variants||[];p.status=p.status!==false});
  return r;
@@ -365,6 +365,15 @@ const Service={
   catch(e){if(e.message==='unauthorized')Service.logout();throw e}
  },
  // แอดมินบันทึกรับชำระเงิน: info={pay:'paid'|'unpaid',method,paidAt,amount,note}
+ async setPayType(orderId,payType){
+  if(!REMOTE){
+   const a=localOrders(),o=a.find(x=>x.orderId===orderId);if(!o)throw new Error('ไม่พบคำสั่งซื้อนี้');
+   o.payType=payType;try{localStorage.setItem(ORDKEY,JSON.stringify(a))}catch(e){}
+   return{ok:true,orderId,payType};
+  }
+  try{return await api(Object.assign({action:'setPayType',orderId,payType},CRED))}
+  catch(e){if(e.message==='unauthorized')Service.logout();throw e}
+ },
  async setPay(orderId,info){
   if(!REMOTE){
    const a=localOrders(),o=a.find(x=>x.orderId===orderId);if(!o)throw new Error('ไม่พบคำสั่งซื้อนี้');

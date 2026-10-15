@@ -251,3 +251,12 @@ body.shop .bm .go{width:100%;min-height:40px}
 body.shop .phead .h2{font-size:26px}
 body.shop .card.tile>.btn.go,body.shop .bm>.btn.go{margin:0;width:100%;max-width:100%;box-sizing:border-box}
 body.shop .brow{scroll-padding:0 16px}
+
+/* ---------- วิธีชำระเงิน / บัญชีโอน ---------- */
+body.shop .payopts{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+body.shop .payopts .opt{align-items:flex-start;min-height:0;padding:12px}
+@media(max-width:380px){body.shop .payopts{grid-template-columns:1fr}}
+body.shop .paycard .bank{display:grid;gap:2px;margin:10px 0;padding:14px 16px;border:1px dashed var(--gold);border-radius:14px;background:var(--paper)}
+body.shop .paycard .bank small{color:var(--sage);font-size:13.5px}
+body.shop .paycard .bank .bno{font-family:var(--serif);font-size:24px;letter-spacing:.04em;color:var(--forest);word-break:break-all}
+body.shop .payopts .olab{white-space:nowrap}

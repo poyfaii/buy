@@ -48,6 +48,8 @@ const nowStr = () => bkk().toISOString().slice(0, 19).replace('T', ' ');
 const priceOf = v => { if (v === '' || v == null) return ''; const n = Number(v); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : ''; };
 const stKey = s => { s = str(s).trim(); return s === ST_SHIP ? 'ship' : s === ST_CANCEL ? 'cancel' : 'wait'; };
 const stText = s => { const k = stKey(s); return k === 'ship' ? ST_SHIP : k === 'cancel' ? ST_CANCEL : ST_WAIT; };
+const PT_COD = 'ปลายทาง', PT_TR = 'โอน';
+const ptOf = v => (str(v).trim() === PT_COD || str(v).trim() === 'cod') ? PT_COD : PT_TR;
 const payText = v => str(v).trim() === ST_PAID ? ST_PAID : ST_UNPAID;
 const tsOf = v => { const m = /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/.exec(str(v)); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4] - 7, +m[5], +m[6]) : 0; };
 const parseItems = t => { try { const a = JSON.parse(str(t) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } };
@@ -66,6 +68,7 @@ let schemaOk = false, modeMemo = null;
 async function ensureSchema(env) {
  if (schemaOk) return;
  await env.DB.batch(DDL.map(s => env.DB.prepare(s)));
+ try { await env.DB.prepare("ALTER TABLE orders ADD COLUMN payType TEXT DEFAULT ''").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
  schemaOk = true;
 }
 async function metaGet(env, k) { const r = await one(env, 'SELECT value FROM meta WHERE key=?', k); return r ? r.value : null; }
@@ -174,7 +177,7 @@ async function readAll(env, admin) {
  const st = {};
  (rs.results || []).forEach(r => { st[r.key] = str(r.value); });
  const s = await getSales(env);
- return { ok: true, fbUrl: st.fbUrl || '', showPrice: true, units: listOf(st.units), packs: listOf(st.packs), products, top: admin ? [] : s.top, sales: s.sales };
+ return { ok: true, fbUrl: st.fbUrl || '', bank: { name: st.bankName || '', no: st.bankNo || '', holder: st.bankHolder || '', note: st.bankNote || '' }, showPrice: true, units: listOf(st.units), packs: listOf(st.packs), products, top: admin ? [] : s.top, sales: s.sales };
 }
 
 /* ---------- บันทึกสินค้า (แอดมิน) ---------- */
@@ -200,7 +203,7 @@ async function saveAll(env, data) {
    vrows.push({ id: str(v.id) || (id + 'v' + (j + 1)), productId: id, productName: str(p.name).trim(), sortOrder: j, size: str(v.size), sizeUnit: str(v.sizeUnit), packaging: str(v.packaging), price, status: v.status !== false ? 1 : 0 });
   });
  });
- const setRows = [{ key: 'fbUrl', value: str(data.fbUrl) }, { key: 'units', value: (data.units || []).join(',') }, { key: 'packs', value: (data.packs || []).join(',') }];
+ const setRows = [{ key: 'fbUrl', value: str(data.fbUrl) }, { key: 'bankName', value: clean(data.bank && data.bank.name, 60) }, { key: 'bankNo', value: clean(data.bank && data.bank.no, 40) }, { key: 'bankHolder', value: clean(data.bank && data.bank.holder, 100) }, { key: 'bankNote', value: clean(data.bank && data.bank.note, 200) }, { key: 'units', value: (data.units || []).join(',') }, { key: 'packs', value: (data.packs || []).join(',') }];
  await env.DB.batch([
   stmt(env, 'DELETE FROM variants'), stmt(env, 'DELETE FROM products'), stmt(env, 'DELETE FROM settings'),
   ...insJson(env, 'products', prows), ...insJson(env, 'variants', vrows), ...insJson(env, 'settings', setRows),
@@ -244,6 +247,7 @@ function orderText(o) {
  const out = ['🛒 ออเดอร์ใหม่', 'เลขที่ ' + o.id].concat(when ? ['🕒 ' + when] : [], [BAR, '👤 ลูกค้า', o.name, '📞 ' + o.phone, BAR, '📦 รายการสินค้า (' + its.length + ' รายการ)', rows.join('\n'), BAR, '📍 ที่อยู่จัดส่ง', addr || '-']);
  if (o.note) out.push(BAR, '📝 หมายเหตุ', o.note);
  if (priced) out.push(BAR, '💰 ยอดโดยประมาณ ' + total.toLocaleString('en-US') + ' บาท');
+ out.push(BAR, o.payType === PT_COD ? '💵 เก็บเงินปลายทาง' : '💳 โอนเงิน');
  out.push(BAR, '🔗 จัดการออเดอร์', o.origin + '/admin.html');
  return out.join('\n');
 }
@@ -270,8 +274,8 @@ async function saveOrder(env, o, ctx, origin) {
  const itemsJson = JSON.stringify(js);
  try {
   await env.DB.batch([
-   stmt(env, `INSERT INTO orders(orderId,createdAt,name,phone,province,amphoe,tambon,zip,address,note,items,itemsJson,status,shippedAt,payStatus,paidAt,payMethod,payAmount,payNote) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'',?,'','','','')`,
-    id, at, name, phone, f.province, f.amphoe, f.tambon, f.zip, f.address, clean(o.note, 500), lines.join('\n'), itemsJson, ST_WAIT, ST_UNPAID),
+   stmt(env, `INSERT INTO orders(orderId,createdAt,name,phone,province,amphoe,tambon,zip,address,note,items,itemsJson,status,shippedAt,payStatus,paidAt,payMethod,payAmount,payNote,payType) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'',?,'','','','',?)`,
+    id, at, name, phone, f.province, f.amphoe, f.tambon, f.zip, f.address, clean(o.note, 500), lines.join('\n'), itemsJson, ST_WAIT, ST_UNPAID, ptOf(o.payType)),
    stmt(env, `INSERT INTO customers(phone,name,province,amphoe,tambon,zip,address,lastOrderId,lastOrderAt,lastItemsJson,orderCount) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,1)
     ON CONFLICT(phone) DO UPDATE SET name=?2,province=?3,amphoe=?4,tambon=?5,zip=?6,address=?7,lastOrderId=?8,lastOrderAt=?9,lastItemsJson=?10,orderCount=COALESCE(customers.orderCount,0)+1`,
     phone, name, f.province, f.amphoe, f.tambon, f.zip, f.address, id, at, itemsJson),
@@ -282,7 +286,7 @@ async function saveOrder(env, o, ctx, origin) {
   throw e;
  }
  if (lineOn(env)) {
-  const p = notifyLine(env, orderText({ id, at, name, phone, items: js, addr: f.address, tam: f.tambon && 'ต.' + f.tambon, amp: f.amphoe && 'อ.' + f.amphoe, prov: f.province && 'จ.' + f.province, zip: f.zip, note: clean(o.note, 200), origin: origin || '' }));
+  const p = notifyLine(env, orderText({ id, at, name, phone, items: js, addr: f.address, tam: f.tambon && 'ต.' + f.tambon, amp: f.amphoe && 'อ.' + f.amphoe, prov: f.province && 'จ.' + f.province, zip: f.zip, note: clean(o.note, 200), payType: ptOf(o.payType), origin: origin || '' }));
   if (ctx && ctx.waitUntil) ctx.waitUntil(p); else await p;
  }
  return { ok: true, orderId: id };
@@ -310,27 +314,37 @@ async function track(env, b) {
  return { ok: true, found: orders.length > 0, orders, days: TRACK_DAYS };
 }
 const ageDays = (at, today) => Math.max(0, Math.round((Date.parse(today + 'T00:00:00Z') - Date.parse(str(at).slice(0, 10) + 'T00:00:00Z')) / 864e5));
-// สรุปรายวัน: ออเดอร์ค้าง แยกตามสถานะ (ไม่รวมที่ยกเลิก)
+// สรุปรายวัน: ออเดอร์ใหม่ + ค้างจัดส่ง + รอเก็บเงินปลายทาง (ออเดอร์หนึ่งอยู่หมวดเดียว)
 async function dailySummary(env) {
  const today = nowStr().slice(0, 10), yest = new Date(Date.parse(today + 'T00:00:00Z') - 864e5).toISOString().slice(0, 10);
- const rows = await all(env, "SELECT orderId,createdAt,name,status,payStatus,itemsJson FROM orders WHERE status<>? ORDER BY rowid", ST_CANCEL);
+ const rows = await all(env, "SELECT orderId,createdAt,name,status,shippedAt,payStatus,payType,itemsJson FROM orders WHERE status<>? ORDER BY rowid", ST_CANCEL);
  const total = r => parseItems(r.itemsJson).reduce((t, i) => t + (typeof i.price === 'number' ? i.price * i.qty : 0), 0);
- const wait = rows.filter(x => stKey(x.status) === 'wait'), shipUnpaid = rows.filter(x => stKey(x.status) === 'ship' && payText(x.payStatus) !== ST_PAID), waitPaid = wait.filter(x => payText(x.payStatus) === ST_PAID);
- const newY = rows.filter(x => str(x.createdAt).slice(0, 10) === yest).length, newT = rows.filter(x => str(x.createdAt).slice(0, 10) === today).length;
- const done = rows.filter(x => stKey(x.status) === 'ship' && payText(x.payStatus) === ST_PAID && str(x.createdAt).slice(0, 10) >= yest).length;
- const BAR = '━━━━━━━━━━━━━━';
- const sec = (title, list) => {
-  if (!list.length) return [];
-  const o = [BAR, title + ' (' + list.length + ')'];
-  list.slice(0, 12).forEach(x => { const d = ageDays(x.createdAt, today), t = total(x); o.push((d >= 2 ? '⚠️ ' : '• ') + x.orderId + ' · ' + x.name + (t ? ' · ' + t.toLocaleString('en-US') + ' บาท' : '') + (d ? ' · ' + d + ' วัน' : ' · วันนี้')); });
-  if (list.length > 12) o.push('…และอีก ' + (list.length - 12) + ' รายการ');
-  return o;
+ const cod = r => ptOf(r.payType) === PT_COD, paid = r => payText(r.payStatus) === ST_PAID, shipped = r => stKey(r.status) === 'ship';
+ const dOf = r => str(r.createdAt).slice(0, 10);
+ const newY = rows.filter(x => dOf(x) === yest), newT = rows.filter(x => dOf(x) === today);
+ const toShip = rows.filter(x => !shipped(x)), codWait = rows.filter(x => shipped(x) && cod(x) && !paid(x)), oddWait = rows.filter(x => shipped(x) && !cod(x) && !paid(x));
+ const BAR = '━━━━━━━━━━━━━━', money = t => t ? ' · ' + t.toLocaleString('en-US') + ' บาท' : '';
+ const build = cap => {
+  const sec = (title, list, line) => {
+   if (!list.length) return [];
+   const o = [BAR, title + ' (' + list.length + ')'];
+   list.slice(0, cap).forEach(x => o.push(line(x)));
+   if (list.length > cap) o.push('…อีก ' + (list.length - cap) + ' รายการ ดูในแอดมิน');
+   return o;
+  };
+  const nw = newY.concat(newT);
+  const out = ['📋 สรุปออเดอร์ประจำวัน', [today.slice(8), today.slice(5, 7), +today.slice(0, 4) + 543].join('/'), BAR, 'ออเดอร์ใหม่เมื่อวาน ' + newY.length + ' · วันนี้ ' + newT.length];
+  nw.slice(0, cap).forEach(x => out.push('• ' + x.orderId + ' · ' + x.name + money(total(x)) + ' · ' + (cod(x) ? 'ปลายทาง' : 'โอน') + (dOf(x) === today ? ' · วันนี้' : ' · เมื่อวาน')));
+  if (nw.length > cap) out.push('…อีก ' + (nw.length - cap) + ' รายการ ดูในแอดมิน');
+  const a = sec('📦 ค้างจัดส่ง', toShip, x => { const d = ageDays(x.createdAt, today); return (d >= 2 ? '⚠️ ' : '• ') + x.orderId + ' · ' + x.name + ' · ' + (d ? d + ' วัน' : 'วันนี้') + ' · ' + (cod(x) ? '💵 ปลายทาง' : paid(x) ? '✅ โอนแล้ว' : '⏳ รอโอน'); });
+  const c = sec('💵 รอเก็บเงินปลายทาง', codWait, x => { const d = ageDays(x.shippedAt || x.createdAt, today); return (d >= 2 ? '⚠️ ' : '• ') + x.orderId + ' · ' + x.name + money(total(x)) + ' · ส่งแล้ว ' + (d ? d + ' วัน' : 'วันนี้'); });
+  const e = sec('⚠️ ส่งแล้วแต่ยังไม่ได้รับโอน', oddWait, x => '• ' + x.orderId + ' · ' + x.name + money(total(x)));
+  const res = out.concat(a, c, e);
+  if (!toShip.length && !codWait.length && !oddWait.length) res.push(BAR, '✅ ไม่มีออเดอร์ค้าง');
+  return res.join('\n');
  };
- const out = ['📋 สรุปออเดอร์ประจำวัน', [today.slice(8), today.slice(5, 7), +today.slice(0, 4) + 543].join('/'), BAR, 'ออเดอร์ใหม่เมื่อวาน ' + newY + ' · วันนี้ ' + newT, 'ปิดงานแล้ว (ส่ง+จ่าย) ' + done]
-  .concat(sec('📦 รอจัดส่ง', wait), sec('💸 ส่งแล้ว ยังไม่ชำระ', shipUnpaid));
- if (waitPaid.length) out.push(BAR, 'หมายเหตุ: ' + waitPaid.length + ' รายการจ่ายแล้วแต่ยังไม่จัดส่ง');
- if (!wait.length && !shipUnpaid.length) out.push(BAR, '✅ ไม่มีออเดอร์ค้าง');
- return out.join('\n');
+ for (const cap of [40, 25, 15, 8, 4]) { const t = build(cap); if (t.length <= 4700) return t; }
+ return build(2);
 }
 async function setStatus(env, b) {
  const id = clean(b.orderId, 40), ship = b.status === 'ship', cancel = b.status === 'cancel';
@@ -418,10 +432,16 @@ async function setPay(env, b) {
  await stmt(env, 'UPDATE orders SET payStatus=?,paidAt=?,payMethod=?,payAmount=?,payNote=? WHERE orderId=?', paid ? ST_PAID : ST_UNPAID, paid ? d : '', method, paid ? amt : '', note, id).run();
  return { ok: true, orderId: id, payStatus: paid ? ST_PAID : ST_UNPAID, paidAt: paid ? d : '', payMethod: method, payAmount: paid ? amt : '', payNote: note };
 }
+async function setPayType(env, b) {
+ const id = clean(b.orderId, 40);
+ if (!id || !(await one(env, 'SELECT 1 x FROM orders WHERE orderId=?', id))) throw fail('ไม่พบคำสั่งซื้อนี้');
+ await stmt(env, 'UPDATE orders SET payType=? WHERE orderId=?', ptOf(b.payType), id).run();
+ return { ok: true, orderId: id, payType: ptOf(b.payType) };
+}
 async function listOrders(env, b) {
  const ph = b && b.phone ? phoneOf(b.phone) : '';
  const rows = ph ? await all(env, 'SELECT * FROM orders WHERE phone=? ORDER BY rowid DESC LIMIT 200', ph) : await all(env, 'SELECT * FROM orders ORDER BY rowid DESC LIMIT 200');
- return { ok: true, orders: rows.map(r => ({ orderId: r.orderId, createdAt: str(r.createdAt), name: str(r.name), phone: str(r.phone), prov: str(r.province), amp: str(r.amphoe), tam: str(r.tambon), zip: str(r.zip), addr: str(r.address), note: str(r.note), status: stText(r.status), shippedAt: str(r.shippedAt), payStatus: payText(r.payStatus), paidAt: str(r.paidAt), payMethod: str(r.payMethod), payAmount: str(r.payAmount), payNote: str(r.payNote), items: parseItems(r.itemsJson) })) };
+ return { ok: true, orders: rows.map(r => ({ orderId: r.orderId, createdAt: str(r.createdAt), name: str(r.name), phone: str(r.phone), prov: str(r.province), amp: str(r.amphoe), tam: str(r.tambon), zip: str(r.zip), addr: str(r.address), note: str(r.note), status: stText(r.status), shippedAt: str(r.shippedAt), payStatus: payText(r.payStatus), paidAt: str(r.paidAt), payMethod: str(r.payMethod), payAmount: str(r.payAmount), payNote: str(r.payNote), payType: ptOf(r.payType), items: parseItems(r.itemsJson) })) };
 }
 
 /* ---------- เลขที่เอกสาร: แจกเลขในธุรกรรมเดียว (เลขกับทะเบียนสำเร็จพร้อมกัน ไม่มีเลขข้าม/ซ้ำ) ---------- */
@@ -638,6 +658,7 @@ export default {
     case 'resetTest': return json(await resetTest(env, b));
     case 'setStatus': return json(await setStatus(env, b));
     case 'setPay': return json(await setPay(env, b));
+    case 'setPayType': return json(await setPayType(env, b));
     case 'issueDoc': return json(await issueDoc(env, b.type, b.orderId, 'admin', b.snapshot));
     case 'voidDoc': return json(await voidDoc(env, b));
     case 'listDocs': return json(await listDocs(env, b));
