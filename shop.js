@@ -9,7 +9,7 @@ try{const u=JSON.parse(localStorage.getItem(UKEY));if(u)Object.assign(cust,{name
 const saveCart=()=>{try{localStorage.setItem(CKEY,JSON.stringify(cart))}catch(e){}};
 const saveCust=()=>{try{localStorage.setItem(UKEY,JSON.stringify({name:cust.name,phone:cust.phone,prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:cust.zip,addr:cust.addr,taxName:cust.taxName,taxId:cust.taxId,taxAddr:cust.taxAddr}))}catch(e){}};
 const prod=id=>D&&D.products.find(p=>p.id===id);
-const priceNote=()=>'ราคาที่แสดงเป็นราคาโดยประมาณ ตัวเลือกที่แสดง $$$ บาท ราคาอยู่ระหว่างกำหนด ค่าจัดส่งและราคาสุดท้ายบริษัทจะยืนยันกับคุณอีกครั้งหลังรับคำสั่งซื้อ';
+const priceNote=()=>'ราคาโดยประมาณ ($$$ = ราคาอยู่ระหว่างกำหนด) บริษัทยืนยันราคาและค่าส่งอีกครั้งหลังรับคำสั่งซื้อ'
 const lineP=i=>hasP(i.v)?Number(i.v.price)*i.qty:null;
 const sumP=l=>l.reduce((t,i)=>t+(lineP(i)||0),0);
 const unkN=l=>l.filter(i=>lineP(i)==null).length;
@@ -50,7 +50,7 @@ const chrome=()=>{const n=count();$('#hdr').innerHTML=head();$('#fab').innerHTML
 const prog=()=>{const i=SI[view];if(i==null)return'';return `<div class="prog"><div class="segs">${STEPS.map((s,k)=>`<i class="${k<i?'d':k===i?'c':''}"></i>`).join('')}</div><div class="plabel">ขั้นที่ ${i+1} จาก 5 · <b>${STEPS[i]}</b></div></div>`};
 const hero=()=>{
  const nm=T(greet).replace(/^คุณ/,'').split(/\s+/)[0]; // แสดงชื่อเฉพาะหลังลูกค้าเลือกสั่งซ้ำรายการเดิม
- return `<section class="hero hc"><div class="hero-in"><h2>${nm?`ยินดีต้อนรับกลับ คุณ${esc(nm)}`:'ขนมทอดกรอบ จากกล้วย เผือก มัน มันฝรั่ง และฟักทอง'}</h2><p>${nm?'ปรับจำนวนรายการเดิม หรือเลือกสินค้าเพิ่มได้ตามต้องการ':'แม่ดอนรุ่งเรืองฟู้ดส์ · เลือกสินค้า กรอกที่อยู่ แล้วส่งคำสั่งซื้อถึงบริษัทได้ทันที'}</p>
+ return `<section class="hero hc"><div class="hero-in"><h2>${nm?`ยินดีต้อนรับกลับ คุณ${esc(nm)}`:'ขนมทอดกรอบ กล้วย เผือก มัน ฟักทอง'}</h2><p>${nm?'ปรับจำนวนหรือเพิ่มสินค้าได้เลย':'แม่ดอนรุ่งเรืองฟู้ดส์ · สั่งง่าย ส่งถึงบริษัททันที'}</p>
  <div class="hact"><button onclick="go('again')">${ic('copy',22)}<span>สั่งซ้ำ<br>รายการเดิม</span></button><button onclick="go('track')">${ic('search',22)}<span>ตรวจสอบ<br>สถานะ</span></button><a href="tel:${SHOP_TEL.replace(/\D/g,'')}">${ic('phone',22)}<span>โทร<br>${SHOP_TEL}</span></a></div>
  <span class="hnote">${ic('info',15)} <span>${priceNote()}</span></span></div></section>`;
 };
@@ -96,19 +96,21 @@ function contactHtml(){
  <a class="btn pri go lg" href="https://www.google.com/maps/dir/?api=1&destination=${ll}" target="_blank" rel="noopener">${ic('pin',18)} นำทางไปยังบริษัท</a></div>
  <div class="cmap"><iframe title="แผนที่ที่ตั้งบริษัท แม่ดอนรุ่งเรืองฟู้ดส์ จำกัด" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="https://maps.google.com/maps?q=${ll}&z=15&output=embed"></iframe></div></div></section>`;
 }
+const priceFrom=p=>{
+ const vs=shown(p),pr=vs.filter(hasP).map(v=>Number(v.price));
+ const n=vs.length>1?`<small class="nv">${vs.length} ขนาด</small>`:'';
+ return `<div class="pfrom">${pr.length?`<small>${vs.length>1?'เริ่ม ':''}</small><b>${Math.min(...pr).toLocaleString('th-TH',{maximumFractionDigits:2})}</b> <small>บาท</small>`:'<b class="pq">$$$</b> <small>บาท</small>'}${n}</div>`;
+};
 function card(p,rk){
  return `<article class="card tile${rk?' hot':''}" data-k="${catKey(p.name)}"><div class="cimgw"><button class="cimg" onclick="openP('${p.id}')" tabindex="-1" aria-hidden="true"><img referrerpolicy="no-referrer" loading="lazy" decoding="async" src="${imgOf(p)}" alt="" onerror="this.onerror=null;this.src=defImg('')"></button>${starBtn(p.id,p.name)}</div>
- <div class="cbody"><h3><a href="#" onclick="openP('${p.id}');return false">${esc(p.name)}</a></h3>${p.description?`<p class="desc">${esc(p.description)}</p>`:''}${sold(p.id,'sold nopre')}${priceList(p)}</div><button class="btn pri go" onclick="openP('${p.id}')" aria-label="เลือก ${esc(p.name)}">เลือกสินค้า${ic('chev',18)}</button></article>`;
+ <div class="cbody"><h3><a href="#" onclick="openP('${p.id}');return false">${esc(p.name)}</a></h3>${priceFrom(p)}${sold(p.id,'sold sm')}</div><button class="btn pri go" onclick="openP('${p.id}')" aria-label="เลือก ${esc(p.name)}">เลือก${ic('chev',16)}</button></article>`;
 }
 const sold=(id,c='sold')=>{const a=soldParts(id);if(!a.length)return'';const sm=/sm|nopre/.test(c);return `<p class="${c}">${ic('flame',14)}<span>${sm?'':'ขายแล้ว '}${a.map(x=>`<b>${esc(x)}</b>`).join(' · ')}</span></p>`};
 function pick(p){return `openP('${p.id}')`}
 function bestHtml(tops){
- const nm=p=>`<a href="#" onclick="${pick(p)};return false">${esc(p.name)}</a>`;
  const pic=p=>`<img referrerpolicy="no-referrer" loading="lazy" decoding="async" src="${imgOf(p)}" alt="" onerror="this.onerror=null;this.src=defImg('')">`;
- const [a,...rest]=tops;
- return `<section class="best" aria-label="สินค้าขายดี"><div class="best-h"><span class="best-ic">${ic('star',22)}</span><div><h3>สินค้าขายดี</h3><p>ลูกค้าสั่งบ่อยที่สุด พร้อมยอดที่ขายไปแล้ว</p></div></div>
- <article class="b1"><span class="medal m1">1</span><span class="bpic">${pic(a)}</span><div class="b1-b"><span class="tagc">อันดับ 1</span><h4>${nm(a)}</h4>${sold(a.id,'sold big')}</div><button class="btn pri go" onclick="${pick(a)}" aria-label="เลือก ${esc(a.name)}">เลือก${ic('chev',18)}</button></article>
- ${rest.length?`<div class="brow">${rest.map((p,i)=>`<article class="bm"><span class="medal m${i+2}">${i+2}</span><div class="bm-t"><span class="bpic s">${pic(p)}</span><h4>${nm(p)}</h4></div>${sold(p.id,'sold sm')}<button class="btn sm go" onclick="${pick(p)}" aria-label="เลือก ${esc(p.name)}">เลือก${ic('chev',16)}</button></article>`).join('')}</div>`:''}</section>`;
+ return `<section class="best" aria-label="สินค้าขายดี"><div class="sechead"><h3>ขายดี</h3><span class="cnt">ลูกค้าสั่งบ่อยที่สุด</span></div>
+ <div class="brow">${tops.map((p,i)=>`<article class="bm"><span class="medal m${i+1}">${i+1}</span><button class="bpic" onclick="${pick(p)}" tabindex="-1" aria-hidden="true">${pic(p)}</button><h4><a href="#" onclick="${pick(p)};return false">${esc(p.name)}</a></h4>${sold(p.id,'sold sm')}<button class="btn pri go sm" onclick="${pick(p)}" aria-label="เลือก ${esc(p.name)}">เลือก${ic('chev',16)}</button></article>`).join('')}</div></section>`;
 }
 function setCat(k){onlyFav=false;cat=cat===k?'':k;limit=PAGE;grid()}
 function toggleOnlyFav(){onlyFav=!onlyFav;if(onlyFav)cat='';limit=PAGE;grid()}
@@ -118,14 +120,23 @@ function grid(){
  const avl=D.products.filter(avail).sort(bySort);
  const cs=CATS.filter(c=>avl.some(p=>c[1](String(p.name))));
  const nFav=avl.filter(p=>isFav(p.id)).length;
- $('#cats').innerHTML=(cs.length?`<button class="cat" aria-pressed="${!cat&&!onlyFav}" onclick="setCat('')">ทั้งหมด</button>`+cs.map(c=>`<button class="cat" data-k="${CATK[c[0]]||''}" aria-pressed="${cat===c[0]&&!onlyFav}" onclick="setCat('${c[0]}')">${c[0]}</button>`).join(''):'')+`<button class="cat favchip" aria-pressed="${onlyFav}" onclick="toggleOnlyFav()">${ic('star',16)} ติดดาว${nFav?` (${nFav})`:''}</button>`;
+ const av=c=>{const p=avl.find(x=>c[1](String(x.name)));return p?`<span class="cav"><img referrerpolicy="no-referrer" src="${imgOf(p)}" alt="" onerror="this.onerror=null;this.src=defImg('')"></span>`:''};
+ $('#cats').innerHTML=(cs.length?`<button class="cat" aria-pressed="${!cat&&!onlyFav}" onclick="setCat('')"><span class="cav all">${ic('box',22)}</span><span>ทั้งหมด</span></button>`+cs.map(c=>`<button class="cat" data-k="${CATK[c[0]]||''}" aria-pressed="${cat===c[0]&&!onlyFav}" onclick="setCat('${c[0]}')">${av(c)}<span>${c[0]}</span></button>`).join(''):'')+`<button class="cat favchip" aria-pressed="${onlyFav}" onclick="toggleOnlyFav()"><span class="cav all">${ic('star',22)}</span><span>ติดดาว${nFav?` (${nFav})`:''}</span></button>`;
  const tops=(D.top||[]).map(prod).filter(p=>p&&avail(p)).slice(0,5);
- $('#top').innerHTML=!k&&!cat&&!onlyFav&&tops.length?bestHtml(tops)+`<div class="sechead"><h3>สินค้าทั้งหมด</h3></div>`:'';
+ $('#top').innerHTML=!k&&!cat&&!onlyFav&&tops.length?bestHtml(tops):'';
  const all=avl.filter(p=>inCat(p,cat)&&(!onlyFav||isFav(p.id))),l=k?all.filter(p=>String(p.name).toLowerCase().includes(k)):all,vis=l.slice(0,limit);
- $('#gmeta').textContent=all.length?(k?`พบ ${l.length} จาก ${all.length} รายการ`:`${onlyFav?'สินค้าที่ติดดาว ':cat?cat+' ':'สินค้าทั้งหมด '}${all.length} รายการ`):'';
+ const grouped=!k&&!cat&&!onlyFav;
+ $('#gmeta').textContent=all.length?(k?`พบ ${l.length} รายการ`:grouped?'':`${onlyFav?'ติดดาว ':cat+' '}${all.length} รายการ`):'';
  if(!l.length){
   g.className='';
   g.innerHTML=`<div class="empty">${ic('box',44)}<p>${onlyFav&&!k?'ยังไม่มีสินค้าที่ติดดาว กดรูปดาวบนสินค้าเพื่อบันทึกไว้เลือกภายหลัง':all.length?'ไม่พบสินค้าที่ค้นหา':'ขณะนี้ยังไม่มีสินค้า'}</p>${k?`<button class="btn" onclick="q='';$('#q').value='';grid()">ล้างการค้นหา</button>`:''}</div>`;
+  $('#gmore').innerHTML='';return;
+ }
+ if(grouped){
+  const gs=CATS.map(c=>[c[0],all.filter(p=>c[1](String(p.name)))]);
+  const rest=all.filter(p=>!CATS.some(c=>c[1](String(p.name))));if(rest.length)gs.push(['อื่น ๆ',rest]);
+  g.className='';
+  g.innerHTML=gs.filter(x=>x[1].length).map(x=>`<section class="grp"><div class="sechead"><h3>${x[0]}</h3><span class="cnt">${x[1].length} รายการ</span></div><div class="grid">${x[1].map(p=>card(p)).join('')}</div></section>`).join('');
   $('#gmore').innerHTML='';return;
  }
  g.className='grid';
@@ -176,7 +187,7 @@ function cartView(){
  const l=items();
  if(!l.length)return `<div class="empty">${ic('cart',44)}<p>ยังไม่มีสินค้าในรายการสั่งซื้อ</p><button class="btn pri lg" onclick="go('shop')">เลือกสินค้า</button></div>`;
  return `<h2 class="h2">รายการสั่งซื้อ</h2>
- <div class="note">${ic('info',18)}<span>${priceNote()} (ราคาอาจมีการเปลี่ยนแปลง)</span></div>
+ <div class="note">${ic('info',18)}<span>${priceNote()}</span></div>
  <div class="list">${l.map(i=>`<div class="line"><div class="lthumb">${thumb(i.p)}</div><div class="linfo"><b>${esc(i.p.name)}</b>${i.v?`<div class="mu">${esc(vlabel(i.v))}</div>`:''}<div class="lprice">${hasP(i.v)?`${money(i.v.price)} × ${i.qty} = <b>${money(lineP(i))}</b>`:`ราคา <b>$$$ บาท</b>`}</div>
  <div class="lctl">${qtyUI(i.qty,`cq('${i.pid}',${i.vid?`'${i.vid}'`:'null'},`,qunit(i.v))}<button class="btn sm dng" onclick="cdel('${i.pid}',${i.vid?`'${i.vid}'`:'null'})">${ic('trash',16)} ลบ</button></div></div></div>`).join('')}</div>${totalHtml(l)}
  <div class="stack"><button class="btn pri lg" onclick="go('info')">ถัดไป: ข้อมูลผู้สั่ง</button><button class="btn" onclick="go('shop')">+ เลือกสินค้าเพิ่ม</button></div>`;
@@ -188,16 +199,16 @@ function cdel(pid,vid){cart=cart.filter(c=>!(c.pid===pid&&(c.vid||null)===vid));
 function againView(){
  if(!ag.name&&!ag.phone){ag.name=cust.name;ag.phone=cust.phone}
  const r=ag.res,hist=r&&r.found?(r.history&&r.history.length?r.history:(r.items&&r.items.length?[{createdAt:'',items:r.items}]:[])):[];
- return `<h2 class="h2">สั่งซ้ำ / ดึงข้อมูลเดิม</h2><section class="sec"><p class="sub">กรอกชื่อและเบอร์โทรที่เคยสั่ง เราจะดึงที่อยู่จัดส่งและรายการล่าสุดมาให้ แล้วคุณปรับจำนวนก่อนสั่งได้</p>
+ return `<h2 class="h2">สั่งซ้ำ / ดึงข้อมูลเดิม</h2><section class="sec"><p class="sub">กรอกชื่อและเบอร์ที่เคยสั่ง เราจะดึงที่อยู่และรายการเดิมมาให้</p>
  <div class="fld"><label class="lbl" for="a_name">ชื่อผู้สั่งซื้อ</label><input id="a_name" class="inp" autocomplete="name" value="${esc(ag.name)}" oninput="ag.name=this.value"></div>
  <div class="fld"><label class="lbl" for="a_phone">เบอร์โทรศัพท์</label><input id="a_phone" class="inp" type="tel" inputmode="tel" autocomplete="tel" value="${esc(ag.phone)}" oninput="ag.phone=this.value"></div>
  ${ag.err?`<div class="err" role="alert">${esc(ag.err)}</div>`:''}
  <button class="btn pri lg w" style="margin-top:16px" onclick="doLookup()"${ag.busy?' disabled':''}>${ag.busy?'กำลังค้นหา…':ic('search')+' ค้นหาข้อมูลเดิม'}</button></section>
- ${r&&!r.found?`<div class="note">${ic('info',18)}<span>ไม่พบข้อมูลที่ตรงกับชื่อและเบอร์นี้ ตรวจสอบการสะกด หรือ <a href="#" onclick="go('shop');return false"><b>สั่งเป็นลูกค้าใหม่</b></a></span></div>`:''}
+ ${r&&!r.found?`<div class="note">${ic('info',18)}<span>ไม่พบข้อมูล ตรวจชื่อและเบอร์อีกครั้ง หรือ <a href="#" onclick="go('shop');return false"><b>สั่งเป็นลูกค้าใหม่</b></a></span></div>`:''}
  ${r&&r.found?`<section class="sec"><h3>พบข้อมูลของ ${esc(r.customer.name)}</h3><p class="mu" style="margin-top:6px;white-space:pre-line">${esc([r.customer.addr,(r.customer.prov===BKK?'แขวง':'ตำบล')+r.customer.tam+' '+(r.customer.prov===BKK?'เขต':'อำเภอ')+r.customer.amp,(r.customer.prov===BKK?'':'จ.')+r.customer.prov+' '+r.customer.zip].join('\n'))}</p>
  ${hist.length?`<div class="lbl" style="margin-top:14px">เลือกรายการที่เคยสั่ง (ล่าสุด ${hist.length} ครั้ง)</div>${hist.map((h,n)=>`<div class="hcard"><div class="hhead"><b>${n===0?'ครั้งล่าสุด':n===1?'ครั้งก่อนหน้า':'ก่อนหน้านั้นอีก'}</b><span class="mu">${esc(fmtDate(h.createdAt))}</span></div>${h.items.map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${i.qty}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}<button class="btn pri lg w" style="margin-top:10px" onclick="useLast(true,${n})">สั่งรายการนี้ + ที่อยู่เดิม</button></div>`).join('')}`:'<p class="mu" style="margin-top:10px">ยังไม่มีรายการสั่งก่อนหน้า</p>'}
  <div class="stack"><button class="btn lg" onclick="useLast(false)">ใช้เฉพาะที่อยู่เดิม เลือกสินค้าใหม่</button></div>
- <p class="hint">หลังเลือกรายการ คุณปรับจำนวน เพิ่ม หรือลบสินค้าได้ที่หน้ารายการสั่งซื้อ</p></section>`:''}`;
+ <p class="hint">ปรับรายการได้ที่หน้ารายการสั่งซื้อ</p></section>`:''}`;
 }
 const fmtDate=t=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(t||''));if(!m)return'';const mo=['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];return `${+m[3]} ${mo[+m[2]-1]} ${+m[1]+543}`};
 async function doLookup(){
@@ -267,7 +278,7 @@ function setTam(v){
 }
 function infoView(){
  return `<h2 class="h2">ข้อมูลผู้สั่ง</h2><div class="note">${ic('info',18)}<span>เคยสั่งกับเราแล้ว? <a href="#" onclick="go('again');return false"><b>ดึงที่อยู่เดิม</b></a> ไม่ต้องกรอกใหม่</span></div><section class="sec">${field('name','ชื่อผู้สั่งซื้อ',{req:1,ac:'name'})}${field('phone','เบอร์โทรศัพท์',{req:1,t:'tel',ac:'tel'})}</section>
- <section class="sec"><h3>ที่อยู่จัดส่ง</h3><p class="sub">เลือกจังหวัด แล้วเลือกอำเภอและตำบล รหัสไปรษณีย์จะขึ้นให้เอง</p>
+ <section class="sec"><h3>ที่อยู่จัดส่ง</h3><p class="sub">เลือกจังหวัด อำเภอ ตำบล รหัสไปรษณีย์ขึ้นให้เอง</p>
  ${sel('prov','จังหวัด',{fn:'setProv',html:opts(Object.keys(ADDR).sort(th),cust.prov,'เลือกจังหวัด')})}
  ${sel('amp',lAmp(),{fn:'setAmp',dis:!cust.prov,html:opts(amps(),cust.amp,'เลือก'+lAmp())})}
  ${sel('tam',lTam(),{fn:'setTam',dis:!cust.amp,html:opts(tams(),cust.tam,'เลือก'+lTam())})}
@@ -302,7 +313,7 @@ function reviewView(){
  return `<h2 class="h2">ตรวจสอบคำสั่งซื้อ</h2>
  <section class="sec"><h3>ข้อมูลผู้สั่ง</h3><p style="margin-top:8px"><b>${esc(cust.name)}</b></p><p class="mu">โทร ${esc(cust.phone)}</p><p style="margin-top:8px;white-space:pre-line">${esc(fullAddr())}</p>${T(cust.note)?`<p class="mu" style="margin-top:8px">หมายเหตุ: ${esc(cust.note)}</p>`:''}${cust.tax?`<p class="mu" style="margin-top:8px;white-space:pre-line">ขอใบกำกับภาษี\n${esc(taxTxt())}</p>`:''}</section>
  <section class="sec"><h3>รายการสินค้า</h3>${items().map(i=>`<div class="sumrow"><div><b>${esc(i.p.name)}</b>${i.v?`<div class="mu">${esc(vlabel(i.v))}</div>`:''}</div><b>× ${i.qty}${qunit(i.v)?' '+qunit(i.v):''}<div class="mu" style="font-weight:600">${hasP(i.v)?money(lineP(i)):'$$$ บาท'}</div></b></div>`).join('')}${totalHtml(items())}</section>
- <div class="note">${ic('info',18)}<span>${priceNote()} (ราคาอาจมีการเปลี่ยนแปลง)</span></div>
+ <div class="note">${ic('info',18)}<span>${priceNote()}</span></div>
  <div class="stack"><button class="btn pri lg" onclick="confirmOrder()">ยืนยันคำสั่งซื้อ</button><button class="btn" onclick="go('info')">แก้ไขข้อมูล</button></div>`;
 }
 // สรุปรายการและคำนวณยอดหลังยืนยันคำสั่งซื้อ
@@ -324,7 +335,7 @@ function calcHtml(){
 }
 function doneView(){
  const ok=ord.st==='ok';
- return `<section class="sec okcard"><div class="okmark">${ic('check',34)}</div><h2 class="h2">${ok||ord.st==='saving'?'ส่งคำสั่งซื้อให้บริษัทแล้ว':'ยังส่งคำสั่งซื้อไม่สำเร็จ'}</h2><p class="mu">${ord.st==='fail'?'กรุณากดลองส่งอีกครั้ง หรือโทรแจ้งบริษัทโดยตรง':'บริษัทจะติดต่อกลับเพื่อยืนยันราคา ค่าจัดส่ง และการชำระเงิน'}</p><div class="oid"><small>เลขที่คำสั่งซื้อ</small><b>${esc(ord.id)}</b></div></section>
+ return `<section class="sec okcard"><div class="okmark">${ic('check',34)}</div><h2 class="h2">${ok||ord.st==='saving'?'ส่งคำสั่งซื้อให้บริษัทแล้ว':'ยังส่งคำสั่งซื้อไม่สำเร็จ'}</h2><p class="mu">${ord.st==='fail'?'กดลองส่งอีกครั้ง หรือโทรหาบริษัท':'บริษัทจะติดต่อกลับเพื่อยืนยันราคาและค่าส่ง'}</p><div class="oid"><small>เลขที่คำสั่งซื้อ</small><b>${esc(ord.id)}</b></div></section>
  ${ordHtml()}${calcHtml()}
  <div class="stack"><button class="btn" onclick="viewDoc()">ดูใบประมาณการราคา / บันทึกเป็น PDF</button>
  <button class="btn pri lg" onclick="cart=[];saveCart();msg='';view='shop';render();scrollTo(0,0)">กลับไปเลือกสินค้า</button></div>
@@ -339,17 +350,17 @@ const allPriced=l=>(l||[]).length>0&&l.every(i=>i.price!==''&&i.price!=null&&!is
 function trackView(){
  if(!tk.name&&!tk.phone){tk.name=cust.name;tk.phone=cust.phone}
  const r=tk.res,os=r&&r.found?r.orders:[];
- return `<h2 class="h2">ตรวจสอบสถานะคำสั่งซื้อ</h2><section class="sec"><p class="sub">กรอกชื่อและเบอร์โทรที่ใช้สั่ง ดูได้เฉพาะคำสั่งซื้อย้อนหลัง ${TRACK_DAYS} วัน</p>
+ return `<h2 class="h2">ตรวจสอบสถานะคำสั่งซื้อ</h2><section class="sec"><p class="sub">กรอกชื่อและเบอร์ที่ใช้สั่ง ดูได้ย้อนหลัง ${TRACK_DAYS} วัน</p>
  <div class="fld"><label class="lbl" for="t_name">ชื่อผู้สั่งซื้อ</label><input id="t_name" class="inp" autocomplete="name" value="${esc(tk.name)}" oninput="tk.name=this.value"></div>
  <div class="fld"><label class="lbl" for="t_phone">เบอร์โทรศัพท์</label><input id="t_phone" class="inp" type="tel" inputmode="tel" autocomplete="tel" value="${esc(tk.phone)}" oninput="tk.phone=this.value"></div>
  ${tk.err?`<div class="err" role="alert">${esc(tk.err)}</div>`:''}
  <button class="btn pri lg w" style="margin-top:16px" onclick="doTrack()"${tk.busy?' disabled':''}>${tk.busy?'กำลังตรวจสอบ…':ic('search')+' ตรวจสอบสถานะ'}</button></section>
- ${r&&!r.found?`<div class="note">${ic('info',18)}<span>ไม่พบคำสั่งซื้อย้อนหลัง ${TRACK_DAYS} วันที่ตรงกับชื่อและเบอร์นี้ ตรวจสอบการสะกด หรือโทรสอบถามบริษัท ${telLink('')}</span></div>`:''}
+ ${r&&!r.found?`<div class="note">${ic('info',18)}<span>ไม่พบคำสั่งซื้อ ตรวจชื่อและเบอร์อีกครั้ง หรือโทร ${telLink('')}</span></div>`:''}
  ${os.map((o,n)=>{const sh=o.status===ST_SHIP;return `<section class="sec"><div class="hhead"><b>เลขที่ ${esc(o.orderId)}</b><span class="mu">${esc(fmtDate(o.createdAt))}</span></div>
   <div style="margin:6px 0 10px">${stBadge(o.status)} ${payBadge(o.payStatus)}</div>
   ${(o.items||[]).map(i=>`<div class="sumrow"><div><b>${esc(i.name)}</b>${i.label?`<div class="mu">${esc(i.label)}</div>`:''}</div><b>× ${esc(i.qty)}${i.unit?' '+esc(i.unit):''}</b></div>`).join('')}
-  ${sh?(allPriced(o.items)?`<div class="stack" style="margin-top:12px"><button class="btn pri" onclick="openAbb(${n})">ดูใบกำกับภาษีอย่างย่อ / บันทึกเป็น PDF</button></div>`:`<p class="hint">จัดส่งเรียบร้อยแล้ว หากต้องการใบกำกับภาษี โทรสอบถามบริษัท</p>`)
-  :`<p class="hint">ทางร้านกำลังจัดเตรียมสินค้า บริษัทจะติดต่อกลับเพื่อยืนยันราคา ค่าจัดส่ง และการโอนเงิน (ทางร้านจะบันทึกสถานะชำระเงินให้หลังได้รับเงิน) ใบกำกับภาษีอย่างย่อจะดูได้เมื่อสถานะเป็น "จัดส่งแล้ว"</p>`}</section>`}).join('')}`;
+  ${sh?(allPriced(o.items)?`<div class="stack" style="margin-top:12px"><button class="btn pri" onclick="openAbb(${n})">ดูใบกำกับภาษีอย่างย่อ / บันทึกเป็น PDF</button></div>`:`<p class="hint">จัดส่งแล้ว ขอใบกำกับภาษีได้ทางโทรศัพท์</p>`)
+  :`<p class="hint">ทางร้านกำลังจัดเตรียมสินค้า บริษัทจะติดต่อกลับเพื่อยืนยันราคาและค่าส่ง ใบกำกับภาษีอย่างย่อดูได้เมื่อ "จัดส่งแล้ว"</p>`}</section>`}).join('')}`;
 }
 async function doTrack(){
  if(tk.busy)return;
