@@ -1,23 +1,22 @@
 {
-  // ตั้งค่าเว็บ + หลังบ้าน D1 (Cloudflare อ่านไฟล์นี้ตอน build อัตโนมัติ)
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "buy",                       // ต้องตรงกับชื่อ Worker เดิม (buy)
+  "name": "buy",
   "main": "worker.js",
   "compatibility_date": "2025-09-01",
   "assets": {
     "directory": "./",
     "binding": "ASSETS",
-    "run_worker_first": ["/api", "/api/*"]   // เฉพาะ /api เข้า Worker ส่วนหน้าเว็บส่งแบบไฟล์ปกติ (ไม่นับโควตา)
+    "run_worker_first": ["/api", "/api/*"]
   },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "maedon-db",
-      "database_id": "7e13e9cb-49bc-4f89-9b9a-24d336bcc139"      // ขั้นที่ 1 ในคู่มือ
+      "database_id": "7e13e9cb-49bc-4f89-9b9a-24d336bcc139"
     }
   ],
   "vars": {
-    "APPS_URL": "https://script.google.com/macros/s/AKfycbwpyOWsntMprTiFuwFIh174PJw-RZnMgD2YFlbPPdUCzu5JmRjQVUbXbesLw0jqmw99/exec"   // URL เดิมที่เคยอยู่ใน config.js
-  }
-"triggers": { "crons": ["0 10 * * *"] },
+    "APPS_URL": "https://script.google.com/macros/s/AKfycbwpyOWsntMprTiFuwFIh174PJw-RZnMgD2YFlbPPdUCzu5JmRjQVUbXbesLw0jqmw99/exec"
+  },
+  "triggers": { "crons": ["0 10 * * *"] }
 }
