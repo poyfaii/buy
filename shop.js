@@ -125,7 +125,7 @@ function grid(){
  const tops=(D.top||[]).map(prod).filter(p=>p&&avail(p)).slice(0,5);
  $('#top').innerHTML=!k&&!cat&&!onlyFav&&tops.length?bestHtml(tops):'';
  const all=avl.filter(p=>inCat(p,cat)&&(!onlyFav||isFav(p.id))),l=k?all.filter(p=>String(p.name).toLowerCase().includes(k)):all,vis=l.slice(0,limit);
- const grouped=!k&&!cat&&!onlyFav;
+ const grouped=false;
  $('#gmeta').textContent=all.length?(k?`พบ ${l.length} รายการ`:grouped?'':`${onlyFav?'ติดดาว ':cat+' '}${all.length} รายการ`):'';
  if(!l.length){
   g.className='';
@@ -381,7 +381,7 @@ function doneView(){
  return `<section class="sec okcard"><div class="okmark">${ic('check',34)}</div><h2 class="h2">${ok||ord.st==='saving'?'ส่งคำสั่งซื้อให้บริษัทแล้ว':'ยังส่งคำสั่งซื้อไม่สำเร็จ'}</h2><p class="mu">${ord.st==='fail'?'กดลองส่งอีกครั้ง หรือโทรหาบริษัท':'บริษัทจะติดต่อกลับเพื่อยืนยันราคาและค่าส่ง'}</p><div class="oid"><small>เลขที่คำสั่งซื้อ</small><b>${esc(ord.id)}</b></div></section>
  ${ordHtml()}${payHtml()}${calcHtml()}
  <div class="stack"><button class="btn" onclick="viewDoc()">ดูใบประมาณการราคา / บันทึกเป็น PDF</button>
- <button class="btn pri lg" onclick="cart=[];saveCart();msg='';view='shop';render();scrollTo(0,0)">กลับไปเลือกสินค้า</button></div>
+ <button class="btn pri lg" onclick="if(ord.st==='ok'){cart=[];saveCart()}msg='';view='shop';render();scrollTo(0,0)">กลับไปเลือกสินค้า</button></div>
  <p class="adminlink">สอบถามข้อมูลเพิ่มเติม ${telLink()}${D&&D.fbUrl?`<br><a href="${esc(D.fbUrl)}" target="_blank" rel="noopener">เพจ Facebook</a>`:''}</p>`;
 }
 /* ---------- ตรวจสอบสถานะคำสั่งซื้อ (ชื่อ + เบอร์โทร ย้อนหลัง 3 วัน) ---------- */
@@ -429,13 +429,13 @@ function ordHtml(){
  return `<div id="ordst" class="note" role="status">${m?ic(m[1],18)+'<span>'+m[0]+'</span>':''}</div>`.replace('<div id="ordst" class="note" role="status"></div>','<div id="ordst"></div>');
 }
 const paintOrd=()=>{const e=$('#ordst');if(e)e.outerHTML=ordHtml();paintSlip()};
-function confirmOrder(){doneItems=items();doneCust={...cust,fa:fullAddr().replace(/\n/g,' ')};greet='';ag={name:'',phone:'',busy:false,res:null,err:''};ord={id:newOrderId(),st:'',err:''};slip={st:cust.pay==='โอน'&&slipPend?'ok':'',err:'',prev:cust.pay==='โอน'?slipPend:''};view='done';render();scrollTo(0,0);sendOrder()}
+function confirmOrder(){doneItems=items();doneCust={...cust,fa:fullAddr().replace(/\n/g,' ')};ag={name:'',phone:'',busy:false,res:null,err:''};ord={id:newOrderId(),st:'',err:''};slip={st:cust.pay==='โอน'&&slipPend?'ok':'',err:'',prev:cust.pay==='โอน'?slipPend:''};view='done';render();scrollTo(0,0);sendOrder()}
 let lastOrder=null;
 async function sendOrder(){
  const order=lastOrder&&ord.st==='fail'?lastOrder:{orderId:ord.id,name:T(cust.name),phone:normPhone(cust.phone),prov:cust.prov,amp:cust.amp,tam:cust.tam,zip:T(cust.zip),addr:T(cust.addr),payType:cust.pay==='ปลายทาง'?'ปลายทาง':'โอน',slip:cust.pay==='โอน'&&slipPend?slipPend:undefined,note:[T(cust.note),cust.tax?'[ขอใบกำกับภาษี] '+taxTxt().replace(/\n/g,' | '):''].filter(Boolean).join('\n'),
   items:items().map(i=>({pid:i.pid,vid:i.vid||'',name:i.p.name,label:i.v?vlabel(i.v):'',qty:i.qty,unit:qunit(i.v),price:hasP(i.v)?Number(i.v.price):''}))};
  lastOrder=order;ord.st='saving';ord.err='';paintOrd();
- try{await Service.placeOrder(order);ord.st='ok';slipPend='';setTimeout(refreshSales,800)}catch(e){ord.st='fail';ord.err=e.message||'ผิดพลาด'}
+ try{await Service.placeOrder(order);ord.st='ok';slipPend='';cart=[];saveCart();cust.note='';setTimeout(refreshSales,800)}catch(e){ord.st='fail';ord.err=e.message||'ผิดพลาด'}
  paintOrd();if(view==='done')render();
 }
 const verLine=()=>{const e=$('#verline');if(e)e.textContent=WEB_VER};
