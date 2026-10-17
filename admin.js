@@ -54,7 +54,7 @@ function render(){
  if(!D){$('#app').innerHTML=loadErr
   ?`<div class="awrap" style="padding-top:20px"><div class="empty">${ic('info',44)}<p>${esc(loadErr)}</p><button class="btn pri lg" onclick="loadAdmin()">ลองใหม่</button><button class="btn" onclick="logout()">ออกจากระบบ</button></div></div>`
   :`<div class="awrap" style="padding-top:20px"><div class="sk" style="aspect-ratio:auto;height:220px"></div></div>`;return}
- $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.gif" alt=""><h1 class="brand"><b>จัดการสินค้า</b></h1><a class="swbtn" href="index.html">${ic('store',18)}<span class="t">หน้าร้านลูกค้า</span></a><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ">${ic('logout')}</button></div></header>
+ $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.gif" alt=""><h1 class="brand"><b>จัดการสินค้า</b></h1><span class="rolebadge">ADMIN</span><a class="swbtn" href="index.html">${ic('store',18)}<span class="t">หน้าร้านลูกค้า</span></a><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ">${ic('logout')}</button></div></header>
  <main class="awrap">${tabs()}${aview==='edit'?editView():aview==='set'?setView():aview==='dash'?dashView():aview==='ord'?ordView():aview==='rep'?repView():aview==='dreg'?dregView():aview==='doc'?docView():aview==='ship'?shipView():aview==='pay'?payView():aview==='cus'?cusView():aview==='oedit'?editOrdView():listView()}</main>`;
  if(aview==='list')drawList();
  const on=document.querySelector('.tabs a.on');if(on&&on.scrollIntoView)try{on.scrollIntoView({inline:'center',block:'nearest'})}catch(e){}
