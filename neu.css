@@ -169,3 +169,4 @@ body.adm .dcardx{background:var(--nbg);border:0;box-shadow:var(--raise)}
 body.adm .trow{background:var(--nbg);border:0;box-shadow:var(--raise-s);color:var(--nav)}
 body.adm .dcard{background:var(--nbg);border:0;box-shadow:var(--raise-s)}
 @media(max-width:560px){body.adm .rolebadge{display:none}}
+@media(max-width:560px){body.adm .swbtn .t{display:none}body.adm .swbtn{padding:0;width:44px;justify-content:center}}
