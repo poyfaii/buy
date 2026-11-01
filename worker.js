@@ -1,7 +1,7 @@
 // worker/index.js — หลังบ้านเว็บสั่งซื้อ "แม่ดอนรุ่งเรืองฟู้ดส์" บน Cloudflare Workers + D1
 // - ก่อนกดย้ายข้อมูล: ส่งต่อทุกคำขอ /api ไปที่ Apps Script (Google Sheets) เหมือนเดิม
 // - หลังกดย้ายข้อมูล: ใช้ฐานข้อมูล D1 (ตาราง SQLite) แทน — กดกลับไป Sheets ได้ในหน้าแอดมิน > ตั้งค่า
-const VERSION = 'd1-v24-2026-11-01';
+const VERSION = 'd1-v25-2026-11-01';
 const ST_WAIT = 'รอจัดเตรียมและจัดส่ง', ST_SHIP = 'จัดส่งแล้ว', ST_CANCEL = 'ยกเลิก';
 const ST_UNPAID = 'รอชำระเงิน', ST_PAID = 'ชำระแล้ว';
 const TRACK_DAYS = 3, MAX_ITEMS = 80, SALES_TTL = 60000;
@@ -77,6 +77,7 @@ async function ensureSchema(env) {
  await env.DB.batch(DDL.map(s => env.DB.prepare(s)));
  try { await env.DB.prepare("ALTER TABLE orders ADD COLUMN payType TEXT DEFAULT ''").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
  try { await env.DB.prepare("ALTER TABLE orders ADD COLUMN slipId TEXT DEFAULT ''").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
+ try { await env.DB.prepare("ALTER TABLE pos_items ADD COLUMN mk REAL").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
  schemaOk = true;
 }
 async function metaGet(env, k) { const r = await one(env, 'SELECT value FROM meta WHERE key=?', k); return r ? r.value : null; }
@@ -649,15 +650,16 @@ async function proxy(env, request, url, text) {
 /* ---------- ทางเข้า ---------- */
 
 /* ================= POS ร้านค้าปลีก (บิลเงินสด) — ตารางแยกจากร้านสั่งซื้อ ================= */
-const POS_CFG0 = { shop: '', addr: '', tel: '', mk: 30, note: 'ขอบคุณที่อุดหนุน' };
+const POS_CFG0 = { shop: '', addr: '', tel: '', mk: 30, note: 'ขอบคุณที่อุดหนุน', paper: '80', autoPrint: false };
 const r2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const posNum = (v, name, min = 0, max = 1e9) => { const n = Number(v); if (!isFinite(n) || n < min || n > max) throw fail(name + ' ไม่ถูกต้อง'); return n; };
-const posIt = r => r && ({ id: r.id, barcode: r.barcode || '', name: r.name, unit: r.unit || '', cost: r.cost || 0, price: r.price || 0, maxPrice: r.maxPrice || 0, stock: r.stock || 0, minStock: r.minStock || 0 });
+const posIt = r => r && ({ id: r.id, barcode: r.barcode || '', name: r.name, unit: r.unit || '', cost: r.cost || 0, price: r.price || 0, maxPrice: r.maxPrice || 0, mk: r.mk == null ? '' : r.mk, stock: r.stock || 0, minStock: r.minStock || 0 });
 async function posCfg(env) { let c = {}; try { c = JSON.parse((await metaGet(env, 'pos.cfg')) || '{}'); } catch (e) { /* ใช้ค่าเริ่มต้น */ } return { ...POS_CFG0, ...c }; }
 async function posSaveCfg(env, b) {
  const c = b.cfg || {}, o = {
   shop: str(c.shop).trim().slice(0, 120), addr: str(c.addr).trim().slice(0, 300), tel: str(c.tel).trim().slice(0, 40),
-  note: str(c.note).trim().slice(0, 200), mk: posNum(c.mk, 'กำไร', 0, 1000)
+  note: str(c.note).trim().slice(0, 200), mk: posNum(c.mk, 'กำไร', 0, 1000),
+  paper: ['80', '58', 'a4'].includes(str(c.paper)) ? str(c.paper) : '80', autoPrint: c.autoPrint === true
  };
  await stmt(env, "INSERT INTO meta(key,value) VALUES('pos.cfg',?1) ON CONFLICT(key) DO UPDATE SET value=?1", JSON.stringify(o)).run();
  return { ok: true, cfg: o };
@@ -672,15 +674,16 @@ async function posSaveItem(env, b) {
  const barcode = str(x.barcode).trim().slice(0, 40), unit = str(x.unit).trim().slice(0, 20);
  const cost = posNum(x.cost || 0, 'ต้นทุน'), price = posNum(x.price, 'ราคาขาย'), maxPrice = posNum(x.maxPrice || 0, 'ราคาสูงสุด'), minStock = posNum(x.minStock || 0, 'สต๊อกขั้นต่ำ');
  if (maxPrice > 0 && price > maxPrice) throw fail('ราคาขายเกินราคาสูงสุดที่ตั้งไว้ (' + maxPrice + ' บาท)');
+ const mk = (x.mk === undefined || x.mk === null || x.mk === '') ? null : posNum(x.mk, 'กำไรของสินค้า', 0, 1000);
  const id = str(x.id);
  if (barcode) { const d = await one(env, 'SELECT id,name FROM pos_items WHERE barcode=? AND id<>?', barcode, id); if (d) throw fail('บาร์โค้ดนี้ใช้กับสินค้าอื่นแล้ว: ' + d.name); }
  if (id) {
   const old = await one(env, 'SELECT id FROM pos_items WHERE id=? AND active=1', id); if (!old) throw fail('ไม่พบสินค้า');
-  await stmt(env, 'UPDATE pos_items SET barcode=?,name=?,unit=?,cost=?,price=?,maxPrice=?,minStock=?,updatedAt=? WHERE id=?', barcode, name, unit, cost, price, maxPrice, minStock, t, id).run();
+  await stmt(env, 'UPDATE pos_items SET barcode=?,name=?,unit=?,cost=?,price=?,maxPrice=?,minStock=?,mk=?,updatedAt=? WHERE id=?', barcode, name, unit, cost, price, maxPrice, minStock, mk, t, id).run();
   return { ok: true, item: posIt(await one(env, 'SELECT * FROM pos_items WHERE id=?', id)) };
  }
  const stock0 = posNum(x.stock || 0, 'จำนวนสต๊อก', -1e6, 1e7), nid = 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
- const ops = [stmt(env, 'INSERT INTO pos_items(id,barcode,name,unit,cost,price,maxPrice,stock,minStock,active,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,1,?,?)', nid, barcode, name, unit, cost, price, maxPrice, stock0, minStock, t, t)];
+ const ops = [stmt(env, 'INSERT INTO pos_items(id,barcode,name,unit,cost,price,maxPrice,stock,minStock,mk,active,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,1,?,?)', nid, barcode, name, unit, cost, price, maxPrice, stock0, minStock, mk, t, t)];
  if (stock0) ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'in',?,?,'','ยอดตั้งต้น')", t, nid, stock0, cost));
  await env.DB.batch(ops);
  return { ok: true, item: posIt(await one(env, 'SELECT * FROM pos_items WHERE id=?', nid)) };
@@ -750,6 +753,11 @@ async function posReport(env, b) {
  const low = (await all(env, 'SELECT * FROM pos_items WHERE active=1 AND stock<=minStock AND (minStock>0 OR stock<=0) ORDER BY stock LIMIT 200')).map(posIt);
  return { ok: true, from, to, bills: ok.length, voided: sales.length - ok.length, total: sum(ok, s => s.total), cost: sum(ok, s => s.cost), profit: r2(sum(ok, s => s.total) - sum(ok, s => s.cost)), cash: sum(ok.filter(s => s.method === 'cash'), s => s.total), transfer: sum(ok.filter(s => s.method === 'transfer'), s => s.total), byDay: Object.values(byDay).sort((a, c) => a.day < c.day ? -1 : 1), top: Object.values(top).sort((a, c) => c.amt - a.amt).slice(0, 15), low, sales };
 }
+async function posReset(env, b) {
+ if (str(b.confirm).trim() !== 'ล้างข้อมูล') throw fail('ต้องพิมพ์คำว่า ล้างข้อมูล เพื่อยืนยัน');
+ await env.DB.batch([stmt(env, 'DELETE FROM pos_sales'), stmt(env, 'DELETE FROM pos_moves'), stmt(env, 'DELETE FROM pos_items'), stmt(env, "DELETE FROM counters WHERE key LIKE 'pos%'")]);
+ return { ok: true };
+}
 async function posMoves(env, b) { return { ok: true, moves: await all(env, 'SELECT at,kind,qty,cost,ref,note FROM pos_moves WHERE itemId=? ORDER BY id DESC LIMIT 60', str(b.id)) }; }
 async function posApi(env, action, b) {
  switch (action) {
@@ -763,6 +771,7 @@ async function posApi(env, action, b) {
   case 'posVoid': return posVoid(env, b);
   case 'posReport': return posReport(env, b);
   case 'posMoves': return posMoves(env, b);
+  case 'posReset': return posReset(env, b);
  }
  return { ok: false, error: 'unknown action' };
 }
