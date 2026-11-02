@@ -147,8 +147,9 @@ document.addEventListener('click',e=>{if(view==='sell'&&!document.querySelector(
 let cam=null,camLast='',camAt=0,camNo=0;
 function camDlg(){
  dlg(`<h3>สแกนด้วยกล้อง</h3><div id="camv" class="camv"></div><div id="camm" class="camm">เล็งบาร์โค้ดให้อยู่ในกรอบ</div>
- <div class="acts2"><button class="btn pri lg" onclick="camStop(true)">เสร็จ</button></div>`,null,()=>camStop(false));
- camStart();
+ <div id="camb" class="camb2"></div>
+ <div class="acts2"><div class="payrow"><button class="btn pri" onclick="camPay('cash')">เงินสด</button><button class="btn pri" onclick="camPay('tr')">โอน</button></div><button class="btn" onclick="camStop(true)">ปิดกล้อง (บิลยังอยู่)</button></div>`,null,()=>camStop(false));
+ camBill();camStart();
 }
 async function camStart(){
  const m=$('#camm');
@@ -165,9 +166,15 @@ function camHit(text){
  if(v===camLast&&!(camNo>camAt+700))return; // รหัสเดิมค้างอยู่หน้ากล้อง ไม่นับซ้ำ ต้องเลื่อนออกจากเฟรมก่อน
  camLast=v;camAt=now;
  const it=items.find(i=>i.barcode&&i.barcode===v);
- if(it){addById(it.id,1);const m=$('#camm');if(m)m.innerHTML=`เพิ่มแล้ว: <b>${esc(it.name)}</b> · ในบิล ${fm(cart.filter(l=>l.id===it.id).reduce((t,l)=>t+l.qty,0))} ห่อ · รวม ${fm(total())} บาท`;return}
+ if(it){addById(it.id,1);camBill();const m=$('#camm');if(m)m.innerHTML=`เพิ่มแล้ว: <b>${esc(it.name)}</b> · ในบิล ${fm(cart.filter(l=>l.id===it.id).reduce((t,l)=>t+l.qty,0))} ห่อ · รวม ${fm(total())} บาท`;return}
  camStop(false).then(()=>handleScan(v,1)); // สินค้าใหม่ → ปิดกล้องแล้วเปิดฟอร์ม
 }
+function camBill(){
+ const e=$('#camb');if(!e)return;
+ e.innerHTML=cart.length?cart.map((l,i)=>`<div class="cbl"><b>${esc(l.name)}</b><span class="stp"><button onclick="camQty(${i},-1)" aria-label="ลด">−</button><span class="q">${fm(l.qty)}</span><button onclick="camQty(${i},1)" aria-label="เพิ่ม">+</button></span><span class="amt">${fm(l.price*l.qty)}</span><button class="xbtn" onclick="camQty(${i},-1e9)" aria-label="ลบรายการ">ลบ</button></div>`).join('')+`<div class="tot"><span>รวม ${fm(cart.reduce((a,l)=>a+l.qty,0))} ชิ้น</span><b>${fm(total())}</b></div>`:'<div class="camm" style="min-height:0">ยังไม่มีสินค้าในบิล</div>';
+}
+function camQty(i,d){const l=cart[i];if(!l)return;if(d<=-1e8){cart.splice(i,1)}else{l.qty=r2(l.qty+d);if(l.qty<=0)cart.splice(i,1)}saveCart();repaintSell(false);camBill()}
+async function camPay(k){await camStop(true);if(!cart.length)return;k==='cash'?payCash():payTransfer()}
 async function camStop(close){
  const c=cam;cam=null;
  if(c){try{await c.stop()}catch(e){}try{c.clear()}catch(e){}}

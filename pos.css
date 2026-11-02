@@ -106,3 +106,12 @@ body.pos .camb{position:absolute;right:8px;top:8px;min-height:46px;padding:0 16p
 body.pos .camv{width:100%;min-height:220px;border-radius:16px;overflow:hidden;background:#0d1a33;box-shadow:var(--inset)}
 body.pos .camv video{width:100%!important;display:block}
 body.pos .camm{margin:10px 2px;font-size:15px;color:var(--slate);min-height:44px}
+
+body.pos .camb2{max-height:34vh;overflow:auto;margin:4px 0 8px}
+body.pos .cbl{display:grid;grid-template-columns:1fr auto auto;gap:4px 10px;align-items:center;padding:8px 2px;border-bottom:1px solid var(--line)}
+body.pos .cbl b{grid-column:1/-1;font-size:15px}
+body.pos .cbl .stp{display:inline-flex;align-items:center;gap:6px}
+body.pos .cbl .stp button{width:40px;height:40px;border:0;border-radius:12px;background:var(--nbg);box-shadow:var(--raise-s);font-size:20px;color:var(--blue2)}
+body.pos .cbl .q{min-width:34px;text-align:center;font-weight:700}
+body.pos .cbl .amt{text-align:right;font-weight:700}
+body.pos .cbl .xbtn{grid-column:3;justify-self:end}
