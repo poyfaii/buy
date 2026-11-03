@@ -35,7 +35,7 @@ function mkTag(cost,price){const m=mkPct(cost,price);if(m===null)return '';const
 
 /* ---------- โครงหน้า ---------- */
 function loginView(){
- return `<main class="login"><section class="sec"><img class="logo-img" src="logo.gif" alt="" style="width:72px;height:72px;margin-bottom:12px"><h1 class="h2" style="margin:0 0 2px">ขายหน้าร้าน</h1><p class="sub">ใช้ชื่อผู้ใช้และรหัสผ่านเดียวกับหน้าจัดการร้าน</p>
+ return `<main class="login"><section class="sec"><img class="logo-img" src="logo.svg" alt="" style="width:72px;height:72px;margin-bottom:12px"><h1 class="h2" style="margin:0 0 2px">ร้านชำ · ขายหน้าร้าน</h1><p class="sub">เข้าสู่ระบบเพื่อเริ่มขาย</p>
  <form onsubmit="return doLogin(event)"><div class="fld"><label class="lbl" for="lu">ชื่อผู้ใช้</label><input id="lu" class="inp" autocomplete="username" autocapitalize="off" spellcheck="false"></div>
  <div class="fld"><label class="lbl" for="lp">รหัสผ่าน</label><input id="lp" class="inp" type="password" autocomplete="current-password"></div>
  ${lerr?`<div class="err" role="alert">${esc(lerr)}</div>`:''}<button class="btn pri lg w" style="margin-top:16px" type="submit"${logging?' disabled':''}>${logging?'กำลังตรวจสอบ…':'เข้าสู่ระบบ'}</button></form></section></main>`;
@@ -51,7 +51,7 @@ async function boot(){const j=await api({action:'posInit'});items=j.items;cfg=j.
 function render(){
  if(!CRED){$('#app').innerHTML=loginView();return}
  const tab=(k,t)=>`<a href="#" class="${view===k?'on':''}" onclick="return nav('${k}')">${t}</a>`;
- $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.gif" alt=""><h1 class="brand"><b>ขายหน้าร้าน</b></h1><a class="swbtn" href="admin.html"><span class="t">จัดการร้านออนไลน์</span></a><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div></header>
+ $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.svg" alt=""><h1 class="brand"><b>${esc(cfg.shop||'ร้านชำ')}</b></h1><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div></header>
  <main class="pwrap"><nav class="tabs" aria-label="เมนู">${tab('sell','ขาย')}${tab('items','สินค้า / สต๊อก')}${tab('rep','รายงาน')}${tab('set','ตั้งค่า')}</nav>
  <div id="pv">${view==='sell'?sellView():view==='items'?itemsView():view==='rep'?repView():setView()}</div></main>${view==='sell'?payBar():''}`;
  if(view==='sell')focusScan();
@@ -440,6 +440,14 @@ function setView(){
  <section class="sec"><h3>ข้อมูลบนใบเสร็จ</h3>${f('s_shop','ชื่อร้าน',cfg.shop)}${f('s_addr','ที่อยู่',cfg.addr)}${f('s_tel','เบอร์โทร',cfg.tel)}${f('s_note','ข้อความท้ายใบเสร็จ',cfg.note)}</section>
  <section class="sec"><h3>กำไร</h3><p class="sub">ใส่ราคาทุนแล้วระบบบวกกำไรตามนี้ ปัดขึ้นเป็นบาทเต็ม ไม่มีเศษทศนิยม เช่น ทุน 7 บวก 30% ได้ 9.1 ขาย 10 บาท</p>
  ${f('s_mk','กำไร (%) ของทุกรายการ',cfg.mk,'30','inputmode="decimal"')}</section>
+ <section class="sec"><h3>แจ้งเตือนเข้า LINE</h3><p class="sub">ใช้ LINE กลุ่มเดียวกับแจ้งเตือนออเดอร์ (โควตาฟรีประมาณ 300 ข้อความต่อเดือน ข้อความนี้ใช้วันละไม่เกิน 2 ข้อความ)</p>
+ <label class="chk" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="s_nst"${cfg.notiStock!==false?' checked':''}> <span>แจ้งสต๊อกตอนเช้า (สินค้าหมด และสินค้าเหลือน้อย)</span></label>
+ <label class="fld"><span class="lbl">เวลาแจ้งสต๊อก</span><select id="s_sth" class="inp">${hourOpts(cfg.stockHour==null?8:cfg.stockHour)}</select></label>
+ <label class="chk" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="s_nsa"${cfg.notiSales!==false?' checked':''}> <span>สรุปยอดขายและกำไร (วันนี้ เดือนนี้ ปีนี้)</span></label>
+ <label class="fld"><span class="lbl">เวลาสรุปยอดขาย</span><select id="s_sah" class="inp">${hourOpts(cfg.salesHour==null?20:cfg.salesHour)}</select></label>
+ <label class="fld"><span class="lbl">เตือนเมื่อสต๊อกเหลือไม่เกิน (ใช้กับสินค้าที่ไม่ได้ตั้งเกณฑ์เอง ใส่ 0 = ปิด)</span><input id="s_low" class="inp" inputmode="decimal" value="${cfg.lowDefault||0}"></label>
+ <div class="acts2" style="margin-top:8px"><button class="btn" onclick="testNoti('stock')">ส่งสรุปสต๊อกตอนนี้</button><button class="btn" onclick="testNoti('sales')">ส่งสรุปยอดขายตอนนี้</button></div>
+ <div class="note2">ต้องตั้งให้ระบบรันทุกชั่วโมงใน Cloudflare (ดูในคู่มือ) ถึงจะส่งตามเวลาที่เลือก กดปุ่มทดสอบได้เลยโดยไม่ต้องรอ เกณฑ์เตือนของสินค้าแต่ละชิ้นตั้งได้ในหน้าแก้ไขสินค้า (ช่อง “เตือนเมื่อเหลือไม่เกิน”)</div></section>
  <section class="sec"><h3>เครื่องพิมพ์ใบเสร็จ</h3><p class="sub">เลือกขนาดกระดาษให้ตรงกับเครื่อง แล้วกด “พิมพ์ใบเสร็จ” ในหน้าบิล ระบบจะส่งเข้าเครื่องพิมพ์ที่เลือกในหน้าต่างพิมพ์</p>
  <label class="fld"><span class="lbl">ขนาดกระดาษ</span><select id="s_paper" class="inp"><option value="80"${cfg.paper==='80'?' selected':''}>เครื่องพิมพ์สลิป 80 มม. (ทั่วไป)</option><option value="58"${cfg.paper==='58'?' selected':''}>เครื่องพิมพ์สลิป 58 มม.</option><option value="a4"${cfg.paper==='a4'?' selected':''}>A4 / เครื่องพิมพ์ทั่วไป</option></select></label>
  <label class="chk" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="s_auto"${cfg.autoPrint?' checked':''}> <span>พิมพ์ใบเสร็จอัตโนมัติหลังบันทึกบิล</span></label>
@@ -447,9 +455,13 @@ function setView(){
  <div id="perr" class="err" role="alert"></div><button class="btn pri lg w" onclick="saveCfg()">บันทึกตั้งค่า</button>
  <section class="sec" style="margin-top:22px"><h3 style="color:#c0261a">ล้างข้อมูลทดสอบ</h3><p class="sub">ใช้ก่อนเริ่มขายจริง เพื่อลบสินค้าและบิลที่ลองไว้ทั้งหมด</p><button class="btn dng w" onclick="resetDlg()">ล้างข้อมูลทดสอบ…</button></section>`;
 }
+const hourOpts=h=>Array.from({length:24},(_,i)=>`<option value="${i}"${i===Number(h)?' selected':''}>${String(i).padStart(2,'0')}:00 น.</option>`).join('');
+async function testNoti(kind){
+ try{const j=await api({action:'posNotify',kind});toast(j.ok?'ส่งเข้า LINE แล้ว':(j.error||'ส่งไม่สำเร็จ'))}catch(e){toast(e.message)}
+}
 async function saveCfg(){
  const g=i=>$('#'+i).value.trim();
- try{const j=await api({action:'posSaveCfg',cfg:{shop:g('s_shop'),addr:g('s_addr'),tel:g('s_tel'),note:g('s_note'),mk:Number(g('s_mk')),paper:$('#s_paper').value,autoPrint:$('#s_auto').checked}});cfg=j.cfg;toast('บันทึกตั้งค่าแล้ว');render()}catch(e){$('#perr').textContent=e.message}
+ try{const j=await api({action:'posSaveCfg',cfg:{shop:g('s_shop'),addr:g('s_addr'),tel:g('s_tel'),note:g('s_note'),mk:Number(g('s_mk')),paper:$('#s_paper').value,autoPrint:$('#s_auto').checked,notiStock:$('#s_nst').checked,stockHour:Number($('#s_sth').value),notiSales:$('#s_nsa').checked,salesHour:Number($('#s_sah').value),lowDefault:Number(g('s_low')||0)}});cfg=j.cfg;toast('บันทึกตั้งค่าแล้ว');render()}catch(e){$('#perr').textContent=e.message}
 }
 
 function resetDlg(){

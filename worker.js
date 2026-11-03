@@ -1,7 +1,7 @@
 // worker/index.js — หลังบ้านเว็บสั่งซื้อ "แม่ดอนรุ่งเรืองฟู้ดส์" บน Cloudflare Workers + D1
 // - ก่อนกดย้ายข้อมูล: ส่งต่อทุกคำขอ /api ไปที่ Apps Script (Google Sheets) เหมือนเดิม
 // - หลังกดย้ายข้อมูล: ใช้ฐานข้อมูล D1 (ตาราง SQLite) แทน — กดกลับไป Sheets ได้ในหน้าแอดมิน > ตั้งค่า
-const VERSION = 'd1-v25-2026-11-01';
+const VERSION = 'd1-v26-2026-11-03';
 const ST_WAIT = 'รอจัดเตรียมและจัดส่ง', ST_SHIP = 'จัดส่งแล้ว', ST_CANCEL = 'ยกเลิก';
 const ST_UNPAID = 'รอชำระเงิน', ST_PAID = 'ชำระแล้ว';
 const TRACK_DAYS = 3, MAX_ITEMS = 80, SALES_TTL = 60000;
@@ -650,7 +650,7 @@ async function proxy(env, request, url, text) {
 /* ---------- ทางเข้า ---------- */
 
 /* ================= POS ร้านค้าปลีก (บิลเงินสด) — ตารางแยกจากร้านสั่งซื้อ ================= */
-const POS_CFG0 = { shop: '', addr: '', tel: '', mk: 30, note: 'ขอบคุณที่อุดหนุน', paper: '80', autoPrint: false };
+const POS_CFG0 = { shop: '', addr: '', tel: '', mk: 30, note: 'ขอบคุณที่อุดหนุน', paper: '80', autoPrint: false, notiStock: true, stockHour: 8, notiSales: true, salesHour: 20, lowDefault: 0 };
 const r2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const posNum = (v, name, min = 0, max = 1e9) => { const n = Number(v); if (!isFinite(n) || n < min || n > max) throw fail(name + ' ไม่ถูกต้อง'); return n; };
 const posIt = r => r && ({ id: r.id, barcode: r.barcode || '', name: r.name, unit: r.unit || '', cost: r.cost || 0, price: r.price || 0, maxPrice: r.maxPrice || 0, mk: r.mk == null ? '' : r.mk, stock: r.stock || 0, minStock: r.minStock || 0 });
@@ -659,7 +659,9 @@ async function posSaveCfg(env, b) {
  const c = b.cfg || {}, o = {
   shop: str(c.shop).trim().slice(0, 120), addr: str(c.addr).trim().slice(0, 300), tel: str(c.tel).trim().slice(0, 40),
   note: str(c.note).trim().slice(0, 200), mk: posNum(c.mk, 'กำไร', 0, 1000),
-  paper: ['80', '58', 'a4'].includes(str(c.paper)) ? str(c.paper) : '80', autoPrint: c.autoPrint === true
+  paper: ['80', '58', 'a4'].includes(str(c.paper)) ? str(c.paper) : '80', autoPrint: c.autoPrint === true,
+  notiStock: c.notiStock !== false, stockHour: Math.round(posNum(c.stockHour === undefined ? 8 : c.stockHour, 'เวลาแจ้งสต๊อก', 0, 23)),
+  notiSales: c.notiSales !== false, salesHour: Math.round(posNum(c.salesHour === undefined ? 20 : c.salesHour, 'เวลาสรุปยอดขาย', 0, 23)), lowDefault: posNum(c.lowDefault || 0, 'เกณฑ์สต๊อกเหลือน้อย', 0, 100000)
  };
  await stmt(env, "INSERT INTO meta(key,value) VALUES('pos.cfg',?1) ON CONFLICT(key) DO UPDATE SET value=?1", JSON.stringify(o)).run();
  return { ok: true, cfg: o };
@@ -753,6 +755,46 @@ async function posReport(env, b) {
  const low = (await all(env, 'SELECT * FROM pos_items WHERE active=1 AND stock<=minStock AND (minStock>0 OR stock<=0) ORDER BY stock LIMIT 200')).map(posIt);
  return { ok: true, from, to, bills: ok.length, voided: sales.length - ok.length, total: sum(ok, s => s.total), cost: sum(ok, s => s.cost), profit: r2(sum(ok, s => s.total) - sum(ok, s => s.cost)), cash: sum(ok.filter(s => s.method === 'cash'), s => s.total), transfer: sum(ok.filter(s => s.method === 'transfer'), s => s.total), byDay: Object.values(byDay).sort((a, c) => a.day < c.day ? -1 : 1), top: Object.values(top).sort((a, c) => c.amt - a.amt).slice(0, 15), low, sales };
 }
+/* ---- แจ้งเตือน LINE ของร้านขายหน้าร้าน: สต๊อก (ตอนเช้า) และสรุปยอดขาย/กำไร (ตอนเย็น) ---- */
+const thDate = d => d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + (+d.slice(0, 4) + 543);
+const THM = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+const money0 = n => Math.round(Number(n) || 0).toLocaleString('en-US');
+async function posStockText(env) {
+ const c = await posCfg(env), today = nowStr().slice(0, 10), items = await all(env, 'SELECT name,stock,minStock,cost FROM pos_items WHERE active=1 ORDER BY name');
+ const th = i => (i.minStock > 0 ? i.minStock : c.lowDefault || 0);
+ const out = items.filter(i => (i.stock || 0) <= 0), low = items.filter(i => (i.stock || 0) > 0 && th(i) > 0 && i.stock <= th(i));
+ const val = items.reduce((t, i) => t + Math.max(0, i.stock || 0) * (i.cost || 0), 0), BAR = '━━━━━━━━━━━━━━', q = n => String(Math.round(n * 100) / 100);
+ const build = cap => {
+  const sec = (title, list, line) => list.length ? ['', title + ' (' + list.length + ')'].concat(list.slice(0, cap).map(line), list.length > cap ? ['…และอีก ' + (list.length - cap) + ' รายการ'] : []) : [];
+  const r = ['🌅 สต๊อกร้านเช้านี้', thDate(today), BAR];
+  const a = sec('❌ หมดแล้ว (ต้องสั่งของ)', out, i => '• ' + i.name), b = sec('⚠️ เหลือน้อย (ถึงเกณฑ์เตือน)', low, i => '• ' + i.name + ' · เหลือ ' + q(i.stock) + ' (เตือนที่ ≤ ' + q(th(i)) + ')');
+  const res = r.concat(a, b);
+  res.push('', out.length || low.length ? BAR : '✅ ไม่มีสินค้าหมดหรือเหลือน้อย', '📦 สินค้าทั้งหมด ' + items.length + ' รายการ · มูลค่าสต๊อก (ตามทุน) ' + money0(val) + ' บาท');
+  return res.join('\n');
+ };
+ for (const cap of [60, 40, 25, 12, 5]) { const t = build(cap); if (t.length <= 4700) return t; }
+ return build(3);
+}
+async function posSalesText(env) {
+ const today = nowStr().slice(0, 10), ym = today.slice(0, 7), yy = today.slice(0, 4);
+ const agg = async (a, b) => { const r = await one(env, "SELECT COUNT(*) n, COALESCE(SUM(total),0) t, COALESCE(SUM(cost),0) c, COALESCE(SUM(CASE WHEN method='cash' THEN total ELSE 0 END),0) cash, COALESCE(SUM(CASE WHEN method='transfer' THEN total ELSE 0 END),0) tr FROM pos_sales WHERE status='ปกติ' AND day>=? AND day<=?", a, b); return r; };
+ const d = await agg(today, today), m = await agg(ym + '-01', ym + '-31'), y = await agg(yy + '-01-01', yy + '-12-31');
+ const voided = (await one(env, "SELECT COUNT(*) n FROM pos_sales WHERE status<>'ปกติ' AND day=?", today)).n;
+ const line = (t, x) => [t, '  ยอดขาย ' + money0(x.t) + ' บาท · ' + x.n + ' บิล', '  ต้นทุน ' + money0(x.c) + ' · กำไร ' + money0(x.t - x.c) + ' บาท'];
+ const top = await all(env, "SELECT items FROM pos_sales WHERE status='ปกติ' AND day=?", today), tm = {};
+ top.forEach(r => { let l = []; try { l = JSON.parse(r.items || '[]'); } catch (e) { /* ข้าม */ } l.forEach(i => { tm[i.name] = (tm[i.name] || 0) + Number(i.qty || 0); }); });
+ const tops = Object.entries(tm).sort((a, b) => b[1] - a[1]).slice(0, 3);
+ const BAR = '━━━━━━━━━━━━━━', r = ['💰 สรุปยอดขายหน้าร้าน', thDate(today), BAR].concat(line('📅 วันนี้', d), ['  เงินสด ' + money0(d.cash) + ' · โอน ' + money0(d.tr) + (voided ? ' · ยกเลิก ' + voided + ' บิล' : '')], [''], line('🗓 เดือนนี้ (' + THM[+ym.slice(5) - 1] + ' ' + (+yy + 543) + ')', m), [''], line('📆 ปีนี้ (' + (+yy + 543) + ')', y));
+ if (tops.length) r.push('', BAR, '🏆 ขายดีวันนี้', ...tops.map((x, i) => (i + 1) + '. ' + x[0] + ' × ' + Math.round(x[1] * 100) / 100));
+ r.push('', '* กำไร = ยอดขาย − ต้นทุนสินค้า (กำไรขั้นต้น ยังไม่หักค่าใช้จ่ายอื่น)');
+ return r.join('\n');
+}
+async function posNotify(env, b) {
+ if (!lineOn(env)) throw fail('ยังไม่ได้ตั้งค่า LINE (LINE_TOKEN / LINE_TO) ใน Cloudflare');
+ const kind = b.kind === 'sales' ? 'sales' : 'stock', text = kind === 'sales' ? await posSalesText(env) : await posStockText(env);
+ const res = await notifyLine(env, text);
+ return { ok: !!(res && res.every(x => x.ok)), sent: !!res, error: res && !res.every(x => x.ok) ? ('LINE ตอบ ' + res.map(x => x.status).join(',')) : undefined };
+}
 async function posReset(env, b) {
  if (str(b.confirm).trim() !== 'ล้างข้อมูล') throw fail('ต้องพิมพ์คำว่า ล้างข้อมูล เพื่อยืนยัน');
  await env.DB.batch([stmt(env, 'DELETE FROM pos_sales'), stmt(env, 'DELETE FROM pos_moves'), stmt(env, 'DELETE FROM pos_items'), stmt(env, "DELETE FROM counters WHERE key LIKE 'pos%'")]);
@@ -772,6 +814,7 @@ async function posApi(env, action, b) {
   case 'posReport': return posReport(env, b);
   case 'posMoves': return posMoves(env, b);
   case 'posReset': return posReset(env, b);
+  case 'posNotify': return posNotify(env, b);
  }
  return { ok: false, error: 'unknown action' };
 }
@@ -807,6 +850,7 @@ export default {
     if (action === 'ping') return json({ ok: true, version: VERSION, db: 'd1', features: ['sales', 'history3', 'price-always', 'variant-names', 'track', 'status', 'docno', 'docsnap', 'pay', 'export', 'd1'] });
     return json({ ok: false, error: 'unknown action' });
    }
+   if (env.ORDERS_OPEN !== '1' && ['order', 'lookup', 'track', 'slip'].includes(action)) return json({ ok: false, error: 'ปิดรับออเดอร์ออนไลน์แล้ว' });
    if (action === 'order') return json(await saveOrder(env, b.order, ctx, url.origin));
    if (action === 'lookup') return json(await lookup(env, b));
    if (action === 'track') return json(await track(env, b));
@@ -852,6 +896,16 @@ export default {
  // Cron Trigger: ส่งสรุปประจำวันเข้า LINE (ตั้งเวลาใน wrangler.jsonc)
  async scheduled(event, env, ctx) {
   if (!lineOn(env) || !env.DB) return;
-  ctx.waitUntil((async () => { await ensureSchema(env); if ((await getMode(env)) !== 'd1') return; await notifyLine(env, await dailySummary(env)); })());
+  ctx.waitUntil((async () => {
+   await ensureSchema(env); if ((await getMode(env)) !== 'd1') return;
+   const at = new Date((event && event.scheduledTime ? Number(event.scheduledTime) : Date.now()) + 7 * 3600e3), h = at.getUTCHours(), today = at.toISOString().slice(0, 10);
+   const once = async key => { if ((await metaGet(env, key)) === today) return false; await stmt(env, "INSERT INTO meta(key,value) VALUES(?1,?2) ON CONFLICT(key) DO UPDATE SET value=?2", key, today).run(); return true; };
+   if (env.ORDERS_OPEN === '1' && h === 17 && await once('cron.orders')) await notifyLine(env, await dailySummary(env)); // สรุปออเดอร์ 17:00 (เดิม)
+   const c = await posCfg(env), n = (await one(env, 'SELECT COUNT(*) n FROM pos_items WHERE active=1')).n;
+   if (n > 0) {
+    if (c.notiStock && h === c.stockHour && await once('cron.posStock')) await notifyLine(env, await posStockText(env));
+    if (c.notiSales && h === c.salesHour && await once('cron.posSales')) await notifyLine(env, await posSalesText(env));
+   }
+  })());
  }
 };
