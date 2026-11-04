@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap');
 /* ธีมสี — เปลี่ยนเฉพาะตัวแปรสี รูปทรงปุ่มนูน/ช่องกรอกจมเหมือนเดิม  ใช้: <body data-theme="mint|peach|lav|night"> (ไม่ใส่ = น้ำเงินเดิม) */
 body.neu[data-theme="mint"]{--nbg:#e3eee8;--nsh:#b9ccc2;--nhi:#fbfffd;--nav:#1d4a3a;--blue:#2f8f6b;--blue2:#217555;--slate:#5b7a6c;--rose:#e5603a;--g1:#3fa67f;--g2:#237a58;--line:rgba(29,74,58,.1);--soft:rgba(29,74,58,.06);--accs:rgba(47,143,107,.1);--gline:rgba(47,143,107,.35);--gl:rgba(47,143,107,.12)}
 body.neu[data-theme="peach"]{--nbg:#f1e7df;--nsh:#d4c2b4;--nhi:#fffaf6;--nav:#5a3326;--blue:#d9622b;--blue2:#b84e1c;--slate:#8a6b5c;--rose:#c0392b;--g1:#ec7a42;--g2:#c9531f;--line:rgba(90,51,38,.1);--soft:rgba(90,51,38,.06);--accs:rgba(217,98,43,.1);--gline:rgba(217,98,43,.35);--gl:rgba(217,98,43,.12)}
@@ -16,3 +17,92 @@ body.neu[data-theme="night"] .rcpt{background:#fff;color:#111;--nav:#111;--slate
 .thm button[aria-pressed="true"]{box-shadow:var(--inset);color:var(--blue2)}
 .thm i{display:block;width:34px;height:34px;border-radius:50%;box-shadow:inset 0 0 0 3px rgba(255,255,255,.5)}
 body.neu[data-theme="night"] #toast{background:#0d1018;color:#fff}
+
+/* ================= SKIN "Soft Dock" — ดีไซน์ใหม่ (ยังเป็นปุ่มนูน/ช่องกรอกจมเหมือนเดิม) ================= */
+body.neu.pos{font-family:'Prompt','IBM Plex Sans Thai',system-ui,sans-serif;--r1:22px;--r2:18px;--raise-l:9px 9px 20px var(--nsh),-9px -9px 20px var(--nhi);
+ --inset-d:inset 4px 4px 10px var(--nsh),inset -4px -4px 10px var(--nhi);--cash1:#3cc283;--cash2:#1f9a5e;
+ background:var(--nbg);letter-spacing:.005em}
+body.neu.pos::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(900px 520px at 0% -8%,var(--nhi),transparent 62%)}
+body.neu.pos h1,body.neu.pos h2,body.neu.pos h3,body.neu.pos h4,body.neu.pos .btn,body.neu.pos .lbl{font-family:inherit}
+/* หัว */
+body.neu.pos .top{background:transparent;box-shadow:none;position:static}
+body.neu.pos .top .bar{padding:14px 16px 4px}
+body.neu.pos .top .brand{font-size:21px;font-weight:700;letter-spacing:-.01em}
+body.neu.pos .logo-img{width:46px;height:46px;border-radius:50%;object-fit:cover}
+body.neu.pos .iconbtn{width:46px;height:46px;border-radius:50%}
+/* ปุ่ม */
+body.neu.pos .btn{border-radius:var(--r2);min-height:48px;font-weight:600;font-size:16px;transition:box-shadow .12s,transform .12s}
+body.neu.pos .btn:active{transform:scale(.985)}
+body.neu.pos .btn.pri{background:linear-gradient(160deg,var(--g1),var(--g2));box-shadow:6px 6px 14px var(--nsh),-5px -5px 12px var(--nhi),inset 0 1px 0 rgba(255,255,255,.28)}
+body.neu.pos .btn.lg{min-height:56px;font-size:17px}
+/* ช่องกรอก */
+body.neu.pos .inp{border-radius:var(--r2);min-height:52px;box-shadow:var(--inset-d)}
+body.neu.pos .inp:focus{box-shadow:var(--inset-d),0 0 0 3px var(--gline)}
+body.neu.pos .lbl{font-size:14.5px;font-weight:600;color:var(--slate)}
+/* การ์ด */
+body.neu.pos .sec{border-radius:var(--r1);box-shadow:var(--raise);padding:18px;border:0}
+body.neu.pos .sec h3{display:flex;align-items:center;gap:10px;font-size:17px;font-weight:700}
+body.neu.pos .sec h3::before{content:'';width:6px;height:20px;border-radius:3px;background:linear-gradient(var(--g1),var(--g2));flex:none}
+body.neu.pos .lhead .h2,body.neu.pos .h2{font-size:25px;font-weight:700;letter-spacing:-.01em}
+/* แถบสแกน */
+body.neu.pos .scan .inp{min-height:66px;border-radius:24px;font-size:19px;padding-left:60px;box-shadow:var(--inset-d)}
+body.neu.pos .scan .ic{top:21px;left:20px;width:26px;height:26px}
+body.neu.pos .camb{top:9px;right:9px;min-height:48px;border-radius:18px;box-shadow:4px 4px 10px var(--nsh),-3px -3px 8px var(--nhi),inset 0 1px 0 rgba(255,255,255,.3)}
+/* ตะกร้า: แต่ละรายการเป็นการ์ดนูน */
+body.neu.pos .cartbox{background:none;box-shadow:none;padding:2px 0}
+body.neu.pos .cl{background:var(--nbg);box-shadow:var(--raise-s);border:0;border-radius:var(--r1);padding:14px 16px;margin-bottom:12px}
+body.neu.pos .cl b{font-size:17px;font-weight:600}
+body.neu.pos .cl .amt{font-size:20px;font-weight:700;color:var(--blue2)}
+body.neu.pos .stp{border-radius:16px;box-shadow:var(--inset-d)}
+body.neu.pos .stp button{width:40px;height:40px;border-radius:13px}
+body.neu.pos .empty2{padding:44px 10px;color:var(--slate);border-radius:var(--r1);box-shadow:var(--inset-d)}
+body.neu.pos .tot b{font-size:42px;font-weight:700}
+/* ปุ่มจ่ายเงิน: เงินสดเขียว / โอนตามธีม / ติดไว้เรียบ */
+body.neu.pos .payrow{gap:12px}
+body.neu.pos .payrow .btn{min-height:62px;font-size:19px;font-weight:700;border-radius:20px}
+body.neu.pos .payrow .btn:nth-child(1){background:linear-gradient(160deg,var(--cash1),var(--cash2))}
+body.neu.pos .payrow .btn:nth-child(3){min-height:50px;font-size:16px;font-weight:600;background:var(--nbg);color:var(--nav);box-shadow:var(--raise-s)}
+/* ตัวเลขสรุป */
+body.neu.pos .sc div{border-radius:var(--r1);padding:16px 18px;box-shadow:var(--raise)}
+body.neu.pos .sc small{display:flex;align-items:center;gap:7px;font-size:13px}
+body.neu.pos .sc small::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--blue);flex:none}
+body.neu.pos .sc .pf small::before{background:var(--ok)}
+body.neu.pos .sc b{font-size:28px;font-weight:700;margin-top:2px;display:block}
+/* รายการสินค้า / ชิป / แถว */
+body.neu.pos .it{border-radius:var(--r1);padding:16px 18px}
+body.neu.pos .it b{font-weight:600;font-size:17px}
+body.neu.pos .it .stk{font-size:24px;font-weight:700}
+body.neu.pos .cat{min-height:44px;font-weight:600}
+body.neu.pos .sres button{border-radius:var(--r2);min-height:54px}
+body.neu.pos table.t th{text-transform:none;font-weight:600;border-bottom:2px solid var(--line)}
+body.neu.pos .mk{font-weight:600}
+/* หน้าต่างย่อย */
+body.neu.pos .scrim2{background:rgba(20,28,50,.38);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+body.neu.pos .dlg{border-radius:32px 32px 0 0;padding-top:26px;box-shadow:0 -14px 50px -12px rgba(10,18,40,.5)}
+body.neu.pos .dlg::before{content:'';position:absolute;left:50%;top:9px;width:44px;height:5px;margin-left:-22px;border-radius:3px;box-shadow:var(--inset)}
+body.neu.pos .dlg{position:relative}
+@media(min-width:640px){body.neu.pos .dlg{border-radius:32px}body.neu.pos .dlg::before{display:none}}
+body.neu.pos .big{font-size:50px;font-weight:700;letter-spacing:-.01em}
+body.neu.pos .chg{border-radius:var(--r1);box-shadow:var(--inset-d)}
+/* เมนูล่าง (มือถือ/แท็บเล็ต) */
+@media(max-width:899px){
+ body.neu.pos .pwrap{padding-bottom:190px}
+ body.neu.pos .tabs{position:fixed;left:12px;right:12px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:45;margin:0;padding:8px 6px;border-radius:30px;background:var(--nbg);box-shadow:var(--raise-l);display:grid;grid-template-columns:repeat(6,1fr);gap:2px;overflow:visible}
+ body.neu.pos .tabs a{display:flex;flex-direction:column;align-items:center;gap:3px;padding:7px 0 6px;border-radius:22px;font-size:11.5px;font-weight:600;line-height:1.1}
+ body.neu.pos .tabs a::before{content:'';width:23px;height:23px;background:currentColor;-webkit-mask:var(--ico) center/contain no-repeat;mask:var(--ico) center/contain no-repeat}
+ body.neu.pos .tabs a.on{box-shadow:var(--inset-d);color:var(--blue2)}
+ body.neu.pos .paybar{bottom:calc(86px + env(safe-area-inset-bottom));left:12px;right:12px;padding:12px 14px;border-radius:28px;background:var(--nbg);box-shadow:var(--raise-l);z-index:44}
+ body.neu.pos .paybar .tot{padding:0 4px 8px}
+ body.neu.pos .paybar .tot b{font-size:34px}
+}
+@media(min-width:900px){
+ body.neu.pos .tabs{border-radius:24px;padding:6px;gap:6px;box-shadow:var(--inset-d);max-width:640px}
+ body.neu.pos .tabs a{border-radius:18px;padding:12px 14px}
+ body.neu.pos .tabs a.on{box-shadow:var(--raise-s)}
+}
+body.neu.pos .tabs a[onclick*="'sell'"]{--ico:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 4h2l2.4 11h10.2L20 7H6.2'/><circle cx='9' cy='19.5' r='1.5'/><circle cx='17' cy='19.5' r='1.5'/></svg>")}
+body.neu.pos .tabs a[onclick*="'rcv'"]{--ico:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3'/></svg>")}
+body.neu.pos .tabs a[onclick*="'items'"]{--ico:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 8l9-5 9 5v8l-9 5-9-5zM3 8l9 5 9-5M12 13v8'/></svg>")}
+body.neu.pos .tabs a[onclick*="'rep'"]{--ico:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M5 20V10M12 20V4M19 20v-7'/></svg>")}
+body.neu.pos .tabs a[onclick*="'acc'"]{--ico:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M4 6h13a3 3 0 0 1 3 3v9H7a3 3 0 0 1-3-3zM4 6V5a1 1 0 0 1 1-1h11M16 13h2'/></svg>")}
+body.neu.pos .tabs a[onclick*="'set'"]{--ico:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M4 7h10M18 7h2M4 17h2M10 17h10'/><circle cx='16' cy='7' r='2'/><circle cx='8' cy='17' r='2'/></svg>")}

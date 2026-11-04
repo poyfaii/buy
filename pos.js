@@ -49,6 +49,7 @@ async function doLogin(e){
 function logout(){CRED=null;try{sessionStorage.removeItem(CRK)}catch(e){}render()}
 async function boot(){const j=await api({action:'posInit'});items=j.items;cfg=j.cfg;custs=j.custs||[];view=view||'sell'}
 function render(){
+ document.querySelectorAll('body > .paybar').forEach(e=>e.remove());
  if(!CRED){$('#app').innerHTML=loginView();return}
  const tab=(k,t)=>`<a href="#" class="${view===k?'on':''}" onclick="return nav('${k}')">${t}</a>`;
  $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.svg" alt=""><h1 class="brand"><b>${esc(cfg.shop||'ร้านชำ')}</b></h1><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div></header>
