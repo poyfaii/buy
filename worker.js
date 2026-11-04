@@ -746,14 +746,29 @@ async function posVoid(env, b) {
  await env.DB.batch(ops);
  return { ok: true };
 }
+/* ---- บาร์โค้ดของร้านเอง (EAN-13 ขึ้นต้น 20 = ช่วงใช้ภายในร้าน ไม่ชนกับสินค้าจริง) ---- */
+const ean13 = d12 => { let s = 0; for (let i = 0; i < 12; i++) s += (+d12[i]) * (i % 2 ? 3 : 1); return d12 + ((10 - s % 10) % 10); };
+async function posNewCode(env, b) {
+ const n = Math.max(1, Math.min(100, Math.floor(Number(b && b.n) || 1))), out = [];
+ for (let guard = 0; out.length < n && guard < 5000; guard++) {
+  await stmt(env, "INSERT INTO counters(key,last) VALUES('posown',1) ON CONFLICT(key) DO UPDATE SET last=last+1").run();
+  const last = (await one(env, "SELECT last FROM counters WHERE key='posown'")).last, code = ean13('20' + String(last).padStart(10, '0'));
+  if (!(await one(env, 'SELECT id FROM pos_items WHERE barcode=?', code))) out.push(code);
+ }
+ return { ok: true, codes: out };
+}
 async function posReport(env, b) {
  const re = /^\d{4}-\d{2}-\d{2}$/, today = nowStr().slice(0, 10), from = re.test(str(b.from)) ? b.from : today, to = re.test(str(b.to)) ? b.to : from;
  const rows = await all(env, 'SELECT * FROM pos_sales WHERE day>=? AND day<=? ORDER BY at DESC LIMIT 5000', from, to), sales = rows.map(posSaleOut);
  const ok = sales.filter(s => s.status === 'ปกติ'), sum = (a, f) => r2(a.reduce((t, x) => t + f(x), 0));
  const byDay = {}, top = {};
- ok.forEach(s => { const d = byDay[s.day] || (byDay[s.day] = { day: s.day, bills: 0, total: 0, cost: 0, cash: 0, transfer: 0 }); d.bills++; d.total = r2(d.total + s.total); d.cost = r2(d.cost + s.cost); d[s.method] = r2(d[s.method] + s.total); s.items.forEach(l => { const k = top[l.id] || (top[l.id] = { name: l.name, qty: 0, amt: 0, profit: 0 }); k.qty = r2(k.qty + l.qty); k.amt = r2(k.amt + l.amt); k.profit = r2(k.profit + l.amt - l.cost * l.qty); }); });
+ ok.forEach(s => { const d = byDay[s.day] || (byDay[s.day] = { day: s.day, bills: 0, total: 0, cost: 0, cash: 0, transfer: 0 }); d.bills++; d.total = r2(d.total + s.total); d.cost = r2(d.cost + s.cost); d[s.method] = r2(d[s.method] + s.total); s.items.forEach(l => { const k = top[l.id] || (top[l.id] = { id: l.id, name: l.name, qty: 0, amt: 0, profit: 0 }); k.qty = r2(k.qty + l.qty); k.amt = r2(k.amt + l.amt); k.profit = r2(k.profit + l.amt - l.cost * l.qty); }); });
+ const days = Math.max(1, Math.round((Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / 864e5) + 1), allIt = (await all(env, 'SELECT * FROM pos_items WHERE active=1')).map(posIt);
+ const fast = Object.values(top).sort((a, c) => c.qty - a.qty || c.amt - a.amt).slice(0, 20);
+ const slow = allIt.filter(i => i.stock > 0).map(i => ({ id: i.id, name: i.name, unit: i.unit, stock: i.stock, sold: (top[i.id] || { qty: 0 }).qty, tied: r2(i.stock * i.cost) })).sort((a, c) => a.sold - c.sold || c.tied - a.tied).slice(0, 20);
+ const reorder = allIt.filter(i => top[i.id] && top[i.id].qty > 0).map(i => { const per = top[i.id].qty / days, cover = i.stock > 0 ? i.stock / per : 0; return { id: i.id, name: i.name, unit: i.unit, stock: i.stock, perDay: r2(per), cover: Math.round(cover * 10) / 10, need: Math.max(0, Math.ceil(per * 14 - Math.max(0, i.stock))) }; }).filter(x => x.cover < 7 && x.need > 0).sort((a, c) => a.cover - c.cover).slice(0, 30);
  const low = (await all(env, 'SELECT * FROM pos_items WHERE active=1 AND stock<=minStock AND (minStock>0 OR stock<=0) ORDER BY stock LIMIT 200')).map(posIt);
- return { ok: true, from, to, bills: ok.length, voided: sales.length - ok.length, total: sum(ok, s => s.total), cost: sum(ok, s => s.cost), profit: r2(sum(ok, s => s.total) - sum(ok, s => s.cost)), cash: sum(ok.filter(s => s.method === 'cash'), s => s.total), transfer: sum(ok.filter(s => s.method === 'transfer'), s => s.total), byDay: Object.values(byDay).sort((a, c) => a.day < c.day ? -1 : 1), top: Object.values(top).sort((a, c) => c.amt - a.amt).slice(0, 15), low, sales };
+ return { ok: true, from, to, bills: ok.length, voided: sales.length - ok.length, total: sum(ok, s => s.total), cost: sum(ok, s => s.cost), profit: r2(sum(ok, s => s.total) - sum(ok, s => s.cost)), cash: sum(ok.filter(s => s.method === 'cash'), s => s.total), transfer: sum(ok.filter(s => s.method === 'transfer'), s => s.total), byDay: Object.values(byDay).sort((a, c) => a.day < c.day ? -1 : 1), top: Object.values(top).sort((a, c) => c.amt - a.amt).slice(0, 15), fast, slow, reorder, days, low, sales };
 }
 /* ---- แจ้งเตือน LINE ของร้านขายหน้าร้าน: สต๊อก (ตอนเช้า) และสรุปยอดขาย/กำไร (ตอนเย็น) ---- */
 const thDate = d => d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + (+d.slice(0, 4) + 543);
@@ -815,6 +830,7 @@ async function posApi(env, action, b) {
   case 'posMoves': return posMoves(env, b);
   case 'posReset': return posReset(env, b);
   case 'posNotify': return posNotify(env, b);
+  case 'posNewCode': return posNewCode(env, b);
  }
  return { ok: false, error: 'unknown action' };
 }

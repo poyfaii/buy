@@ -115,3 +115,17 @@ body.pos .cbl .stp button{width:40px;height:40px;border:0;border-radius:12px;bac
 body.pos .cbl .q{min-width:34px;text-align:center;font-weight:700}
 body.pos .cbl .amt{text-align:right;font-weight:700}
 body.pos .cbl .xbtn{grid-column:3;justify-self:end}
+
+/* ป้ายบาร์โค้ด */
+.lbrows{max-height:240px;overflow:auto;margin:8px 0;border-radius:12px}
+.lbr{display:flex;gap:10px;align-items:center;padding:8px 6px;font-size:15px}.lbr small{opacity:.7}.lbr.all{position:sticky;top:0;background:inherit}
+#lblsheet{display:none}
+@media print{
+ body.lblprint>*:not(#lblsheet){display:none!important}
+ body.lblprint #lblsheet{display:grid!important;grid-template-columns:repeat(3,1fr);gap:3mm;background:#fff;color:#000}
+ body.lblprint .lbl1{border:.3mm dashed #888;padding:2.5mm;text-align:center;break-inside:avoid;font-family:inherit}
+ body.lblprint .lbl1 b{display:block;font-size:12pt;line-height:1.2}
+ body.lblprint .lbl1 .pr{font-size:15pt;font-weight:700;margin:1mm 0}
+ body.lblprint .lbl1 .bcsvg{width:100%;max-height:26mm}
+ body.lblprint .lbl1 .bcsvg.qr{width:26mm;height:26mm}
+}
