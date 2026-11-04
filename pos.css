@@ -129,3 +129,4 @@ body.pos .cbl .xbtn{grid-column:3;justify-self:end}
  body.lblprint .lbl1 .bcsvg{width:100%;max-height:26mm}
  body.lblprint .lbl1 .bcsvg.qr{width:26mm;height:26mm}
 }
+.newc{margin:10px 0}.newc summary{cursor:pointer;font-weight:600;padding:6px 0}

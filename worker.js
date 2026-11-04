@@ -1,7 +1,7 @@
 // worker/index.js — หลังบ้านเว็บสั่งซื้อ "แม่ดอนรุ่งเรืองฟู้ดส์" บน Cloudflare Workers + D1
 // - ก่อนกดย้ายข้อมูล: ส่งต่อทุกคำขอ /api ไปที่ Apps Script (Google Sheets) เหมือนเดิม
 // - หลังกดย้ายข้อมูล: ใช้ฐานข้อมูล D1 (ตาราง SQLite) แทน — กดกลับไป Sheets ได้ในหน้าแอดมิน > ตั้งค่า
-const VERSION = 'd1-v26-2026-11-03';
+const VERSION = 'd1-v27-2026-11-04';
 const ST_WAIT = 'รอจัดเตรียมและจัดส่ง', ST_SHIP = 'จัดส่งแล้ว', ST_CANCEL = 'ยกเลิก';
 const ST_UNPAID = 'รอชำระเงิน', ST_PAID = 'ชำระแล้ว';
 const TRACK_DAYS = 3, MAX_ITEMS = 80, SALES_TTL = 60000;
@@ -29,8 +29,15 @@ const DDL = [
  `CREATE UNIQUE INDEX IF NOT EXISTS ux_pos_cid ON pos_sales(clientId) WHERE clientId<>''`,
  `CREATE INDEX IF NOT EXISTS ix_pos_day ON pos_sales(day)`,
  `CREATE TABLE IF NOT EXISTS pos_moves(id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, itemId TEXT, kind TEXT, qty REAL, cost REAL, ref TEXT, note TEXT)`,
- `CREATE INDEX IF NOT EXISTS ix_pos_mv ON pos_moves(itemId)`
-];
+ `CREATE INDEX IF NOT EXISTS ix_pos_mv ON pos_moves(itemId)`,
+ `CREATE TABLE IF NOT EXISTS pos_cust(id TEXT PRIMARY KEY, name TEXT, phone TEXT, note TEXT, active INTEGER, createdAt TEXT)`,
+ `CREATE TABLE IF NOT EXISTS pos_debt(id INTEGER PRIMARY KEY AUTOINCREMENT, custId TEXT, at TEXT, day TEXT, kind TEXT, amount REAL, method TEXT, saleNo TEXT, note TEXT)`,
+ `CREATE INDEX IF NOT EXISTS ix_pos_debt ON pos_debt(custId)`,
+ `CREATE INDEX IF NOT EXISTS ix_pos_debtd ON pos_debt(day)`,
+ `CREATE TABLE IF NOT EXISTS pos_exp(id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, day TEXT, cat TEXT, amount REAL, method TEXT, note TEXT)`,
+ `CREATE INDEX IF NOT EXISTS ix_pos_exp ON pos_exp(day)`,
+ `CREATE TABLE IF NOT EXISTS pos_close(day TEXT PRIMARY KEY, at TEXT, float REAL, counted REAL, expected REAL, diff REAL, note TEXT)`,
+ `CREATE TABLE IF NOT EXISTS pos_packs(barcode TEXT PRIMARY KEY, itemId TEXT, qty REAL, label TEXT)`];
 const COLS = {
  products: ['id', 'sortOrder', 'name', 'description', 'note', 'status', 'image'],
  variants: ['id', 'productId', 'productName', 'sortOrder', 'size', 'sizeUnit', 'packaging', 'price', 'status'],
@@ -78,6 +85,7 @@ async function ensureSchema(env) {
  try { await env.DB.prepare("ALTER TABLE orders ADD COLUMN payType TEXT DEFAULT ''").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
  try { await env.DB.prepare("ALTER TABLE orders ADD COLUMN slipId TEXT DEFAULT ''").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
  try { await env.DB.prepare("ALTER TABLE pos_items ADD COLUMN mk REAL").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
+ try { await env.DB.prepare("ALTER TABLE pos_sales ADD COLUMN custId TEXT").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
  schemaOk = true;
 }
 async function metaGet(env, k) { const r = await one(env, 'SELECT value FROM meta WHERE key=?', k); return r ? r.value : null; }
@@ -668,7 +676,7 @@ async function posSaveCfg(env, b) {
 }
 async function posInit(env) {
  const items = (await all(env, 'SELECT * FROM pos_items WHERE active=1 ORDER BY name')).map(posIt);
- return { ok: true, items, cfg: await posCfg(env), version: VERSION };
+ return { ok: true, items, cfg: await posCfg(env), packs: await all(env, 'SELECT * FROM pos_packs'), custs: await posCusts(env), version: VERSION };
 }
 async function posSaveItem(env, b) {
  const x = b.item || {}, t = nowStr();
@@ -678,6 +686,7 @@ async function posSaveItem(env, b) {
  if (maxPrice > 0 && price > maxPrice) throw fail('ราคาขายเกินราคาสูงสุดที่ตั้งไว้ (' + maxPrice + ' บาท)');
  const mk = (x.mk === undefined || x.mk === null || x.mk === '') ? null : posNum(x.mk, 'กำไรของสินค้า', 0, 1000);
  const id = str(x.id);
+ if (barcode && await one(env, 'SELECT barcode FROM pos_packs WHERE barcode=?', barcode)) throw fail('บาร์โค้ดนี้ใช้เป็นบาร์โค้ดลัง/แพ็กอยู่แล้ว');
  if (barcode) { const d = await one(env, 'SELECT id,name FROM pos_items WHERE barcode=? AND id<>?', barcode, id); if (d) throw fail('บาร์โค้ดนี้ใช้กับสินค้าอื่นแล้ว: ' + d.name); }
  if (id) {
   const old = await one(env, 'SELECT id FROM pos_items WHERE id=? AND active=1', id); if (!old) throw fail('ไม่พบสินค้า');
@@ -719,7 +728,7 @@ async function posSale(env, b) {
  const cid = str(b.clientId).slice(0, 60);
  if (cid) { const d = await one(env, 'SELECT * FROM pos_sales WHERE clientId=?', cid); if (d) return { ok: true, dup: true, sale: posSaleOut(d) }; }
  const cart = Array.isArray(b.cart) ? b.cart : []; if (!cart.length) throw fail('ยังไม่มีสินค้าในบิล'); if (cart.length > 120) throw fail('รายการในบิลมากเกินไป');
- const method = b.method === 'transfer' ? 'transfer' : 'cash', lines = []; let total = 0, cost = 0;
+ const method = b.method === 'transfer' ? 'transfer' : b.method === 'credit' ? 'credit' : 'cash', lines = []; let total = 0, cost = 0;
  for (const c of cart) {
   const it = await one(env, 'SELECT * FROM pos_items WHERE id=? AND active=1', str(c.id)); if (!it) throw fail('มีสินค้าที่ถูกลบแล้วในบิล กรุณาสแกนใหม่');
   const q = posNum(c.qty, 'จำนวน', 0.001, 99999), p = (c.price === undefined || c.price === null || c.price === '') ? (it.price || 0) : posNum(c.price, 'ราคา');
@@ -727,21 +736,24 @@ async function posSale(env, b) {
   const amt = r2(p * q); total = r2(total + amt); cost = r2(cost + (it.cost || 0) * q);
   lines.push({ id: it.id, name: it.name, barcode: it.barcode || '', unit: it.unit || '', qty: q, price: p, cost: it.cost || 0, amt });
  }
- let rec = total, chg = 0;
+ let rec = total, chg = 0, cust = null;
+ if (method === 'credit') { cust = await one(env, 'SELECT * FROM pos_cust WHERE id=? AND active=1', str(b.custId)); if (!cust) throw fail('กรุณาเลือกลูกค้าที่ติดเงิน'); rec = 0; }
  if (method === 'cash') { rec = posNum(b.received === undefined || b.received === '' ? total : b.received, 'เงินที่รับ', 0, 1e8); if (rec + 0.001 < total) throw fail('เงินที่รับน้อยกว่ายอดรวม'); chg = r2(rec - total); }
  const t = nowStr(), day = t.slice(0, 10), yy = String(Number(day.slice(0, 4)) + 543).slice(-2), ck = 'pos' + day.replace(/-/g, '');
  await stmt(env, 'INSERT INTO counters(key,last) VALUES(?1,1) ON CONFLICT(key) DO UPDATE SET last=last+1', ck).run();
  const n = (await one(env, 'SELECT last FROM counters WHERE key=?', ck)).last, no = 'B' + yy + day.slice(5, 7) + day.slice(8, 10) + '-' + String(n).padStart(3, '0');
  const ops = [stmt(env, "INSERT INTO pos_sales(saleNo,clientId,at,day,total,cost,method,received,chg,status,voidedAt,voidReason,items) VALUES(?,?,?,?,?,?,?,?,?,'ปกติ','','',?)", no, cid, t, day, total, cost, method, rec, chg, JSON.stringify(lines))];
+ if (cust) { ops.push(stmt(env, 'UPDATE pos_sales SET custId=? WHERE saleNo=?', cust.id, no)); ops.push(stmt(env, "INSERT INTO pos_debt(custId,at,day,kind,amount,method,saleNo,note) VALUES(?,?,?,'charge',?,'',?,'ขายเชื่อ')", cust.id, t, day, total, no)); }
  for (const l of lines) { ops.push(stmt(env, 'UPDATE pos_items SET stock=stock-?,updatedAt=? WHERE id=?', l.qty, t, l.id)); ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'sale',?,?,?,'')", t, l.id, -l.qty, l.cost, no)); }
  await env.DB.batch(ops);
  return { ok: true, sale: posSaleOut(await one(env, 'SELECT * FROM pos_sales WHERE saleNo=?', no)), items: (await all(env, `SELECT * FROM pos_items WHERE id IN (${lines.map(() => '?').join(',')})`, ...lines.map(l => l.id))).map(posIt) };
 }
-function posSaleOut(r) { let items = []; try { items = JSON.parse(r.items || '[]'); } catch (e) { /* ว่าง */ } return { saleNo: r.saleNo, at: r.at, day: r.day, total: r.total, cost: r.cost, method: r.method, received: r.received, change: r.chg, status: r.status, voidReason: r.voidReason || '', items }; }
+function posSaleOut(r) { let items = []; try { items = JSON.parse(r.items || '[]'); } catch (e) { /* ว่าง */ } return { saleNo: r.saleNo, at: r.at, day: r.day, total: r.total, cost: r.cost, method: r.method, received: r.received, change: r.chg, status: r.status, voidReason: r.voidReason || '', custId: r.custId || '', items }; }
 async function posVoid(env, b) {
  const s = await one(env, 'SELECT * FROM pos_sales WHERE saleNo=?', str(b.saleNo)); if (!s) throw fail('ไม่พบบิล');
  if (s.status !== 'ปกติ') throw fail('บิลนี้ถูกยกเลิกแล้ว');
  const t = nowStr(), lines = posSaleOut(s).items, ops = [stmt(env, "UPDATE pos_sales SET status='ยกเลิก',voidedAt=?,voidReason=? WHERE saleNo=?", t, str(b.reason).slice(0, 120), s.saleNo)];
+ if (s.custId) ops.push(stmt(env, "INSERT INTO pos_debt(custId,at,day,kind,amount,method,saleNo,note) VALUES(?,?,?,'charge',?,'',?,'ยกเลิกบิล')", s.custId, t, t.slice(0, 10), -s.total, s.saleNo));
  for (const l of lines) { ops.push(stmt(env, 'UPDATE pos_items SET stock=stock+?,updatedAt=? WHERE id=?', l.qty, t, l.id)); ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'void',?,?,?,'ยกเลิกบิล')", t, l.id, l.qty, l.cost, s.saleNo)); }
  await env.DB.batch(ops);
  return { ok: true };
@@ -762,13 +774,15 @@ async function posReport(env, b) {
  const rows = await all(env, 'SELECT * FROM pos_sales WHERE day>=? AND day<=? ORDER BY at DESC LIMIT 5000', from, to), sales = rows.map(posSaleOut);
  const ok = sales.filter(s => s.status === 'ปกติ'), sum = (a, f) => r2(a.reduce((t, x) => t + f(x), 0));
  const byDay = {}, top = {};
- ok.forEach(s => { const d = byDay[s.day] || (byDay[s.day] = { day: s.day, bills: 0, total: 0, cost: 0, cash: 0, transfer: 0 }); d.bills++; d.total = r2(d.total + s.total); d.cost = r2(d.cost + s.cost); d[s.method] = r2(d[s.method] + s.total); s.items.forEach(l => { const k = top[l.id] || (top[l.id] = { id: l.id, name: l.name, qty: 0, amt: 0, profit: 0 }); k.qty = r2(k.qty + l.qty); k.amt = r2(k.amt + l.amt); k.profit = r2(k.profit + l.amt - l.cost * l.qty); }); });
+ ok.forEach(s => { const d = byDay[s.day] || (byDay[s.day] = { day: s.day, bills: 0, total: 0, cost: 0, cash: 0, transfer: 0, credit: 0 }); d.bills++; d.total = r2(d.total + s.total); d.cost = r2(d.cost + s.cost); d[s.method] = r2(d[s.method] + s.total); s.items.forEach(l => { const k = top[l.id] || (top[l.id] = { id: l.id, name: l.name, qty: 0, amt: 0, profit: 0 }); k.qty = r2(k.qty + l.qty); k.amt = r2(k.amt + l.amt); k.profit = r2(k.profit + l.amt - l.cost * l.qty); }); });
+ const expRows = await all(env, 'SELECT cat,amount FROM pos_exp WHERE day>=? AND day<=?', from, to), expBy = {}; let expT = 0; expRows.forEach(r => { expBy[r.cat] = r2((expBy[r.cat] || 0) + r.amount); expT = r2(expT + r.amount); });
+ const dIn = (await one(env, "SELECT COALESCE(SUM(amount),0) t FROM pos_debt WHERE kind='pay' AND day>=? AND day<=?", from, to)).t, owed = (await posCusts(env)).reduce((t, c) => t + Math.max(0, c.bal), 0);
  const days = Math.max(1, Math.round((Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / 864e5) + 1), allIt = (await all(env, 'SELECT * FROM pos_items WHERE active=1')).map(posIt);
  const fast = Object.values(top).sort((a, c) => c.qty - a.qty || c.amt - a.amt).slice(0, 20);
  const slow = allIt.filter(i => i.stock > 0).map(i => ({ id: i.id, name: i.name, unit: i.unit, stock: i.stock, sold: (top[i.id] || { qty: 0 }).qty, tied: r2(i.stock * i.cost) })).sort((a, c) => a.sold - c.sold || c.tied - a.tied).slice(0, 20);
  const reorder = allIt.filter(i => top[i.id] && top[i.id].qty > 0).map(i => { const per = top[i.id].qty / days, cover = i.stock > 0 ? i.stock / per : 0; return { id: i.id, name: i.name, unit: i.unit, stock: i.stock, perDay: r2(per), cover: Math.round(cover * 10) / 10, need: Math.max(0, Math.ceil(per * 14 - Math.max(0, i.stock))) }; }).filter(x => x.cover < 7 && x.need > 0).sort((a, c) => a.cover - c.cover).slice(0, 30);
  const low = (await all(env, 'SELECT * FROM pos_items WHERE active=1 AND stock<=minStock AND (minStock>0 OR stock<=0) ORDER BY stock LIMIT 200')).map(posIt);
- return { ok: true, from, to, bills: ok.length, voided: sales.length - ok.length, total: sum(ok, s => s.total), cost: sum(ok, s => s.cost), profit: r2(sum(ok, s => s.total) - sum(ok, s => s.cost)), cash: sum(ok.filter(s => s.method === 'cash'), s => s.total), transfer: sum(ok.filter(s => s.method === 'transfer'), s => s.total), byDay: Object.values(byDay).sort((a, c) => a.day < c.day ? -1 : 1), top: Object.values(top).sort((a, c) => c.amt - a.amt).slice(0, 15), fast, slow, reorder, days, low, sales };
+ return { ok: true, from, to, bills: ok.length, voided: sales.length - ok.length, total: sum(ok, s => s.total), cost: sum(ok, s => s.cost), profit: r2(sum(ok, s => s.total) - sum(ok, s => s.cost)), cash: sum(ok.filter(s => s.method === 'cash'), s => s.total), transfer: sum(ok.filter(s => s.method === 'transfer'), s => s.total), credit: sum(ok.filter(s => s.method === 'credit'), s => s.total), exp: expT, expBy, net: r2(sum(ok, s => s.total) - sum(ok, s => s.cost) - expT), debtIn: r2(dIn), owed: r2(owed), byDay: Object.values(byDay).sort((a, c) => a.day < c.day ? -1 : 1), top: Object.values(top).sort((a, c) => c.amt - a.amt).slice(0, 15), fast, slow, reorder, days, low, sales };
 }
 /* ---- แจ้งเตือน LINE ของร้านขายหน้าร้าน: สต๊อก (ตอนเช้า) และสรุปยอดขาย/กำไร (ตอนเย็น) ---- */
 const thDate = d => d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + (+d.slice(0, 4) + 543);
@@ -799,8 +813,9 @@ async function posSalesText(env) {
  const top = await all(env, "SELECT items FROM pos_sales WHERE status='ปกติ' AND day=?", today), tm = {};
  top.forEach(r => { let l = []; try { l = JSON.parse(r.items || '[]'); } catch (e) { /* ข้าม */ } l.forEach(i => { tm[i.name] = (tm[i.name] || 0) + Number(i.qty || 0); }); });
  const tops = Object.entries(tm).sort((a, b) => b[1] - a[1]).slice(0, 3);
- const BAR = '━━━━━━━━━━━━━━', r = ['💰 สรุปยอดขายหน้าร้าน', thDate(today), BAR].concat(line('📅 วันนี้', d), ['  เงินสด ' + money0(d.cash) + ' · โอน ' + money0(d.tr) + (voided ? ' · ยกเลิก ' + voided + ' บิล' : '')], [''], line('🗓 เดือนนี้ (' + THM[+ym.slice(5) - 1] + ' ' + (+yy + 543) + ')', m), [''], line('📆 ปีนี้ (' + (+yy + 543) + ')', y));
+ const BAR = '━━━━━━━━━━━━━━', r = ['💰 สรุปยอดขายหน้าร้าน', thDate(today), BAR].concat(line('📅 วันนี้', d), ['  เงินสด ' + money0(d.cash) + ' · โอน ' + money0(d.tr) + (d.t - d.cash - d.tr > 0.5 ? ' · เชื่อ ' + money0(d.t - d.cash - d.tr) : '') + (voided ? ' · ยกเลิก ' + voided + ' บิล' : '')], [''], line('🗓 เดือนนี้ (' + THM[+ym.slice(5) - 1] + ' ' + (+yy + 543) + ')', m), [''], line('📆 ปีนี้ (' + (+yy + 543) + ')', y));
  if (tops.length) r.push('', BAR, '🏆 ขายดีวันนี้', ...tops.map((x, i) => (i + 1) + '. ' + x[0] + ' × ' + Math.round(x[1] * 100) / 100));
+ const owedL = (await posCusts(env)).filter(c => c.bal > 0.004); if (owedL.length) r.push('', '🧾 ลูกหนี้ค้างรวม ' + money0(owedL.reduce((t, c) => t + c.bal, 0)) + ' บาท (' + owedL.length + ' ราย)');
  r.push('', '* กำไร = ยอดขาย − ต้นทุนสินค้า (กำไรขั้นต้น ยังไม่หักค่าใช้จ่ายอื่น)');
  return r.join('\n');
 }
@@ -812,10 +827,76 @@ async function posNotify(env, b) {
 }
 async function posReset(env, b) {
  if (str(b.confirm).trim() !== 'ล้างข้อมูล') throw fail('ต้องพิมพ์คำว่า ล้างข้อมูล เพื่อยืนยัน');
- await env.DB.batch([stmt(env, 'DELETE FROM pos_sales'), stmt(env, 'DELETE FROM pos_moves'), stmt(env, 'DELETE FROM pos_items'), stmt(env, "DELETE FROM counters WHERE key LIKE 'pos%'")]);
+ await env.DB.batch([stmt(env, 'DELETE FROM pos_sales'), stmt(env, 'DELETE FROM pos_moves'), stmt(env, 'DELETE FROM pos_items'), stmt(env, 'DELETE FROM pos_cust'), stmt(env, 'DELETE FROM pos_debt'), stmt(env, 'DELETE FROM pos_exp'), stmt(env, 'DELETE FROM pos_close'), stmt(env, 'DELETE FROM pos_packs'), stmt(env, "DELETE FROM counters WHERE key LIKE 'pos%'")]);
  return { ok: true };
 }
 async function posMoves(env, b) { return { ok: true, moves: await all(env, 'SELECT at,kind,qty,cost,ref,note FROM pos_moves WHERE itemId=? ORDER BY id DESC LIMIT 60', str(b.id)) }; }
+
+/* ---- ลูกหนี้ (ขายเชื่อ) / รายจ่าย / ปิดยอด / บาร์โค้ดลัง ---- */
+const posCusts = async env => (await all(env, "SELECT c.id,c.name,c.phone,c.note,COALESCE((SELECT SUM(CASE WHEN kind='charge' THEN amount ELSE -amount END) FROM pos_debt WHERE custId=c.id),0) bal,(SELECT MAX(at) FROM pos_debt WHERE custId=c.id) last FROM pos_cust c WHERE c.active=1 ORDER BY c.name")).map(c => ({ ...c, bal: r2(c.bal) }));
+async function posCustSave(env, b) {
+ const x = b.cust || {}, name = str(x.name).trim().slice(0, 80); if (!name) throw fail('กรุณากรอกชื่อลูกค้า');
+ const phone = str(x.phone).trim().slice(0, 30), note = str(x.note).trim().slice(0, 120), id = str(x.id);
+ if (id) { if (!(await one(env, 'SELECT id FROM pos_cust WHERE id=? AND active=1', id))) throw fail('ไม่พบลูกค้า'); await stmt(env, 'UPDATE pos_cust SET name=?,phone=?,note=? WHERE id=?', name, phone, note, id).run(); return { ok: true, id, custs: await posCusts(env) }; }
+ const nid = 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+ await stmt(env, 'INSERT INTO pos_cust(id,name,phone,note,active,createdAt) VALUES(?,?,?,?,1,?)', nid, name, phone, note, nowStr()).run();
+ return { ok: true, id: nid, custs: await posCusts(env) };
+}
+async function posCustDelete(env, b) {
+ const id = str(b.id), bal = (await posCusts(env)).find(c => c.id === id); if (!bal) throw fail('ไม่พบลูกค้า');
+ if (Math.abs(bal.bal) > 0.004) throw fail('ลูกค้ายังมียอดค้าง ' + bal.bal + ' บาท ลบไม่ได้');
+ await stmt(env, 'UPDATE pos_cust SET active=0 WHERE id=?', id).run(); return { ok: true, custs: await posCusts(env) };
+}
+async function posDebtLog(env, b) {
+ const id = str(b.id), c = (await posCusts(env)).find(x => x.id === id); if (!c) throw fail('ไม่พบลูกค้า');
+ return { ok: true, cust: c, rows: await all(env, 'SELECT at,kind,amount,method,saleNo,note FROM pos_debt WHERE custId=? ORDER BY id DESC LIMIT 200', id) };
+}
+async function posDebtPay(env, b) {
+ const id = str(b.custId), c = (await posCusts(env)).find(x => x.id === id); if (!c) throw fail('ไม่พบลูกค้า');
+ const amt = posNum(b.amount, 'จำนวนเงิน', 0.01, 1e8); if (amt > c.bal + 0.004) throw fail('รับเกินยอดค้าง (ค้างอยู่ ' + c.bal + ' บาท)');
+ const m = b.method === 'transfer' ? 'transfer' : 'cash', t = nowStr();
+ await stmt(env, "INSERT INTO pos_debt(custId,at,day,kind,amount,method,saleNo,note) VALUES(?,?,?,'pay',?,?,'',?)", id, t, t.slice(0, 10), amt, m, str(b.note).slice(0, 100)).run();
+ return { ok: true, custs: await posCusts(env) };
+}
+const EXP_CATS = ['ค่าไฟ', 'ค่าน้ำ', 'ค่าเช่า', 'ค่าขนส่ง', 'ค่าแรง', 'ค่าบรรจุภัณฑ์', 'อื่นๆ'];
+async function posExpAdd(env, b) {
+ const amt = posNum(b.amount, 'จำนวนเงิน', 0.01, 1e8), cat = str(b.cat).trim().slice(0, 40) || 'อื่นๆ', m = b.method === 'transfer' ? 'transfer' : 'cash', t = nowStr();
+ const re = /^\d{4}-\d{2}-\d{2}$/, day = re.test(str(b.day)) ? b.day : t.slice(0, 10);
+ await stmt(env, 'INSERT INTO pos_exp(at,day,cat,amount,method,note) VALUES(?,?,?,?,?,?)', t, day, cat, amt, m, str(b.note).trim().slice(0, 120)).run();
+ return posExpList(env, { from: b.from || day, to: b.to || day });
+}
+async function posExpDel(env, b) { await stmt(env, 'DELETE FROM pos_exp WHERE id=?', Number(b.id) || 0).run(); return posExpList(env, b); }
+async function posExpList(env, b) {
+ const re = /^\d{4}-\d{2}-\d{2}$/, today = nowStr().slice(0, 10), from = re.test(str(b.from)) ? b.from : today.slice(0, 7) + '-01', to = re.test(str(b.to)) ? b.to : today;
+ const rows = await all(env, 'SELECT id,at,day,cat,amount,method,note FROM pos_exp WHERE day>=? AND day<=? ORDER BY day DESC,id DESC LIMIT 500', from, to), by = {};
+ rows.forEach(r => { by[r.cat] = r2((by[r.cat] || 0) + r.amount); });
+ return { ok: true, from, to, rows, total: r2(rows.reduce((t, r) => t + r.amount, 0)), by, cats: EXP_CATS };
+}
+async function posCloseCalc(env, day) {
+ const cs = (await one(env, "SELECT COALESCE(SUM(total),0) t FROM pos_sales WHERE day=? AND status='ปกติ' AND method='cash'", day)).t,
+  dp = (await one(env, "SELECT COALESCE(SUM(amount),0) t FROM pos_debt WHERE day=? AND kind='pay' AND method='cash'", day)).t,
+  ex = (await one(env, "SELECT COALESCE(SUM(amount),0) t FROM pos_exp WHERE day=? AND method='cash'", day)).t;
+ return { cashSales: r2(cs), debtCash: r2(dp), expCash: r2(ex) };
+}
+async function posCloseGet(env, b) {
+ const re = /^\d{4}-\d{2}-\d{2}$/, day = re.test(str(b.day)) ? b.day : nowStr().slice(0, 10);
+ return { ok: true, day, calc: await posCloseCalc(env, day), rec: await one(env, 'SELECT * FROM pos_close WHERE day=?', day), history: await all(env, 'SELECT * FROM pos_close ORDER BY day DESC LIMIT 31') };
+}
+async function posCloseSave(env, b) {
+ const re = /^\d{4}-\d{2}-\d{2}$/, day = re.test(str(b.day)) ? b.day : nowStr().slice(0, 10), fl = posNum(b.float || 0, 'เงินทอนตั้งต้น', 0, 1e8), counted = posNum(b.counted, 'เงินที่นับได้', 0, 1e8), c = await posCloseCalc(env, day);
+ const expected = r2(fl + c.cashSales + c.debtCash - c.expCash), diff = r2(counted - expected);
+ await stmt(env, 'INSERT INTO pos_close(day,at,float,counted,expected,diff,note) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(day) DO UPDATE SET at=?2,float=?3,counted=?4,expected=?5,diff=?6,note=?7', day, nowStr(), fl, counted, expected, diff, str(b.note).trim().slice(0, 150)).run();
+ return posCloseGet(env, { day });
+}
+async function posPackSave(env, b) {
+ const bc = str(b.barcode).trim().slice(0, 40), it = await one(env, 'SELECT id FROM pos_items WHERE id=? AND active=1', str(b.itemId)), q = posNum(b.qty, 'จำนวนชิ้นต่อลัง', 0.001, 1e6);
+ if (!bc) throw fail('กรุณากรอกบาร์โค้ดลัง/แพ็ก'); if (!it) throw fail('ไม่พบสินค้า');
+ if (await one(env, 'SELECT id FROM pos_items WHERE barcode=?', bc)) throw fail('บาร์โค้ดนี้ใช้เป็นบาร์โค้ดสินค้าอยู่แล้ว');
+ const old = await one(env, 'SELECT itemId FROM pos_packs WHERE barcode=?', bc); if (old && old.itemId !== it.id) throw fail('บาร์โค้ดนี้ผูกกับสินค้าอื่นแล้ว');
+ await stmt(env, 'INSERT INTO pos_packs(barcode,itemId,qty,label) VALUES(?1,?2,?3,?4) ON CONFLICT(barcode) DO UPDATE SET qty=?3,label=?4', bc, it.id, q, str(b.label).trim().slice(0, 40)).run();
+ return { ok: true, packs: await all(env, 'SELECT * FROM pos_packs') };
+}
+async function posPackDelete(env, b) { await stmt(env, 'DELETE FROM pos_packs WHERE barcode=?', str(b.barcode)).run(); return { ok: true, packs: await all(env, 'SELECT * FROM pos_packs') }; }
 async function posApi(env, action, b) {
  switch (action) {
   case 'posInit': return posInit(env);
@@ -831,6 +912,17 @@ async function posApi(env, action, b) {
   case 'posReset': return posReset(env, b);
   case 'posNotify': return posNotify(env, b);
   case 'posNewCode': return posNewCode(env, b);
+  case 'posCustSave': return posCustSave(env, b);
+  case 'posCustDelete': return posCustDelete(env, b);
+  case 'posDebtLog': return posDebtLog(env, b);
+  case 'posDebtPay': return posDebtPay(env, b);
+  case 'posExpAdd': return posExpAdd(env, b);
+  case 'posExpDel': return posExpDel(env, b);
+  case 'posExpList': return posExpList(env, b);
+  case 'posCloseGet': return posCloseGet(env, b);
+  case 'posCloseSave': return posCloseSave(env, b);
+  case 'posPackSave': return posPackSave(env, b);
+  case 'posPackDelete': return posPackDelete(env, b);
  }
  return { ok: false, error: 'unknown action' };
 }

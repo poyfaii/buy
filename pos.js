@@ -47,16 +47,16 @@ async function doLogin(e){
  logging=false;render();return false;
 }
 function logout(){CRED=null;try{sessionStorage.removeItem(CRK)}catch(e){}render()}
-async function boot(){const j=await api({action:'posInit'});items=j.items;cfg=j.cfg;view=view||'sell'}
+async function boot(){const j=await api({action:'posInit'});items=j.items;cfg=j.cfg;custs=j.custs||[];packs=j.packs||[];view=view||'sell'}
 function render(){
  if(!CRED){$('#app').innerHTML=loginView();return}
  const tab=(k,t)=>`<a href="#" class="${view===k?'on':''}" onclick="return nav('${k}')">${t}</a>`;
  $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.svg" alt=""><h1 class="brand"><b>${esc(cfg.shop||'ร้านชำ')}</b></h1><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div></header>
- <main class="pwrap"><nav class="tabs" aria-label="เมนู">${tab('sell','ขาย')}${tab('items','สินค้า / สต๊อก')}${tab('rep','รายงาน')}${tab('set','ตั้งค่า')}</nav>
- <div id="pv">${view==='sell'?sellView():view==='items'?itemsView():view==='rep'?repView():setView()}</div></main>${view==='sell'?payBar():''}`;
+ <main class="pwrap"><nav class="tabs" aria-label="เมนู">${tab('sell','ขาย')}${tab('items','สินค้า / สต๊อก')}${tab('rep','รายงาน')}${tab('acc','บัญชี')}${tab('set','ตั้งค่า')}</nav>
+ <div id="pv">${view==='sell'?sellView():view==='items'?itemsView():view==='rep'?repView():view==='acc'?accView():setView()}</div></main>${view==='sell'?payBar():''}`;
  if(view==='sell')focusScan();
 }
-function nav(k){view=k;q='';render();if(k==='rep'&&!report)loadReport();window.scrollTo(0,0);return false}
+function nav(k){view=k;q='';render();if(k==='rep'&&!report)loadReport();if(k==='acc')accLoad();window.scrollTo(0,0);return false}
 
 /* ---------- หน้าขาย ---------- */
 const total=()=>r2(cart.reduce((t,l)=>t+l.price*l.qty,0));
@@ -72,7 +72,7 @@ function sellView(){
  <div class="payrow"><button class="btn pri" onclick="payCash()"${cart.length?'':' disabled'}>เงินสด</button><button class="btn pri" onclick="payTransfer()"${cart.length?'':' disabled'}>โอน</button></div>
  ${cart.length?`<button class="btn w" style="margin-top:10px" onclick="clearCart()">ล้างบิล</button>`:''}</section></aside></div>`;
 }
-const payBar=()=>cart.length?`<div class="paybar"><div class="tot" style="padding:0 4px 8px"><span>รวม</span><b style="font-size:30px">${fm(total())}</b></div><div class="payrow"><button class="btn pri" onclick="payCash()">เงินสด</button><button class="btn pri" onclick="payTransfer()">โอน</button></div></div>`:'';
+const payBar=()=>cart.length?`<div class="paybar"><div class="tot" style="padding:0 4px 8px"><span>รวม</span><b style="font-size:30px">${fm(total())}</b></div><div class="payrow"><button class="btn pri" onclick="payCash()">เงินสด</button><button class="btn pri" onclick="payTransfer()">โอน</button><button class="btn" onclick="payCredit()">ติดไว้</button></div></div>`:'';
 function lineHtml(l,i){
  const it=find(l.id),low=it&&it.stock-l.qty<0;
  return `<div class="cl"><b>${esc(l.name)}</b><span class="amt">${fm(l.price*l.qty)}</span>
@@ -98,6 +98,7 @@ function scanKey(e){
 function handleScan(v,n){
  const it=items.find(i=>i.barcode&&i.barcode===v);
  if(it){addById(it.id,n);return 'add'}
+ const pk=packs.find(p=>p.barcode===v);if(pk&&find(pk.itemId)){addById(pk.itemId,r2((n>0?n:1)*pk.qty));toast('ลัง/แพ็ก = '+fm(pk.qty)+' ชิ้น');return 'add'}
  if(/^[0-9A-Za-z\-._]{6,}$/.test(v)&&/\d/.test(v)){beep(false);newItemDlg(v,'');return 'new'}
  const ms=items.filter(i=>i.name.toLowerCase().includes(v.toLowerCase()));
  if(ms.length===1){addById(ms[0].id,n);return 'add'}
@@ -182,7 +183,7 @@ async function camStop(close){
 }
 
 /* ---------- เงินสด / โอน ---------- */
-let cid='';
+let cid='',custs=[],packs=[];
 const newCid=()=>'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 function payCash(){
  if(!cart.length)return;cid=newCid();const t=total();
@@ -210,12 +211,12 @@ function payTransfer(){
  <p class="sub" style="text-align:center">ให้ลูกค้าสแกนจ่ายตามยอดนี้ ตรวจว่าเงินเข้าแล้วจึงกดบันทึก</p><div id="perr" class="err" role="alert"></div>
  <div class="acts2"><button id="okb" class="btn pri lg" onclick="submitSale('transfer')">ได้รับเงินแล้ว บันทึกบิล</button><button class="btn" onclick="closeDlg()">ยกเลิก</button></div>`);
 }
-async function submitSale(method,rec){
+async function submitSale(method,rec,custId){
  if(busy)return;busy=true;const b=$('#okb');if(b){b.disabled=true;b.textContent='กำลังบันทึก…'}
  try{
-  const j=await api({action:'posSale',clientId:cid,method,received:rec,cart:cart.map(l=>({id:l.id,qty:l.qty,price:l.price}))});
+  const j=await api({action:'posSale',clientId:cid,method,received:rec,custId,cart:cart.map(l=>({id:l.id,qty:l.qty,price:l.price}))});
   (j.items||[]).forEach(u=>{const k=items.findIndex(x=>x.id===u.id);if(k>=0)items[k]=u});
-  cart=[];saveCart();busy=false;showReceipt(j.sale,true);repaintSell(false);
+  cart=[];saveCart();busy=false;if(method==='credit')refreshCusts();showReceipt(j.sale,true);repaintSell(false);
  }catch(e){busy=false;const p=$('#perr');if(p)p.textContent=e.message;if(b){b.disabled=false;b.textContent=method==='cash'?'บันทึกบิล':'ได้รับเงินแล้ว บันทึกบิล'}}
 }
 
@@ -223,16 +224,16 @@ async function submitSale(method,rec){
 function rcptHtml(s){
  const L=(a,b,c)=>`<div class="ln"><span>${a}</span><span>${b}</span></div>`;
  return `<div class="rcpt"><h4>${esc(cfg.shop||'ร้านค้า')}</h4>${cfg.addr?`<div class="c">${esc(cfg.addr)}</div>`:''}${cfg.tel?`<div class="c">โทร ${esc(cfg.tel)}</div>`:''}
- <div class="c" style="margin-top:4px"><b>บิลเงินสด</b>${s.status!=='ปกติ'?' (ยกเลิก)':''}</div><hr>
+ <div class="c" style="margin-top:4px"><b>${s.method==='credit'?'บิลขายเชื่อ (ยังไม่ชำระ)':'บิลเงินสด'}</b>${s.status!=='ปกติ'?' (ยกเลิก)':''}</div><hr>
  <div class="ln"><span>เลขที่ ${esc(s.saleNo)}</span><span>${esc(tthai(s.at))}</span></div><hr>
  ${s.items.map(l=>L(`${esc(l.name)}<br><small>${fm(l.qty)} × ${fm(l.price)}${l.unit?' '+esc(l.unit):''}</small>`,fm(l.amt))).join('')}<hr>
  <div class="ln tt"><span>รวมทั้งสิ้น</span><span>${fm(s.total)} บาท</span></div>
- ${s.method==='cash'?L('รับเงินสด',fm(s.received))+L('เงินทอน',fm(s.change)):L('ชำระโดย','โอนเงิน')}
+ ${s.method==='cash'?L('รับเงินสด',fm(s.received))+L('เงินทอน',fm(s.change)):s.method==='credit'?L('ชำระโดย','ติดไว้ (ค้างชำระ)')+(custName(s.custId)?L('ลูกค้า',esc(custName(s.custId))):''):L('ชำระโดย','โอนเงิน')}
  ${cfg.note?`<hr><div class="c">${esc(cfg.note)}</div>`:''}${s.status!=='ปกติ'?`<div class="vd">ยกเลิกแล้ว${s.voidReason?' · '+esc(s.voidReason):''}</div>`:''}</div>`;
 }
 function showReceipt(s,fresh){
  window.__rs=s;
- dlg(`${fresh?`<h3 style="text-align:center">บันทึกบิลแล้ว</h3>${s.method==='cash'?`<div class="chg"><small>เงินทอน</small><b>${fm(s.change)}</b></div>`:`<div class="chg"><small>รับโอนแล้ว</small><b>${fm(s.total)}</b></div>`}`:`<h3>${esc(s.saleNo)}</h3>`}
+ dlg(`${fresh?`<h3 style="text-align:center">บันทึกบิลแล้ว</h3>${s.method==='cash'?`<div class="chg"><small>เงินทอน</small><b>${fm(s.change)}</b></div>`:s.method==='credit'?`<div class="chg"><small>ติดไว้ · ${esc(custName(s.custId))}</small><b>${fm(s.total)}</b></div>`:`<div class="chg"><small>รับโอนแล้ว</small><b>${fm(s.total)}</b></div>`}`:`<h3>${esc(s.saleNo)}</h3>`}
  ${rcptHtml(s)}
  <div class="acts2"><button class="btn pri lg" onclick="printRcpt()">พิมพ์ใบเสร็จ / บันทึก PDF</button><button class="btn" id="donebtn" onclick="closeDlg()">${fresh?'ขายรายการถัดไป':'ปิด'}</button></div>`,'donebtn');
  if(fresh&&cfg.autoPrint)setTimeout(printRcpt,200);
@@ -289,7 +290,7 @@ function newItemDlg(bc,nm){
 }
 function editItemDlg(id){
  const it=find(id);if(!it)return;editId=id;
- dlg(`<h3>แก้ไขสินค้า</h3>${itemForm(it)}<div class="acts2"><button class="btn pri lg" onclick="saveItemDlg(false)">บันทึก</button><button class="btn" onclick="movesDlg('${id}')">ประวัติสต๊อก</button><button class="btn dng" onclick="delItem('${id}')">ลบสินค้า</button><button class="btn" onclick="closeDlg()">ปิด</button></div>`,'f_nm');
+ dlg(`<h3>แก้ไขสินค้า</h3>${itemForm(it)}<div class="acts2"><button class="btn pri lg" onclick="saveItemDlg(false)">บันทึก</button><button class="btn" onclick="movesDlg('${id}')">ประวัติสต๊อก</button><button class="btn" onclick="packDlg('${id}')">บาร์โค้ดลัง/แพ็ก</button><button class="btn dng" onclick="delItem('${id}')">ลบสินค้า</button><button class="btn" onclick="closeDlg()">ปิด</button></div>`,'f_nm');
  fMk();
 }
 async function saveItemDlg(addCart){
@@ -328,10 +329,10 @@ async function lookupName(bc){
  if(nm&&!f.value.trim()){f.value=nm;h2.textContent='ชื่อจากฐานข้อมูลสินค้าออนไลน์ ตรวจและแก้ไขได้';try{$('#f_cost').focus()}catch(e){}}
  else h2.textContent=nm?'':'ไม่พบชื่อสินค้านี้ในฐานข้อมูลออนไลน์ พิมพ์ชื่อเอง ครั้งเดียวพอ';
 }
-function recvDlg(id){
- const it=find(id),pn=getPk(id);
+function recvDlg(id,pq){
+ const it=find(id),pn=pq>0?pq:getPk(id);
  dlg(`<h3>รับสินค้าเข้า</h3><p class="sub">${esc(it.name)} · คงเหลือ ${fm(it.stock)} ห่อ · ทุนล่าสุดห่อละ ${fm(r2(it.cost))}</p>
- <div class="row2"><label class="fld"><span class="lbl">รับเข้ากี่แพ็ค</span><input id="r_k" class="inp" inputmode="decimal" oninput="rNew('${id}')" onkeydown="if(event.key==='Enter')$('#r_c').focus()"></label>
+ <div class="row2"><label class="fld"><span class="lbl">รับเข้ากี่แพ็ค</span><input id="r_k" class="inp" inputmode="decimal" value="${pq>0?1:''}" oninput="rNew('${id}')" onkeydown="if(event.key==='Enter')$('#r_c').focus()"></label>
  <label class="fld"><span class="lbl">แพ็คละกี่ห่อ</span><input id="r_n" class="inp" inputmode="numeric" value="${pn}" oninput="rNew('${id}')" onfocus="this.select()"></label></div>
  <label class="fld"><span class="lbl">ราคาซื้อต่อแพ็ค (บาท)</span><input id="r_c" class="inp" inputmode="decimal" value="${it.cost?r2(it.cost*pn):''}" oninput="rNew('${id}')" onkeydown="if(event.key==='Enter')doRecv('${id}')"></label>
  <label class="chk" style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" id="r_p" checked onchange="rNew('${id}')"> <span>ถ้าทุนเปลี่ยน ให้คำนวณราคาขายใหม่</span></label><div id="r_x" class="hint"></div><div id="perr" class="err" role="alert"></div>
@@ -378,7 +379,7 @@ function itemsView(){
  <div id="ilist">${iRows(l)}</div>`;
 }
 function iList(){const t=q.trim().toLowerCase();let l=items.filter(i=>!t||i.name.toLowerCase().includes(t)||(i.barcode||'').includes(t));if(flt==='low')l=l.filter(i=>i.stock<=0||(i.minStock>0&&i.stock<=i.minStock));$('#ilist').innerHTML=iRows(l)}
-function itemScan(v){v=v.trim();const it=items.find(i=>i.barcode&&i.barcode===v);if(it){editItemDlg(it.id);return}if(/^\d{6,}$/.test(v))newItemDlg(v,'')}
+function itemScan(v){v=v.trim();const it=items.find(i=>i.barcode&&i.barcode===v);if(it){editItemDlg(it.id);return}const pk=packs.find(p=>p.barcode===v);if(pk&&find(pk.itemId)){recvDlg(pk.itemId,pk.qty);return}if(/^\d{6,}$/.test(v))newItemDlg(v,'')}
 function iRows(l){
  if(!l.length)return `<div class="empty2">${items.length?'ไม่พบสินค้า':'ยังไม่มีสินค้า — ยิงบาร์โค้ดในหน้าขายเพื่อเพิ่มทีละชิ้น หรือกด “เพิ่มสินค้า”'}</div>`;
  return l.slice(0,300).map(i=>{const low=i.stock<=0||(i.minStock>0&&i.stock<=i.minStock);
@@ -415,7 +416,8 @@ function repView(){
  <div class="chips">${chip('today','วันนี้')}${chip('yest','เมื่อวาน')}${chip('month','เดือนนี้')}${chip('pmonth','เดือนก่อน')}${chip('year','ปีนี้')}${chip('custom','เลือกช่วง')}</div>
  ${rng==='custom'?`<div class="row2"><label class="fld" style="margin-top:0"><span class="lbl">ตั้งแต่</span><input type="date" class="inp" value="${rfrom}" onchange="rfrom=this.value"></label><label class="fld" style="margin-top:0"><span class="lbl">ถึง</span><input type="date" class="inp" value="${rto}" onchange="rto=this.value"></label></div><button class="btn pri w" style="margin:10px 0" onclick="loadReport()">ดูรายงาน</button>`:''}
  ${!r?'<div class="empty2">กำลังโหลด…</div>':`<p class="sub" style="margin-bottom:10px">${dthai(r.from)}${r.to!==r.from?' – '+dthai(r.to):''}${r.voided?` · ยกเลิก ${r.voided} บิล (ไม่รวมในยอด)`:''}</p>
- <div class="sc"><div><small>ยอดขาย</small><b>${fm(r.total)}</b></div><div class="pf"><small>กำไรขั้นต้น</small><b>${fm(r.profit)}</b></div><div><small>จำนวนบิล</small><b>${fm(r.bills)}</b></div><div><small>เงินสด</small><b>${fm(r.cash)}</b></div><div><small>โอน</small><b>${fm(r.transfer)}</b></div></div>
+ <div class="sc"><div><small>ยอดขาย</small><b>${fm(r.total)}</b></div><div class="pf"><small>กำไรขั้นต้น</small><b>${fm(r.profit)}</b></div><div><small>จำนวนบิล</small><b>${fm(r.bills)}</b></div><div><small>เงินสด</small><b>${fm(r.cash)}</b></div><div><small>โอน</small><b>${fm(r.transfer)}</b></div>${r.credit?`<div><small>ขายเชื่อ</small><b>${fm(r.credit)}</b></div>`:''}</div>
+ ${r.exp||r.owed||r.debtIn?`<div class="sc"><div><small>รายจ่าย</small><b>${fm(r.exp)}</b></div><div class="pf"><small>กำไรสุทธิ</small><b>${fm(r.net)}</b></div><div><small>รับชำระหนี้</small><b>${fm(r.debtIn)}</b></div><div><small>ลูกหนี้ค้างรวม</small><b style="color:${r.owed?'#c0261a':'inherit'}">${fm(r.owed)}</b></div></div>`:''}
  <div class="chips"><button class="cat" onclick="exportDays()">ส่งออกสรุปรายวัน CSV</button><button class="cat" onclick="exportBills()">ส่งออกรายการบิล CSV</button></div>
  ${r.byDay.length?`<section class="sec"><h3>รายวัน</h3><table class="t"><tr><th>วันที่</th><th class="r">บิล</th><th class="r">ยอดขาย</th><th class="r">กำไร</th></tr>${r.byDay.map(d=>`<tr><td>${dthai(d.day)}</td><td class="r">${d.bills}</td><td class="r">${fm(d.total)}</td><td class="r">${fm(d.total-d.cost)}</td></tr>`).join('')}</table></section>`:''}
  ${r.top.length?`<section class="sec"><h3>ขายดี (เรียงตามยอดเงิน)</h3><table class="t"><tr><th>สินค้า</th><th class="r">ชิ้น</th><th class="r">ยอด</th><th class="r">กำไร</th></tr>${r.top.map(d=>`<tr><td>${esc(d.name)}</td><td class="r">${fm(d.qty)}</td><td class="r">${fm(d.amt)}</td><td class="r">${fm(d.profit)}</td></tr>`).join('')}</table></section>`:''}
@@ -423,7 +425,7 @@ function repView(){
  ${r.slow&&r.slow.length?`<section class="sec"><h3>ขายช้า / ค้างสต๊อก</h3><p class="sub">สินค้าที่ยังมีของแต่ขายได้น้อยที่สุดในช่วงนี้ — เงินทุนที่จมอยู่คือต้นทุน × จำนวนคงเหลือ ลองลดราคาหรือเลิกสั่งเพิ่ม</p><table class="t"><tr><th>สินค้า</th><th class="r">คงเหลือ</th><th class="r">ขายได้</th><th class="r">ทุนจม</th></tr>${r.slow.map(d=>`<tr><td>${esc(d.name)}</td><td class="r">${fm(d.stock)}</td><td class="r"${d.sold?'':' style="color:#c0261a;font-weight:700"'}>${d.sold?fm(d.sold):'ไม่เคยขาย'}</td><td class="r">${fm(d.tied)}</td></tr>`).join('')}</table></section>`:''}
  ${r.reorder&&r.reorder.length?`<section class="sec"><h3>แนะนำสั่งเพิ่ม</h3><p class="sub">คิดจากยอดขายเฉลี่ย ${fm(r.days)} วันที่เลือก สต๊อกพอขายไม่ถึง 7 วัน แนะนำจำนวนที่ควรมีไว้ขาย 14 วัน ถ้าเลือกช่วงสั้น (วันนี้) ตัวเลขจะคลาดเคลื่อน ควรดูเดือนนี้ขึ้นไป</p><table class="t"><tr><th>สินค้า</th><th class="r">เหลือ</th><th class="r">ขาย/วัน</th><th class="r">พอขาย</th><th class="r">สั่งเพิ่ม</th></tr>${r.reorder.map(d=>`<tr><td>${esc(d.name)}</td><td class="r">${fm(d.stock)}</td><td class="r">${fm(d.perDay)}</td><td class="r" style="color:#c0261a">${d.stock>0?fm(d.cover)+' วัน':'หมด'}</td><td class="r"><b>${fm(d.need)}</b></td></tr>`).join('')}</table><div class="chips"><button class="cat" onclick="exportReorder()">ส่งออกรายการสั่งของ CSV</button></div></section>`:''}
  ${r.low.length?`<section class="sec"><h3>ควรสั่งของเพิ่ม (${r.low.length})</h3><table class="t">${r.low.map(d=>`<tr><td>${esc(d.name)}</td><td class="r" style="color:#c0261a;font-weight:700">${fm(d.stock)} ${esc(d.unit)}</td></tr>`).join('')}</table></section>`:''}
- <section class="sec"><h3>บิลทั้งหมด (${r.sales.length})</h3>${r.sales.length?r.sales.slice(0,200).map((s,i)=>`<div class="bill${s.status!=='ปกติ'?' void':''}"><b>${esc(s.saleNo)}${s.status!=='ปกติ'?' (ยกเลิก)':''}</b><button class="btn sm" onclick="openBill(${i})">เปิด</button><small>${esc(tthai(s.at))} · ${s.method==='cash'?'เงินสด':'โอน'} · ${fm(s.total)} บาท</small></div>`).join(''):'<div class="empty2">ไม่มีบิลในช่วงนี้</div>'}</section>`}`;
+ <section class="sec"><h3>บิลทั้งหมด (${r.sales.length})</h3>${r.sales.length?r.sales.slice(0,200).map((s,i)=>`<div class="bill${s.status!=='ปกติ'?' void':''}"><b>${esc(s.saleNo)}${s.status!=='ปกติ'?' (ยกเลิก)':''}</b><button class="btn sm" onclick="openBill(${i})">เปิด</button><small>${esc(tthai(s.at))} · ${s.method==='cash'?'เงินสด':s.method==='credit'?'ติดไว้ '+esc(custName(s.custId)):'โอน'} · ${fm(s.total)} บาท</small></div>`).join(''):'<div class="empty2">ไม่มีบิลในช่วงนี้</div>'}</section>`}`;
 }
 function openBill(i){
  const s=report.sales[i];
@@ -431,11 +433,11 @@ function openBill(i){
 }
 async function voidBill(i){
  const s=report.sales[i],why=prompt('เหตุผลที่ยกเลิกบิล '+s.saleNo+' (ไม่บังคับ)');if(why===null)return;
- try{await api({action:'posVoid',saleNo:s.saleNo,reason:why});closeDlg(true);const j=await api({action:'posInit'});items=j.items;toast('ยกเลิกบิลแล้ว');await loadReport()}catch(e){toast(e.message)}
+ try{await api({action:'posVoid',saleNo:s.saleNo,reason:why});closeDlg(true);const j=await api({action:'posInit'});items=j.items;refreshCusts();toast('ยกเลิกบิลแล้ว');await loadReport()}catch(e){toast(e.message)}
 }
 function exportReorder(){const r=report;csvDl(`รายการสั่งของ-${r.from}-${r.to}.csv`,[['สินค้า','คงเหลือ','ขายเฉลี่ย/วัน','พอขายกี่วัน','แนะนำสั่งเพิ่ม']].concat(r.reorder.map(d=>[d.name,d.stock,d.perDay,d.stock>0?d.cover:0,d.need])))}
 function exportDays(){const r=report;csvDl(`สรุปยอดขายรายวัน-${r.from}-${r.to}.csv`,[['วันที่','จำนวนบิล','ยอดขาย','เงินสด','โอน','ต้นทุน','กำไรขั้นต้น']].concat(r.byDay.map(d=>[d.day,d.bills,d.total,d.cash,d.transfer,d.cost,r2(d.total-d.cost)])).concat([['รวม',r.bills,r.total,r.cash,r.transfer,r.cost,r.profit]]))}
-function exportBills(){const r=report;csvDl(`รายการบิล-${r.from}-${r.to}.csv`,[['เลขที่บิล','วันเวลา','ยอดรวม','ชำระโดย','สถานะ','รายการสินค้า']].concat(r.sales.slice().reverse().map(s=>[s.saleNo,s.at,s.total,s.method==='cash'?'เงินสด':'โอน',s.status,s.items.map(l=>`${l.name} x${l.qty}`).join('; ')])))}
+function exportBills(){const r=report;csvDl(`รายการบิล-${r.from}-${r.to}.csv`,[['เลขที่บิล','วันเวลา','ยอดรวม','ชำระโดย','สถานะ','รายการสินค้า']].concat(r.sales.slice().reverse().map(s=>[s.saleNo,s.at,s.total,s.method==='cash'?'เงินสด':s.method==='credit'?'ขายเชื่อ':'โอน',s.status,s.items.map(l=>`${l.name} x${l.qty}`).join('; ')])))}
 
 /* ---------- ตั้งค่า ---------- */
 function setView(){
