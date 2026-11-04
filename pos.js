@@ -52,9 +52,9 @@ function render(){
  if(!CRED){$('#app').innerHTML=loginView();return}
  const tab=(k,t)=>`<a href="#" class="${view===k?'on':''}" onclick="return nav('${k}')">${t}</a>`;
  $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.svg" alt=""><h1 class="brand"><b>${esc(cfg.shop||'ร้านชำ')}</b></h1><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div></header>
- <main class="pwrap"><nav class="tabs" aria-label="เมนู">${tab('sell','ขาย')}${tab('items','สินค้า / สต๊อก')}${tab('rep','รายงาน')}${tab('acc','บัญชี')}${tab('set','ตั้งค่า')}</nav>
- <div id="pv">${view==='sell'?sellView():view==='items'?itemsView():view==='rep'?repView():view==='acc'?accView():setView()}</div></main>${view==='sell'?payBar():''}`;
- if(view==='sell')focusScan();
+ <main class="pwrap"><nav class="tabs" aria-label="เมนู">${tab('sell','ขาย')}${tab('rcv','รับของ')}${tab('items','สินค้า')}${tab('rep','รายงาน')}${tab('acc','บัญชี')}${tab('set','ตั้งค่า')}</nav>
+ <div id="pv">${view==='sell'?sellView():view==='items'?itemsView():view==='rep'?repView():view==='acc'?accView():view==='rcv'?rcvView():setView()}</div></main>${view==='sell'?payBar():''}`;
+ if(view==='sell')focusScan();if(view==='rcv')rcvFocus();
 }
 function nav(k){view=k;q='';render();if(k==='rep'&&!report)loadReport();if(k==='acc')accLoad();window.scrollTo(0,0);return false}
 
@@ -163,6 +163,7 @@ async function camStart(){
  }catch(e){cam=null;const mm=$('#camm');if(mm)mm.textContent=/Permission|NotAllowed|denied/i.test(String(e))?'ไม่ได้รับอนุญาตใช้กล้อง กรุณากดอนุญาตในเบราว์เซอร์':'เปิดกล้องไม่ได้ ('+String(e&&e.message||e).slice(0,60)+')'}
 }
 function camHit(text){
+ if(camMode==='rcv')return rcvHit(text);
  const v=String(text||'').trim(),now=Date.now();if(!v)return;
  if(v===camLast&&!(camNo>camAt+700))return; // รหัสเดิมค้างอยู่หน้ากล้อง ไม่นับซ้ำ ต้องเลื่อนออกจากเฟรมก่อน
  camLast=v;camAt=now;
@@ -177,7 +178,7 @@ function camBill(){
 function camQty(i,d){const l=cart[i];if(!l)return;if(d<=-1e8){cart.splice(i,1)}else{l.qty=r2(l.qty+d);if(l.qty<=0)cart.splice(i,1)}saveCart();repaintSell(false);camBill()}
 async function camPay(k){await camStop(true);if(!cart.length)return;k==='cash'?payCash():payTransfer()}
 async function camStop(close){
- const c=cam;cam=null;
+ const c=cam;cam=null;camMode='';
  if(c){try{await c.stop()}catch(e){}try{c.clear()}catch(e){}}
  if(close===true)closeDlg(true),setTimeout(focusScan,30);
 }
@@ -442,7 +443,9 @@ function exportBills(){const r=report;csvDl(`รายการบิล-${r.fro
 /* ---------- ตั้งค่า ---------- */
 function setView(){
  const f=(id,l,v,ph='',t='')=>`<label class="fld"><span class="lbl">${l}</span><input id="${id}" class="inp" value="${esc(v)}" placeholder="${ph}" ${t}></label>`;
+ const th=(()=>{try{return localStorage.getItem('posTheme')||''}catch(e){return ''}})(),TH=[['','น้ำเงิน','#3563b0'],['mint','เขียวมิ้นต์','#2f8f6b'],['peach','ส้มพีช','#d9622b'],['lav','ม่วงลาเวนเดอร์','#6a4fc7'],['night','กลางคืน','#272c38']];
  return `<div class="lhead"><h2 class="h2">ตั้งค่าร้าน</h2></div>
+ <section class="sec"><h3>สีหน้าจอ</h3><p class="sub">เปลี่ยนเฉพาะสี ปุ่มนูนและการใช้งานเหมือนเดิม จำค่าไว้ในเครื่องนี้</p><div class="thm">${TH.map(t=>`<button type="button" aria-pressed="${th===t[0]}" onclick="setTheme('${t[0]}')"><i style="background:${t[2]}"></i>${t[1]}</button>`).join('')}</div></section>
  <section class="sec"><h3>ข้อมูลบนใบเสร็จ</h3>${f('s_shop','ชื่อร้าน',cfg.shop)}${f('s_addr','ที่อยู่',cfg.addr)}${f('s_tel','เบอร์โทร',cfg.tel)}${f('s_note','ข้อความท้ายใบเสร็จ',cfg.note)}</section>
  <section class="sec"><h3>กำไร</h3><p class="sub">ใส่ราคาทุนแล้วระบบบวกกำไรตามนี้ ปัดขึ้นเป็นบาทเต็ม ไม่มีเศษทศนิยม เช่น ทุน 7 บวก 30% ได้ 9.1 ขาย 10 บาท</p>
  ${f('s_mk','กำไร (%) ของทุกรายการ',cfg.mk,'30','inputmode="decimal"')}</section>
@@ -486,3 +489,5 @@ async function doReset(){
  render();
 })();
 window.addEventListener('beforeunload',saveCart);
+
+function setTheme(k){try{localStorage.setItem('posTheme',k)}catch(e){}if(k)document.body.dataset.theme=k;else delete document.body.dataset.theme;const m=document.querySelector('meta[name=theme-color]');if(m)m.content=getComputedStyle(document.body).getPropertyValue('--nbg').trim();render()}
