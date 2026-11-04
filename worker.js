@@ -36,8 +36,7 @@ const DDL = [
  `CREATE INDEX IF NOT EXISTS ix_pos_debtd ON pos_debt(day)`,
  `CREATE TABLE IF NOT EXISTS pos_exp(id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, day TEXT, cat TEXT, amount REAL, method TEXT, note TEXT)`,
  `CREATE INDEX IF NOT EXISTS ix_pos_exp ON pos_exp(day)`,
- `CREATE TABLE IF NOT EXISTS pos_close(day TEXT PRIMARY KEY, at TEXT, float REAL, counted REAL, expected REAL, diff REAL, note TEXT)`,
- `CREATE TABLE IF NOT EXISTS pos_packs(barcode TEXT PRIMARY KEY, itemId TEXT, qty REAL, label TEXT)`];
+ `CREATE TABLE IF NOT EXISTS pos_close(day TEXT PRIMARY KEY, at TEXT, float REAL, counted REAL, expected REAL, diff REAL, note TEXT)`];
 const COLS = {
  products: ['id', 'sortOrder', 'name', 'description', 'note', 'status', 'image'],
  variants: ['id', 'productId', 'productName', 'sortOrder', 'size', 'sizeUnit', 'packaging', 'price', 'status'],
@@ -676,7 +675,7 @@ async function posSaveCfg(env, b) {
 }
 async function posInit(env) {
  const items = (await all(env, 'SELECT * FROM pos_items WHERE active=1 ORDER BY name')).map(posIt);
- return { ok: true, items, cfg: await posCfg(env), packs: await all(env, 'SELECT * FROM pos_packs'), custs: await posCusts(env), version: VERSION };
+ return { ok: true, items, cfg: await posCfg(env), custs: await posCusts(env), version: VERSION };
 }
 async function posSaveItem(env, b) {
  const x = b.item || {}, t = nowStr();
@@ -686,7 +685,6 @@ async function posSaveItem(env, b) {
  if (maxPrice > 0 && price > maxPrice) throw fail('ราคาขายเกินราคาสูงสุดที่ตั้งไว้ (' + maxPrice + ' บาท)');
  const mk = (x.mk === undefined || x.mk === null || x.mk === '') ? null : posNum(x.mk, 'กำไรของสินค้า', 0, 1000);
  const id = str(x.id);
- if (barcode && await one(env, 'SELECT barcode FROM pos_packs WHERE barcode=?', barcode)) throw fail('บาร์โค้ดนี้ใช้เป็นบาร์โค้ดลัง/แพ็กอยู่แล้ว');
  if (barcode) { const d = await one(env, 'SELECT id,name FROM pos_items WHERE barcode=? AND id<>?', barcode, id); if (d) throw fail('บาร์โค้ดนี้ใช้กับสินค้าอื่นแล้ว: ' + d.name); }
  if (id) {
   const old = await one(env, 'SELECT id FROM pos_items WHERE id=? AND active=1', id); if (!old) throw fail('ไม่พบสินค้า');
@@ -827,7 +825,7 @@ async function posNotify(env, b) {
 }
 async function posReset(env, b) {
  if (str(b.confirm).trim() !== 'ล้างข้อมูล') throw fail('ต้องพิมพ์คำว่า ล้างข้อมูล เพื่อยืนยัน');
- await env.DB.batch([stmt(env, 'DELETE FROM pos_sales'), stmt(env, 'DELETE FROM pos_moves'), stmt(env, 'DELETE FROM pos_items'), stmt(env, 'DELETE FROM pos_cust'), stmt(env, 'DELETE FROM pos_debt'), stmt(env, 'DELETE FROM pos_exp'), stmt(env, 'DELETE FROM pos_close'), stmt(env, 'DELETE FROM pos_packs'), stmt(env, "DELETE FROM counters WHERE key LIKE 'pos%'")]);
+ await env.DB.batch([stmt(env, 'DELETE FROM pos_sales'), stmt(env, 'DELETE FROM pos_moves'), stmt(env, 'DELETE FROM pos_items'), stmt(env, 'DELETE FROM pos_cust'), stmt(env, 'DELETE FROM pos_debt'), stmt(env, 'DELETE FROM pos_exp'), stmt(env, 'DELETE FROM pos_close'), stmt(env, "DELETE FROM counters WHERE key LIKE 'pos%'")]);
  return { ok: true };
 }
 async function posMoves(env, b) { return { ok: true, moves: await all(env, 'SELECT at,kind,qty,cost,ref,note FROM pos_moves WHERE itemId=? ORDER BY id DESC LIMIT 60', str(b.id)) }; }
@@ -888,15 +886,6 @@ async function posCloseSave(env, b) {
  await stmt(env, 'INSERT INTO pos_close(day,at,float,counted,expected,diff,note) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(day) DO UPDATE SET at=?2,float=?3,counted=?4,expected=?5,diff=?6,note=?7', day, nowStr(), fl, counted, expected, diff, str(b.note).trim().slice(0, 150)).run();
  return posCloseGet(env, { day });
 }
-async function posPackSave(env, b) {
- const bc = str(b.barcode).trim().slice(0, 40), it = await one(env, 'SELECT id FROM pos_items WHERE id=? AND active=1', str(b.itemId)), q = posNum(b.qty, 'จำนวนชิ้นต่อลัง', 0.001, 1e6);
- if (!bc) throw fail('กรุณากรอกบาร์โค้ดลัง/แพ็ก'); if (!it) throw fail('ไม่พบสินค้า');
- if (await one(env, 'SELECT id FROM pos_items WHERE barcode=?', bc)) throw fail('บาร์โค้ดนี้ใช้เป็นบาร์โค้ดสินค้าอยู่แล้ว');
- const old = await one(env, 'SELECT itemId FROM pos_packs WHERE barcode=?', bc); if (old && old.itemId !== it.id) throw fail('บาร์โค้ดนี้ผูกกับสินค้าอื่นแล้ว');
- await stmt(env, 'INSERT INTO pos_packs(barcode,itemId,qty,label) VALUES(?1,?2,?3,?4) ON CONFLICT(barcode) DO UPDATE SET qty=?3,label=?4', bc, it.id, q, str(b.label).trim().slice(0, 40)).run();
- return { ok: true, packs: await all(env, 'SELECT * FROM pos_packs') };
-}
-async function posPackDelete(env, b) { await stmt(env, 'DELETE FROM pos_packs WHERE barcode=?', str(b.barcode)).run(); return { ok: true, packs: await all(env, 'SELECT * FROM pos_packs') }; }
 async function posApi(env, action, b) {
  switch (action) {
   case 'posInit': return posInit(env);
@@ -921,8 +910,6 @@ async function posApi(env, action, b) {
   case 'posExpList': return posExpList(env, b);
   case 'posCloseGet': return posCloseGet(env, b);
   case 'posCloseSave': return posCloseSave(env, b);
-  case 'posPackSave': return posPackSave(env, b);
-  case 'posPackDelete': return posPackDelete(env, b);
  }
  return { ok: false, error: 'unknown action' };
 }

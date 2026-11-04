@@ -3,6 +3,7 @@
    เงานูน = เงาเข้มล่างขวา + เงาขาวบนซ้าย · สีสถานะออเดอร์/เอกสารคงเดิม */
 body.neu{
  --nbg:#e8ecf4;--nsh:#c3cadb;--nhi:#ffffff;--nav:#1f3a6b;--blue:#3563b0;--blue2:#2a4f94;--rose:#e5365f;--slate:#5c6b8a;
+ --g1:#4a78c6;--g2:#2f5aa5;
  --raise:6px 6px 14px var(--nsh),-6px -6px 14px var(--nhi);
  --raise-s:3px 3px 8px var(--nsh),-3px -3px 8px var(--nhi);
  --inset:inset 3px 3px 7px var(--nsh),inset -3px -3px 7px var(--nhi);
@@ -44,8 +45,8 @@ body.neu .hero.hc .hnote{color:var(--slate);border-top:1px solid var(--line)}
 body.neu .btn{background:var(--nbg);border:0;color:var(--nav);box-shadow:var(--raise-s);font-weight:600;border-radius:14px}
 body.neu .btn:hover{background:var(--nbg);border:0;box-shadow:var(--raise-s);color:var(--blue2)}
 body.neu .btn:active{box-shadow:var(--inset);transform:none}
-body.neu .btn.pri,body.neu .btn.go,body.neu .card .btn.go,body.neu .card.tile .btn.go{background:linear-gradient(145deg,#4a78c6,#2f5aa5);color:#fff;border:0;box-shadow:5px 5px 12px var(--nsh),-4px -4px 10px var(--nhi)}
-body.neu .btn.pri:hover,body.neu .btn.go:hover,body.neu .card .btn.go:hover{background:linear-gradient(145deg,#4a78c6,#2f5aa5);filter:brightness(1.06);color:#fff;border:0}
+body.neu .btn.pri,body.neu .btn.go,body.neu .card .btn.go,body.neu .card.tile .btn.go{background:linear-gradient(145deg,var(--g1),var(--g2));color:#fff;border:0;box-shadow:5px 5px 12px var(--nsh),-4px -4px 10px var(--nhi)}
+body.neu .btn.pri:hover,body.neu .btn.go:hover,body.neu .card .btn.go:hover{background:linear-gradient(145deg,var(--g1),var(--g2));filter:brightness(1.06);color:#fff;border:0}
 body.neu .btn.pri:active,body.neu .btn.go:active{box-shadow:inset 3px 3px 8px rgba(0,0,0,.28);transform:none}
 body.neu .btn.dng{color:#c0261a}
 body.neu .btn[disabled]{opacity:.5;box-shadow:none}
@@ -118,12 +119,12 @@ body.neu .req,body.neu .err{color:#c0261a}
 body.neu .okcard{background:var(--nbg);color:var(--nav);box-shadow:var(--raise)}
 body.neu .okcard .h2{color:var(--nav)}
 body.neu .okcard .mu{color:var(--slate)}
-body.neu .okmark{background:linear-gradient(145deg,#4a78c6,#2f5aa5);color:#fff;box-shadow:var(--raise-s)}
+body.neu .okmark{background:linear-gradient(145deg,var(--g1),var(--g2));color:#fff;box-shadow:var(--raise-s)}
 body.neu .okmark::after{border-color:rgba(53,99,176,.4)}
 body.neu .oid{border:0;box-shadow:var(--inset);background:var(--nbg)}
 body.neu .oid small{color:var(--slate)}
 body.neu .oid b{color:var(--blue2)}
-body.neu .fab{background:linear-gradient(145deg,#4a78c6,#2f5aa5);color:#fff;border:0;box-shadow:8px 8px 18px var(--nsh),-4px -4px 12px var(--nhi)}
+body.neu .fab{background:linear-gradient(145deg,var(--g1),var(--g2));color:#fff;border:0;box-shadow:8px 8px 18px var(--nsh),-4px -4px 12px var(--nhi)}
 body.neu .fab span:last-child{color:#fff}
 body.neu #toast{background:var(--nav);color:#fff;border:0;border-radius:14px}
 body.neu .paycard .bank{background:var(--nbg);border:0;box-shadow:var(--inset)}

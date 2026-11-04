@@ -1,0 +1,18 @@
+/* ธีมสี — เปลี่ยนเฉพาะตัวแปรสี รูปทรงปุ่มนูน/ช่องกรอกจมเหมือนเดิม  ใช้: <body data-theme="mint|peach|lav|night"> (ไม่ใส่ = น้ำเงินเดิม) */
+body.neu[data-theme="mint"]{--nbg:#e3eee8;--nsh:#b9ccc2;--nhi:#fbfffd;--nav:#1d4a3a;--blue:#2f8f6b;--blue2:#217555;--slate:#5b7a6c;--rose:#e5603a;--g1:#3fa67f;--g2:#237a58;--line:rgba(29,74,58,.1);--soft:rgba(29,74,58,.06);--accs:rgba(47,143,107,.1);--gline:rgba(47,143,107,.35);--gl:rgba(47,143,107,.12)}
+body.neu[data-theme="peach"]{--nbg:#f1e7df;--nsh:#d4c2b4;--nhi:#fffaf6;--nav:#5a3326;--blue:#d9622b;--blue2:#b84e1c;--slate:#8a6b5c;--rose:#c0392b;--g1:#ec7a42;--g2:#c9531f;--line:rgba(90,51,38,.1);--soft:rgba(90,51,38,.06);--accs:rgba(217,98,43,.1);--gline:rgba(217,98,43,.35);--gl:rgba(217,98,43,.12)}
+body.neu[data-theme="lav"]{--nbg:#ebe8f4;--nsh:#c8c3dc;--nhi:#ffffff;--nav:#3a2f66;--blue:#6a4fc7;--blue2:#523ba6;--slate:#6e6892;--rose:#e5365f;--g1:#8068d6;--g2:#5b43b4;--line:rgba(58,47,102,.1);--soft:rgba(58,47,102,.06);--accs:rgba(106,79,199,.1);--gline:rgba(106,79,199,.35);--gl:rgba(106,79,199,.12)}
+body.neu[data-theme="night"]{--nbg:#272c38;--nsh:#191d26;--nhi:#353b4b;--nav:#e6eaf5;--blue:#6c9cff;--blue2:#9ab9ff;--slate:#9aa5c0;--rose:#ff6b8b;--g1:#4f82e6;--g2:#3262c4;--ok:#5fd08a;--line:rgba(230,234,245,.14);--soft:rgba(230,234,245,.07);--accs:rgba(108,156,255,.14);--gline:rgba(108,156,255,.4);--gl:rgba(108,156,255,.16);color-scheme:dark}
+body.neu[data-theme="night"] [style*="#c0261a"]{color:#ff8a80!important}
+body.neu[data-theme="night"] [style*="#1a7a3a"]{color:#6fdc9a!important}
+body.neu[data-theme="night"] .err{color:#ff8a80}
+body.neu[data-theme="night"] .inp::placeholder{color:#7d88a6}
+body.neu[data-theme="night"] .btn.dng{color:#ff8a80}
+/* ใบเสร็จ/ป้ายบาร์โค้ดเป็นกระดาษขาวเสมอ */
+body.neu[data-theme="night"] .rcpt{background:#fff;color:#111;--nav:#111;--slate:#444}
+/* ตัวเลือกธีมในหน้าตั้งค่า */
+.thm{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0 4px}
+.thm button{display:flex;flex-direction:column;align-items:center;gap:6px;border:0;background:var(--nbg);color:var(--nav);border-radius:16px;padding:10px 12px;min-width:74px;font:600 13px/1.2 inherit;box-shadow:var(--raise-s);cursor:pointer}
+.thm button[aria-pressed="true"]{box-shadow:var(--inset);color:var(--blue2)}
+.thm i{display:block;width:34px;height:34px;border-radius:50%;box-shadow:inset 0 0 0 3px rgba(255,255,255,.5)}
+body.neu[data-theme="night"] #toast{background:#0d1018;color:#fff}

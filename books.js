@@ -1,7 +1,7 @@
-/* บัญชีร้าน: ลูกหนี้ (ขายเชื่อ) · รายจ่าย · ปิดยอดสิ้นวัน · บาร์โค้ดลัง/แพ็ก */
+/* บัญชีร้าน: ลูกหนี้ (ขายเชื่อ) · รายจ่าย · ปิดยอดสิ้นวัน */
 const custName=id=>(custs.find(c=>c.id===id)||{}).name||'';
 const BTNS=(a,b)=>`<div class="acts2"><button class="btn pri lg" id="okb" onclick="${a}">${b}</button><button class="btn" onclick="closeDlg()">ยกเลิก</button></div>`;
-async function refreshCusts(){try{const j=await api({action:'posInit'});custs=j.custs||[];packs=j.packs||[]}catch(e){}}
+async function refreshCusts(){try{const j=await api({action:'posInit'});custs=j.custs||[]}catch(e){}}
 
 /* ----- ขายเชื่อ ----- */
 let credSel='',credQ='';
@@ -113,14 +113,3 @@ async function clsSave(){
  const cv=$('#k_c').value.trim();if(cv===''||!isFinite(Number(cv))){$('#perr').textContent='กรุณาใส่ยอดเงินที่นับได้';return}
  try{clsD=await api({action:'posCloseSave',day:clsD.day,float:Number($('#k_f').value)||0,counted:Number(cv),note:$('#k_n').value});repaintAcc();clsCalc();toast('บันทึกปิดยอดแล้ว')}catch(e){$('#perr').textContent=e.message}
 }
-/* ----- บาร์โค้ดลัง/แพ็ก ----- */
-function packDlg(id){
- const it=find(id),l=packs.filter(p=>p.itemId===id);
- dlg(`<h3>บาร์โค้ดลัง / แพ็ก</h3><p class="sub">${esc(it.name)} — ผูกบาร์โค้ดของลังหรือแพ็กเข้ากับสินค้านี้ ตอนขายยิงแล้วเพิ่มตามจำนวนชิ้นในลัง ตอนรับของ (เมนู สินค้า/สต๊อก ช่องค้นหา) ยิงแล้วเปิดหน้ารับเข้าพร้อมจำนวนให้เลย</p>
- ${l.length?`<table class="t">${l.map(p=>`<tr><td>${esc(p.barcode)}${p.label?' · '+esc(p.label):''}</td><td class="r">${fm(p.qty)} ชิ้น</td><td><button class="iconbtn" aria-label="ลบ" onclick="packDel('${esc(p.barcode)}','${id}')">✕</button></td></tr>`).join('')}</table>`:''}
- <label class="fld"><span class="lbl">บาร์โค้ดลัง/แพ็ก (ยิงใส่ช่องนี้ได้เลย)</span><input id="p_b" class="inp" inputmode="numeric" onkeydown="if(event.key==='Enter'){event.preventDefault();$('#p_q').focus()}"></label>
- <div class="row2"><label class="fld"><span class="lbl">ในลังมีกี่ชิ้น</span><input id="p_q" class="inp" inputmode="decimal" placeholder="เช่น 12" onkeydown="if(event.key==='Enter')packSave('${id}')"></label><label class="fld"><span class="lbl">ชื่อเรียก</span><input id="p_l" class="inp" placeholder="ลัง / แพ็ก"></label></div><div id="perr" class="err" role="alert"></div>
- <div class="acts2"><button class="btn pri lg" onclick="packSave('${id}')">เพิ่มบาร์โค้ดลัง</button><button class="btn" onclick="editItemDlg('${id}')">กลับ</button></div>`,'p_b');
-}
-async function packSave(id){try{const j=await api({action:'posPackSave',barcode:$('#p_b').value,itemId:id,qty:Number($('#p_q').value),label:$('#p_l').value});packs=j.packs;packDlg(id);toast('ผูกบาร์โค้ดลังแล้ว')}catch(e){$('#perr').textContent=e.message}}
-async function packDel(bc,id){try{const j=await api({action:'posPackDelete',barcode:bc});packs=j.packs;packDlg(id)}catch(e){toast(e.message)}}

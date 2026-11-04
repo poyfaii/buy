@@ -47,7 +47,7 @@ async function doLogin(e){
  logging=false;render();return false;
 }
 function logout(){CRED=null;try{sessionStorage.removeItem(CRK)}catch(e){}render()}
-async function boot(){const j=await api({action:'posInit'});items=j.items;cfg=j.cfg;custs=j.custs||[];packs=j.packs||[];view=view||'sell'}
+async function boot(){const j=await api({action:'posInit'});items=j.items;cfg=j.cfg;custs=j.custs||[];view=view||'sell'}
 function render(){
  if(!CRED){$('#app').innerHTML=loginView();return}
  const tab=(k,t)=>`<a href="#" class="${view===k?'on':''}" onclick="return nav('${k}')">${t}</a>`;
@@ -98,7 +98,6 @@ function scanKey(e){
 function handleScan(v,n){
  const it=items.find(i=>i.barcode&&i.barcode===v);
  if(it){addById(it.id,n);return 'add'}
- const pk=packs.find(p=>p.barcode===v);if(pk&&find(pk.itemId)){addById(pk.itemId,r2((n>0?n:1)*pk.qty));toast('ลัง/แพ็ก = '+fm(pk.qty)+' ชิ้น');return 'add'}
  if(/^[0-9A-Za-z\-._]{6,}$/.test(v)&&/\d/.test(v)){beep(false);newItemDlg(v,'');return 'new'}
  const ms=items.filter(i=>i.name.toLowerCase().includes(v.toLowerCase()));
  if(ms.length===1){addById(ms[0].id,n);return 'add'}
@@ -184,7 +183,7 @@ async function camStop(close){
 }
 
 /* ---------- เงินสด / โอน ---------- */
-let cid='',custs=[],packs=[];
+let cid='',custs=[];
 const newCid=()=>'c'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 function payCash(){
  if(!cart.length)return;cid=newCid();const t=total();
@@ -291,7 +290,7 @@ function newItemDlg(bc,nm){
 }
 function editItemDlg(id){
  const it=find(id);if(!it)return;editId=id;
- dlg(`<h3>แก้ไขสินค้า</h3>${itemForm(it)}<div class="acts2"><button class="btn pri lg" onclick="saveItemDlg(false)">บันทึก</button><button class="btn" onclick="movesDlg('${id}')">ประวัติสต๊อก</button><button class="btn" onclick="packDlg('${id}')">บาร์โค้ดลัง/แพ็ก</button><button class="btn dng" onclick="delItem('${id}')">ลบสินค้า</button><button class="btn" onclick="closeDlg()">ปิด</button></div>`,'f_nm');
+ dlg(`<h3>แก้ไขสินค้า</h3>${itemForm(it)}<div class="acts2"><button class="btn pri lg" onclick="saveItemDlg(false)">บันทึก</button><button class="btn" onclick="movesDlg('${id}')">ประวัติสต๊อก</button><button class="btn dng" onclick="delItem('${id}')">ลบสินค้า</button><button class="btn" onclick="closeDlg()">ปิด</button></div>`,'f_nm');
  fMk();
 }
 async function saveItemDlg(addCart){
@@ -380,7 +379,7 @@ function itemsView(){
  <div id="ilist">${iRows(l)}</div>`;
 }
 function iList(){const t=q.trim().toLowerCase();let l=items.filter(i=>!t||i.name.toLowerCase().includes(t)||(i.barcode||'').includes(t));if(flt==='low')l=l.filter(i=>i.stock<=0||(i.minStock>0&&i.stock<=i.minStock));$('#ilist').innerHTML=iRows(l)}
-function itemScan(v){v=v.trim();const it=items.find(i=>i.barcode&&i.barcode===v);if(it){editItemDlg(it.id);return}const pk=packs.find(p=>p.barcode===v);if(pk&&find(pk.itemId)){recvDlg(pk.itemId,pk.qty);return}if(/^\d{6,}$/.test(v))newItemDlg(v,'')}
+function itemScan(v){v=v.trim();const it=items.find(i=>i.barcode&&i.barcode===v);if(it){editItemDlg(it.id);return}if(/^\d{6,}$/.test(v))newItemDlg(v,'')}
 function iRows(l){
  if(!l.length)return `<div class="empty2">${items.length?'ไม่พบสินค้า':'ยังไม่มีสินค้า — ยิงบาร์โค้ดในหน้าขายเพื่อเพิ่มทีละชิ้น หรือกด “เพิ่มสินค้า”'}</div>`;
  return l.slice(0,300).map(i=>{const low=i.stock<=0||(i.minStock>0&&i.stock<=i.minStock);
