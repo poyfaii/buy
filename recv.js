@@ -4,6 +4,8 @@ const rlSave=()=>{try{localStorage.setItem('posRcv',JSON.stringify(rl))}catch(e)
 function rcvView(){
  const n=rl.reduce((a,l)=>a+l.qty,0);
  return `<div class="lhead"><h2 class="h2">รับของเข้า</h2></div>
+ <div class="row2 rsup"><label class="fld"><span class="lbl">ผู้ขาย (ไม่บังคับ)</span><input id="r_sup" class="inp" list="dl_sup2" value="${esc(rsup)}" oninput="rsup=this.value;try{localStorage.setItem('posRcvSup',rsup)}catch(e){}" placeholder="ซื้อจากร้านไหน"><datalist id="dl_sup2">${allSups().map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>
+ <label class="fld"><span class="lbl">เลขที่ใบซื้อ (ไม่บังคับ)</span><input id="r_inv" class="inp" value="${esc(rinv)}" oninput="rinv=this.value" placeholder="เช่น INV-123"></label></div>
  <div class="scan"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M7 8v8M11 8v8M15 8v8M18 8v8"/></svg>
  <input id="rscan" class="inp" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ยิงบาร์โค้ดชิ้นหรือลัง หรือพิมพ์ชื่อสินค้า" value="${esc(rq)}" oninput="rq=this.value;rRes()" onkeydown="rKey(event)"><button type="button" class="camb" onclick="rcvCam()" aria-label="สแกนด้วยกล้องมือถือ">กล้อง</button></div>
  <div class="chips"><button class="btn" onclick="rcvPick()">+ เลือกสินค้าที่มีอยู่</button><label class="chk" style="display:flex;gap:8px;align-items:center"><input type="checkbox" ${rask?'checked':''} onchange="setAsk(this.checked)"> <span>ยิงแล้วถามจำนวนลัง/แพ็กก่อน</span></label></div>
@@ -17,6 +19,7 @@ function rlHtml(l,i){
  return `<div class="cl"><b>${esc(it.name)}</b><span class="amt">${l.src?esc(l.src):''}</span>
  <div class="sub2"><span class="stp"><button onclick="rQty(${i},-1)" aria-label="ลด">−</button><input inputmode="decimal" value="${l.qty}" aria-label="จำนวนชิ้น" onchange="rSet(${i},this.value)" onfocus="this.select()"><button onclick="rQty(${i},1)" aria-label="เพิ่ม">+</button></span>
  <span>${esc(it.unit||'ชิ้น')} · คงเหลือ ${fm(it.stock)} → <b>${fm(r2(it.stock+l.qty))}</b></span><button class="pbtn" onclick="rcvQty('${l.id}',1)">ใส่เป็นลัง/แพ็ก</button></div>
+ <div class="sub2"><label class="rcost">หมดอายุ <input type="date" class="dtin" value="${l.exp||''}" onchange="rExp(${i},this.value)"></label></div>
  <div class="sub2"><label class="rcost">ทุนต่อ${esc(it.unit||'ชิ้น')} ใหม่ <input inputmode="decimal" placeholder="${it.cost?fm(r2(it.cost)):'—'}" value="${l.cost===''||l.cost==null?'':l.cost}" onchange="rCost(${i},this.value)"></label><small>เว้นว่าง = ทุนเดิม</small></div>
  <button class="xbtn rm" onclick="rDel(${i})" aria-label="ลบรายการ">ลบ</button></div>`;
 }
@@ -58,11 +61,12 @@ async function rcvSaveNew(){await saveItemDlg(false);if(items.some(i=>i.barcode=
 function rQty(i,d){const l=rl[i];if(!l)return;l.qty=r2(l.qty+d);if(l.qty<=0)rl.splice(i,1);rlSave();rcvPaint();rcamList()}
 function rSet(i,v){const l=rl[i],n=Number(v);if(!l)return;if(n>0)l.qty=n;else rl.splice(i,1);rlSave();rcvPaint()}
 function rCost(i,v){const l=rl[i];if(!l)return;l.cost=v.trim()===''?'':Number(v);if(l.cost!==''&&!(l.cost>=0))l.cost='';rlSave()}
+function rExp(i,v){const l=rl[i];if(!l)return;l.exp=v||'';rlSave()}
 function rDel(i){rl.splice(i,1);rlSave();rcvPaint()}
 function rcvClear(){if(!confirm('ล้างรายการรับเข้าทั้งหมด?'))return;rl=[];rlSave();rcvPaint()}
 
 /* ----- เลือกสินค้าเอง / ใส่เป็นลัง-แพ็ก ----- */
-let rask=(()=>{try{return localStorage.getItem('posRcvAsk')!=='0'}catch(e){return true}})(),rpq='';
+let rsup=(()=>{try{return localStorage.getItem('posRcvSup')||''}catch(e){return ''}})(),rinv='',rask=(()=>{try{return localStorage.getItem('posRcvAsk')!=='0'}catch(e){return true}})(),rpq='';
 function setAsk(on){rask=!!on;try{localStorage.setItem('posRcvAsk',on?'1':'0')}catch(e){}}
 function rcvPick(){
  rpq='';dlg(`<h3>เลือกสินค้าที่รับเข้า</h3><input id="rp_q" class="inp" placeholder="ค้นหาชื่อสินค้า หรือยิงบาร์โค้ด" oninput="rpq=this.value;rpList()" onkeydown="if(event.key==='Enter'){event.preventDefault();rpEnter(this.value)}"><div id="rp_l" class="lbrows" style="max-height:320px"></div>
@@ -114,16 +118,12 @@ function rcvHit(text){
 }
 async function rcvSave(){
  if(busy||!rl.length)return;busy=true;const b=$('#rsv');if(b){b.disabled=true;b.textContent='กำลังบันทึก…'}
- const done=[],changed=[];
+ const lines=rl.filter(l=>find(l.id)).map(l=>({id:l.id,qty:l.qty,cost:l.cost===''?undefined:l.cost,expiry:l.exp||''})),old={};rl.forEach(l=>{const it=find(l.id);if(it)old[l.id]=it.cost});
  try{
-  for(const l of rl.slice()){
-   const it=find(l.id);if(!it){continue}
-   const body={action:'posReceive',id:l.id,qty:l.qty,note:'รับเข้า (โหมดรับของ)'};if(l.cost!==''&&l.cost!=null)body.cost=l.cost;
-   const old=it.cost,j=await api(body),k=items.findIndex(x=>x.id===l.id);if(k>=0)items[k]=j.item;
-   done.push({n:j.item.name,q:l.qty,s:j.item.stock});if(l.cost!==''&&Math.abs(j.item.cost-old)>1e-6)changed.push({n:j.item.name,p:j.item.price,np:calcPackPrice(j.item.cost,1,j.item.mk)});
-   rl=rl.filter(x=>x!==l);rlSave();
-  }
-  busy=false;rcvPaint();
-  dlg(`<h3>รับเข้าสต๊อกแล้ว ${done.length} รายการ</h3><table class="t">${done.map(d=>`<tr><td>${esc(d.n)}</td><td class="r">+${fm(d.q)}</td><td class="r">เหลือ ${fm(d.s)}</td></tr>`).join('')}</table>${changed.length?`<p class="sub" style="margin-top:10px">ทุนเปลี่ยน — ราคาขายแนะนำใหม่ (แก้ได้ที่หน้าสินค้า):<br>${changed.map(c=>esc(c.n)+' '+fm(c.p)+' → <b>'+fm(c.np)+'</b>').join('<br>')}</p>`:''}<div class="acts2"><button class="btn pri lg" onclick="closeDlg()">ปิด</button></div>`);
- }catch(e){busy=false;rcvPaint();const er=$('#rerr');if(er)er.textContent=e.message+' (รายการที่เหลือยังอยู่ กดบันทึกใหม่ได้)'}
+  const j=await api({action:'posReceiveBatch',lines,sup:rsup,invoice:rinv}),done=[],changed=[];
+  j.items.forEach(u=>{const k=items.findIndex(x=>x.id===u.id);if(k>=0)items[k]=u;const l=rl.find(x=>x.id===u.id);done.push({n:u.name,q:l?l.qty:0,s:u.stock});if(l&&l.cost!==''&&l.cost!=null&&Math.abs(u.cost-old[u.id])>1e-6)changed.push({n:u.name,p:u.price,np:calcPackPrice(u.cost,1,u.mk)})});
+  rl=[];rlSave();rinv='';busy=false;rcvPaint();
+  api({action:'posExpiry',days:cfg.expDays==null?14:cfg.expDays}).then(x=>{expL=x.list}).catch(()=>{});
+  dlg(`<h3>รับเข้าสต๊อกแล้ว ${done.length} รายการ</h3><p class="sub">มูลค่าซื้อรวม <b>${fm(j.total)}</b> บาท${rsup?' · '+esc(rsup):''} (บันทึกเป็นใบซื้อแล้ว)</p><table class="t">${done.map(d=>`<tr><td>${esc(d.n)}</td><td class="r">+${fm(d.q)}</td><td class="r">เหลือ ${fm(d.s)}</td></tr>`).join('')}</table>${changed.length?`<p class="sub" style="margin-top:10px">ทุนเปลี่ยน — ราคาขายแนะนำใหม่ (แก้ได้ที่หน้าสินค้า):<br>${changed.map(c=>esc(c.n)+' '+fm(c.p)+' → <b>'+fm(c.np)+'</b>').join('<br>')}</p>`:''}<div class="acts2"><button class="btn pri lg" onclick="closeDlg()">ปิด</button></div>`);
+ }catch(e){busy=false;rcvPaint();const er=$('#rerr');if(er)er.textContent=e.message+' (รายการยังอยู่ กดบันทึกใหม่ได้)'}
 }

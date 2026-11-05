@@ -1,7 +1,7 @@
 // worker/index.js — หลังบ้านเว็บสั่งซื้อ "แม่ดอนรุ่งเรืองฟู้ดส์" บน Cloudflare Workers + D1
 // - ก่อนกดย้ายข้อมูล: ส่งต่อทุกคำขอ /api ไปที่ Apps Script (Google Sheets) เหมือนเดิม
 // - หลังกดย้ายข้อมูล: ใช้ฐานข้อมูล D1 (ตาราง SQLite) แทน — กดกลับไป Sheets ได้ในหน้าแอดมิน > ตั้งค่า
-const VERSION = 'd1-v27-2026-11-04';
+const VERSION = 'd1-v28-2026-11-05';
 const ST_WAIT = 'รอจัดเตรียมและจัดส่ง', ST_SHIP = 'จัดส่งแล้ว', ST_CANCEL = 'ยกเลิก';
 const ST_UNPAID = 'รอชำระเงิน', ST_PAID = 'ชำระแล้ว';
 const TRACK_DAYS = 3, MAX_ITEMS = 80, SALES_TTL = 60000;
@@ -36,6 +36,10 @@ const DDL = [
  `CREATE INDEX IF NOT EXISTS ix_pos_debtd ON pos_debt(day)`,
  `CREATE TABLE IF NOT EXISTS pos_exp(id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, day TEXT, cat TEXT, amount REAL, method TEXT, note TEXT)`,
  `CREATE INDEX IF NOT EXISTS ix_pos_exp ON pos_exp(day)`,
+ `CREATE TABLE IF NOT EXISTS pos_lots(id INTEGER PRIMARY KEY AUTOINCREMENT, itemId TEXT, at TEXT, qty REAL, expiry TEXT)`,
+ `CREATE INDEX IF NOT EXISTS ix_pos_lots ON pos_lots(itemId)`,
+ `CREATE TABLE IF NOT EXISTS pos_buys(id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT, day TEXT, sup TEXT, invoice TEXT, total REAL, items TEXT)`,
+ `CREATE INDEX IF NOT EXISTS ix_pos_buys ON pos_buys(day)`,
  `CREATE TABLE IF NOT EXISTS pos_close(day TEXT PRIMARY KEY, at TEXT, float REAL, counted REAL, expected REAL, diff REAL, note TEXT)`];
 const COLS = {
  products: ['id', 'sortOrder', 'name', 'description', 'note', 'status', 'image'],
@@ -85,6 +89,7 @@ async function ensureSchema(env) {
  try { await env.DB.prepare("ALTER TABLE orders ADD COLUMN slipId TEXT DEFAULT ''").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
  try { await env.DB.prepare("ALTER TABLE pos_items ADD COLUMN mk REAL").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
  try { await env.DB.prepare("ALTER TABLE pos_sales ADD COLUMN custId TEXT").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
+ for (const sql of ["ALTER TABLE pos_sales ADD COLUMN disc REAL", "ALTER TABLE pos_sales ADD COLUMN refNo TEXT", "ALTER TABLE pos_items ADD COLUMN cat TEXT", "ALTER TABLE pos_items ADD COLUMN fav INTEGER", "ALTER TABLE pos_items ADD COLUMN sup TEXT"]) { try { await env.DB.prepare(sql).run(); } catch (e) { /* มีคอลัมน์แล้ว */ } }
  schemaOk = true;
 }
 async function metaGet(env, k) { const r = await one(env, 'SELECT value FROM meta WHERE key=?', k); return r ? r.value : null; }
@@ -657,10 +662,10 @@ async function proxy(env, request, url, text) {
 /* ---------- ทางเข้า ---------- */
 
 /* ================= POS ร้านค้าปลีก (บิลเงินสด) — ตารางแยกจากร้านสั่งซื้อ ================= */
-const POS_CFG0 = { shop: '', addr: '', tel: '', mk: 30, note: 'ขอบคุณที่อุดหนุน', paper: '80', autoPrint: false, notiStock: true, stockHour: 8, notiSales: true, salesHour: 20, lowDefault: 0 };
+const POS_CFG0 = { shop: '', addr: '', tel: '', mk: 30, note: 'ขอบคุณที่อุดหนุน', paper: '80', autoPrint: false, notiStock: true, stockHour: 8, notiSales: true, salesHour: 20, lowDefault: 0, expDays: 14 };
 const r2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const posNum = (v, name, min = 0, max = 1e9) => { const n = Number(v); if (!isFinite(n) || n < min || n > max) throw fail(name + ' ไม่ถูกต้อง'); return n; };
-const posIt = r => r && ({ id: r.id, barcode: r.barcode || '', name: r.name, unit: r.unit || '', cost: r.cost || 0, price: r.price || 0, maxPrice: r.maxPrice || 0, mk: r.mk == null ? '' : r.mk, stock: r.stock || 0, minStock: r.minStock || 0 });
+const posIt = r => r && ({ id: r.id, barcode: r.barcode || '', name: r.name, unit: r.unit || '', cost: r.cost || 0, price: r.price || 0, maxPrice: r.maxPrice || 0, mk: r.mk == null ? '' : r.mk, stock: r.stock || 0, minStock: r.minStock || 0, cat: r.cat || '', fav: r.fav ? 1 : 0, sup: r.sup || '' });
 async function posCfg(env) { let c = {}; try { c = JSON.parse((await metaGet(env, 'pos.cfg')) || '{}'); } catch (e) { /* ใช้ค่าเริ่มต้น */ } return { ...POS_CFG0, ...c }; }
 async function posSaveCfg(env, b) {
  const c = b.cfg || {}, o = {
@@ -668,14 +673,15 @@ async function posSaveCfg(env, b) {
   note: str(c.note).trim().slice(0, 200), mk: posNum(c.mk, 'กำไร', 0, 1000),
   paper: ['80', '58', 'a4'].includes(str(c.paper)) ? str(c.paper) : '80', autoPrint: c.autoPrint === true,
   notiStock: c.notiStock !== false, stockHour: Math.round(posNum(c.stockHour === undefined ? 8 : c.stockHour, 'เวลาแจ้งสต๊อก', 0, 23)),
-  notiSales: c.notiSales !== false, salesHour: Math.round(posNum(c.salesHour === undefined ? 20 : c.salesHour, 'เวลาสรุปยอดขาย', 0, 23)), lowDefault: posNum(c.lowDefault || 0, 'เกณฑ์สต๊อกเหลือน้อย', 0, 100000)
+  notiSales: c.notiSales !== false, salesHour: Math.round(posNum(c.salesHour === undefined ? 20 : c.salesHour, 'เวลาสรุปยอดขาย', 0, 23)), lowDefault: posNum(c.lowDefault || 0, 'เกณฑ์สต๊อกเหลือน้อย', 0, 100000), expDays: Math.round(posNum(c.expDays === undefined ? 14 : c.expDays, 'เตือนก่อนหมดอายุ (วัน)', 0, 365))
  };
  await stmt(env, "INSERT INTO meta(key,value) VALUES('pos.cfg',?1) ON CONFLICT(key) DO UPDATE SET value=?1", JSON.stringify(o)).run();
  return { ok: true, cfg: o };
 }
 async function posInit(env) {
  const items = (await all(env, 'SELECT * FROM pos_items WHERE active=1 ORDER BY name')).map(posIt);
- return { ok: true, items, cfg: await posCfg(env), custs: await posCusts(env), version: VERSION };
+ const cfg = await posCfg(env), td = nowStr().slice(0, 10), tr = await one(env, "SELECT COALESCE(SUM(total),0) t, COALESCE(SUM(cost),0) c, COALESCE(SUM(CASE WHEN COALESCE(refNo,'')='' THEN 1 ELSE 0 END),0) n FROM pos_sales WHERE day=? AND status='ปกติ'", td);
+ return { ok: true, items, cfg, custs: await posCusts(env), exp: await posExpiryList(env, cfg.expDays), today: { total: r2(tr.t), profit: r2(tr.t - tr.c), bills: tr.n }, version: VERSION };
 }
 async function posSaveItem(env, b) {
  const x = b.item || {}, t = nowStr();
@@ -684,15 +690,15 @@ async function posSaveItem(env, b) {
  const cost = posNum(x.cost || 0, 'ต้นทุน'), price = posNum(x.price, 'ราคาขาย'), maxPrice = posNum(x.maxPrice || 0, 'ราคาสูงสุด'), minStock = posNum(x.minStock || 0, 'สต๊อกขั้นต่ำ');
  if (maxPrice > 0 && price > maxPrice) throw fail('ราคาขายเกินราคาสูงสุดที่ตั้งไว้ (' + maxPrice + ' บาท)');
  const mk = (x.mk === undefined || x.mk === null || x.mk === '') ? null : posNum(x.mk, 'กำไรของสินค้า', 0, 1000);
- const id = str(x.id);
+ const cat = str(x.cat).trim().slice(0, 40), sup = str(x.sup).trim().slice(0, 80), fav = x.fav ? 1 : 0, id = str(x.id);
  if (barcode) { const d = await one(env, 'SELECT id,name FROM pos_items WHERE barcode=? AND id<>?', barcode, id); if (d) throw fail('บาร์โค้ดนี้ใช้กับสินค้าอื่นแล้ว: ' + d.name); }
  if (id) {
   const old = await one(env, 'SELECT id FROM pos_items WHERE id=? AND active=1', id); if (!old) throw fail('ไม่พบสินค้า');
-  await stmt(env, 'UPDATE pos_items SET barcode=?,name=?,unit=?,cost=?,price=?,maxPrice=?,minStock=?,mk=?,updatedAt=? WHERE id=?', barcode, name, unit, cost, price, maxPrice, minStock, mk, t, id).run();
+  await stmt(env, 'UPDATE pos_items SET barcode=?,name=?,unit=?,cost=?,price=?,maxPrice=?,minStock=?,mk=?,cat=?,fav=?,sup=?,updatedAt=? WHERE id=?', barcode, name, unit, cost, price, maxPrice, minStock, mk, cat, fav, sup, t, id).run();
   return { ok: true, item: posIt(await one(env, 'SELECT * FROM pos_items WHERE id=?', id)) };
  }
  const stock0 = posNum(x.stock || 0, 'จำนวนสต๊อก', -1e6, 1e7), nid = 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
- const ops = [stmt(env, 'INSERT INTO pos_items(id,barcode,name,unit,cost,price,maxPrice,stock,minStock,mk,active,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,1,?,?)', nid, barcode, name, unit, cost, price, maxPrice, stock0, minStock, mk, t, t)];
+ const ops = [stmt(env, 'INSERT INTO pos_items(id,barcode,name,unit,cost,price,maxPrice,stock,minStock,mk,cat,fav,sup,active,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)', nid, barcode, name, unit, cost, price, maxPrice, stock0, minStock, mk, cat, fav, sup, t, t)];
  if (stock0) ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'in',?,?,'','ยอดตั้งต้น')", t, nid, stock0, cost));
  await env.DB.batch(ops);
  return { ok: true, item: posIt(await one(env, 'SELECT * FROM pos_items WHERE id=?', nid)) };
@@ -728,12 +734,19 @@ async function posSale(env, b) {
  const cart = Array.isArray(b.cart) ? b.cart : []; if (!cart.length) throw fail('ยังไม่มีสินค้าในบิล'); if (cart.length > 120) throw fail('รายการในบิลมากเกินไป');
  const method = b.method === 'transfer' ? 'transfer' : b.method === 'credit' ? 'credit' : 'cash', lines = []; let total = 0, cost = 0;
  for (const c of cart) {
+  if (!str(c.id)) { // สินค้าทั่วไป: ใส่ชื่อ+ราคาเอง ไม่ตัดสต๊อก
+   const nm = str(c.name).trim().slice(0, 80); if (!nm) throw fail('สินค้าทั่วไปต้องมีชื่อ');
+   const q0 = posNum(c.qty, 'จำนวน', 0.001, 99999), p0 = posNum(c.price, 'ราคา', 0, 1e7), c0 = posNum(c.cost || 0, 'ต้นทุน', 0, 1e7), a0 = r2(p0 * q0);
+   total = r2(total + a0); cost = r2(cost + c0 * q0); lines.push({ id: '', name: nm, barcode: '', unit: str(c.unit).slice(0, 20), qty: q0, price: p0, cost: c0, amt: a0, open: 1 }); continue;
+  }
   const it = await one(env, 'SELECT * FROM pos_items WHERE id=? AND active=1', str(c.id)); if (!it) throw fail('มีสินค้าที่ถูกลบแล้วในบิล กรุณาสแกนใหม่');
   const q = posNum(c.qty, 'จำนวน', 0.001, 99999), p = (c.price === undefined || c.price === null || c.price === '') ? (it.price || 0) : posNum(c.price, 'ราคา');
   if (it.maxPrice > 0 && p > it.maxPrice) throw fail(it.name + ' ราคาเกินราคาสูงสุด ' + it.maxPrice + ' บาท');
   const amt = r2(p * q); total = r2(total + amt); cost = r2(cost + (it.cost || 0) * q);
   lines.push({ id: it.id, name: it.name, barcode: it.barcode || '', unit: it.unit || '', qty: q, price: p, cost: it.cost || 0, amt });
  }
+ const subtotal = total, disc = b.discount === undefined || b.discount === '' || b.discount === null ? 0 : posNum(b.discount, 'ส่วนลด', 0, 1e8);
+ if (disc > subtotal + 0.001) throw fail('ส่วนลดมากกว่ายอดสินค้า'); total = r2(subtotal - disc);
  let rec = total, chg = 0, cust = null;
  if (method === 'credit') { cust = await one(env, 'SELECT * FROM pos_cust WHERE id=? AND active=1', str(b.custId)); if (!cust) throw fail('กรุณาเลือกลูกค้าที่ติดเงิน'); rec = 0; }
  if (method === 'cash') { rec = posNum(b.received === undefined || b.received === '' ? total : b.received, 'เงินที่รับ', 0, 1e8); if (rec + 0.001 < total) throw fail('เงินที่รับน้อยกว่ายอดรวม'); chg = r2(rec - total); }
@@ -741,18 +754,21 @@ async function posSale(env, b) {
  await stmt(env, 'INSERT INTO counters(key,last) VALUES(?1,1) ON CONFLICT(key) DO UPDATE SET last=last+1', ck).run();
  const n = (await one(env, 'SELECT last FROM counters WHERE key=?', ck)).last, no = 'B' + yy + day.slice(5, 7) + day.slice(8, 10) + '-' + String(n).padStart(3, '0');
  const ops = [stmt(env, "INSERT INTO pos_sales(saleNo,clientId,at,day,total,cost,method,received,chg,status,voidedAt,voidReason,items) VALUES(?,?,?,?,?,?,?,?,?,'ปกติ','','',?)", no, cid, t, day, total, cost, method, rec, chg, JSON.stringify(lines))];
+ if (disc > 0) ops.push(stmt(env, 'UPDATE pos_sales SET disc=? WHERE saleNo=?', disc, no));
  if (cust) { ops.push(stmt(env, 'UPDATE pos_sales SET custId=? WHERE saleNo=?', cust.id, no)); ops.push(stmt(env, "INSERT INTO pos_debt(custId,at,day,kind,amount,method,saleNo,note) VALUES(?,?,?,'charge',?,'',?,'ขายเชื่อ')", cust.id, t, day, total, no)); }
- for (const l of lines) { ops.push(stmt(env, 'UPDATE pos_items SET stock=stock-?,updatedAt=? WHERE id=?', l.qty, t, l.id)); ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'sale',?,?,?,'')", t, l.id, -l.qty, l.cost, no)); }
+ for (const l of lines) { if (!l.id) continue; ops.push(stmt(env, 'UPDATE pos_items SET stock=stock-?,updatedAt=? WHERE id=?', l.qty, t, l.id)); ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'sale',?,?,?,'')", t, l.id, -l.qty, l.cost, no)); }
  await env.DB.batch(ops);
  return { ok: true, sale: posSaleOut(await one(env, 'SELECT * FROM pos_sales WHERE saleNo=?', no)), items: (await all(env, `SELECT * FROM pos_items WHERE id IN (${lines.map(() => '?').join(',')})`, ...lines.map(l => l.id))).map(posIt) };
 }
-function posSaleOut(r) { let items = []; try { items = JSON.parse(r.items || '[]'); } catch (e) { /* ว่าง */ } return { saleNo: r.saleNo, at: r.at, day: r.day, total: r.total, cost: r.cost, method: r.method, received: r.received, change: r.chg, status: r.status, voidReason: r.voidReason || '', custId: r.custId || '', items }; }
+function posSaleOut(r) { let items = []; try { items = JSON.parse(r.items || '[]'); } catch (e) { /* ว่าง */ } return { saleNo: r.saleNo, at: r.at, day: r.day, total: r.total, cost: r.cost, method: r.method, received: r.received, change: r.chg, status: r.status, voidReason: r.voidReason || '', custId: r.custId || '', disc: r.disc || 0, subtotal: r2((r.total || 0) + (r.disc || 0)), refNo: r.refNo || '', items }; }
 async function posVoid(env, b) {
  const s = await one(env, 'SELECT * FROM pos_sales WHERE saleNo=?', str(b.saleNo)); if (!s) throw fail('ไม่พบบิล');
  if (s.status !== 'ปกติ') throw fail('บิลนี้ถูกยกเลิกแล้ว');
+ if (s.refNo) throw fail('บิลคืนสินค้ายกเลิกไม่ได้');
+ if (await one(env, "SELECT saleNo FROM pos_sales WHERE refNo=? AND status='ปกติ'", s.saleNo)) throw fail('บิลนี้มีการคืนสินค้าแล้ว ยกเลิกไม่ได้');
  const t = nowStr(), lines = posSaleOut(s).items, ops = [stmt(env, "UPDATE pos_sales SET status='ยกเลิก',voidedAt=?,voidReason=? WHERE saleNo=?", t, str(b.reason).slice(0, 120), s.saleNo)];
  if (s.custId) ops.push(stmt(env, "INSERT INTO pos_debt(custId,at,day,kind,amount,method,saleNo,note) VALUES(?,?,?,'charge',?,'',?,'ยกเลิกบิล')", s.custId, t, t.slice(0, 10), -s.total, s.saleNo));
- for (const l of lines) { ops.push(stmt(env, 'UPDATE pos_items SET stock=stock+?,updatedAt=? WHERE id=?', l.qty, t, l.id)); ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'void',?,?,?,'ยกเลิกบิล')", t, l.id, l.qty, l.cost, s.saleNo)); }
+ for (const l of lines) { if (!l.id) continue; ops.push(stmt(env, 'UPDATE pos_items SET stock=stock+?,updatedAt=? WHERE id=?', l.qty, t, l.id)); ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'void',?,?,?,'ยกเลิกบิล')", t, l.id, l.qty, l.cost, s.saleNo)); }
  await env.DB.batch(ops);
  return { ok: true };
 }
@@ -772,15 +788,19 @@ async function posReport(env, b) {
  const rows = await all(env, 'SELECT * FROM pos_sales WHERE day>=? AND day<=? ORDER BY at DESC LIMIT 5000', from, to), sales = rows.map(posSaleOut);
  const ok = sales.filter(s => s.status === 'ปกติ'), sum = (a, f) => r2(a.reduce((t, x) => t + f(x), 0));
  const byDay = {}, top = {};
- ok.forEach(s => { const d = byDay[s.day] || (byDay[s.day] = { day: s.day, bills: 0, total: 0, cost: 0, cash: 0, transfer: 0, credit: 0 }); d.bills++; d.total = r2(d.total + s.total); d.cost = r2(d.cost + s.cost); d[s.method] = r2(d[s.method] + s.total); s.items.forEach(l => { const k = top[l.id] || (top[l.id] = { id: l.id, name: l.name, qty: 0, amt: 0, profit: 0 }); k.qty = r2(k.qty + l.qty); k.amt = r2(k.amt + l.amt); k.profit = r2(k.profit + l.amt - l.cost * l.qty); }); });
+ ok.forEach(s => { const d = byDay[s.day] || (byDay[s.day] = { day: s.day, bills: 0, total: 0, cost: 0, cash: 0, transfer: 0, credit: 0 }); if (!s.refNo) d.bills++; d.total = r2(d.total + s.total); d.cost = r2(d.cost + s.cost); d[s.method] = r2(d[s.method] + s.total); s.items.forEach(l => { const k = top[l.id] || (top[l.id] = { id: l.id, name: l.name, qty: 0, amt: 0, profit: 0 }); k.qty = r2(k.qty + l.qty); k.amt = r2(k.amt + l.amt); k.profit = r2(k.profit + l.amt - l.cost * l.qty); }); });
  const expRows = await all(env, 'SELECT cat,amount FROM pos_exp WHERE day>=? AND day<=?', from, to), expBy = {}; let expT = 0; expRows.forEach(r => { expBy[r.cat] = r2((expBy[r.cat] || 0) + r.amount); expT = r2(expT + r.amount); });
  const dIn = (await one(env, "SELECT COALESCE(SUM(amount),0) t FROM pos_debt WHERE kind='pay' AND day>=? AND day<=?", from, to)).t, owed = (await posCusts(env)).reduce((t, c) => t + Math.max(0, c.bal), 0);
+ const catOf = {}; (await all(env, 'SELECT id,cat FROM pos_items')).forEach(i => { catOf[i.id] = i.cat || ''; }); const bc = {};
+ ok.forEach(s => s.items.forEach(l => { const k = l.id ? (catOf[l.id] || 'ไม่ระบุหมวด') : 'สินค้าทั่วไป', o = bc[k] || (bc[k] = { cat: k, amt: 0, profit: 0, qty: 0 }); o.amt = r2(o.amt + l.amt); o.profit = r2(o.profit + l.amt - l.cost * l.qty); o.qty = r2(o.qty + l.qty); }));
+ const byCat = Object.values(bc).sort((a, c) => c.amt - a.amt);
+ const bt = await one(env, 'SELECT COALESCE(SUM(total),0) t FROM pos_buys WHERE day>=? AND day<=?', from, to), buysT = r2(bt.t), buyRows = await all(env, 'SELECT id,day,sup,invoice,total FROM pos_buys WHERE day>=? AND day<=? ORDER BY id DESC LIMIT 60', from, to);
  const days = Math.max(1, Math.round((Date.parse(to + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / 864e5) + 1), allIt = (await all(env, 'SELECT * FROM pos_items WHERE active=1')).map(posIt);
  const fast = Object.values(top).sort((a, c) => c.qty - a.qty || c.amt - a.amt).slice(0, 20);
  const slow = allIt.filter(i => i.stock > 0).map(i => ({ id: i.id, name: i.name, unit: i.unit, stock: i.stock, sold: (top[i.id] || { qty: 0 }).qty, tied: r2(i.stock * i.cost) })).sort((a, c) => a.sold - c.sold || c.tied - a.tied).slice(0, 20);
  const reorder = allIt.filter(i => top[i.id] && top[i.id].qty > 0).map(i => { const per = top[i.id].qty / days, cover = i.stock > 0 ? i.stock / per : 0; return { id: i.id, name: i.name, unit: i.unit, stock: i.stock, perDay: r2(per), cover: Math.round(cover * 10) / 10, need: Math.max(0, Math.ceil(per * 14 - Math.max(0, i.stock))) }; }).filter(x => x.cover < 7 && x.need > 0).sort((a, c) => a.cover - c.cover).slice(0, 30);
  const low = (await all(env, 'SELECT * FROM pos_items WHERE active=1 AND stock<=minStock AND (minStock>0 OR stock<=0) ORDER BY stock LIMIT 200')).map(posIt);
- return { ok: true, from, to, bills: ok.length, voided: sales.length - ok.length, total: sum(ok, s => s.total), cost: sum(ok, s => s.cost), profit: r2(sum(ok, s => s.total) - sum(ok, s => s.cost)), cash: sum(ok.filter(s => s.method === 'cash'), s => s.total), transfer: sum(ok.filter(s => s.method === 'transfer'), s => s.total), credit: sum(ok.filter(s => s.method === 'credit'), s => s.total), exp: expT, expBy, net: r2(sum(ok, s => s.total) - sum(ok, s => s.cost) - expT), debtIn: r2(dIn), owed: r2(owed), byDay: Object.values(byDay).sort((a, c) => a.day < c.day ? -1 : 1), top: Object.values(top).sort((a, c) => c.amt - a.amt).slice(0, 15), fast, slow, reorder, days, low, sales };
+ return { ok: true, from, to, bills: ok.filter(s => !s.refNo).length, returns: r2(-sum(ok.filter(s => s.refNo), s => s.total)), disc: sum(ok, s => s.disc || 0), byCat, buys: buysT, buyRows, voided: sales.length - ok.length, total: sum(ok, s => s.total), cost: sum(ok, s => s.cost), profit: r2(sum(ok, s => s.total) - sum(ok, s => s.cost)), cash: sum(ok.filter(s => s.method === 'cash'), s => s.total), transfer: sum(ok.filter(s => s.method === 'transfer'), s => s.total), credit: sum(ok.filter(s => s.method === 'credit'), s => s.total), exp: expT, expBy, net: r2(sum(ok, s => s.total) - sum(ok, s => s.cost) - expT), debtIn: r2(dIn), owed: r2(owed), byDay: Object.values(byDay).sort((a, c) => a.day < c.day ? -1 : 1), top: Object.values(top).sort((a, c) => c.amt - a.amt).slice(0, 15), fast, slow, reorder, days, low, sales };
 }
 /* ---- แจ้งเตือน LINE ของร้านขายหน้าร้าน: สต๊อก (ตอนเช้า) และสรุปยอดขาย/กำไร (ตอนเย็น) ---- */
 const thDate = d => d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + (+d.slice(0, 4) + 543);
@@ -789,14 +809,15 @@ const money0 = n => Math.round(Number(n) || 0).toLocaleString('en-US');
 async function posStockText(env) {
  const c = await posCfg(env), today = nowStr().slice(0, 10), items = await all(env, 'SELECT name,stock,minStock,cost FROM pos_items WHERE active=1 ORDER BY name');
  const th = i => (i.minStock > 0 ? i.minStock : c.lowDefault || 0);
- const out = items.filter(i => (i.stock || 0) <= 0), low = items.filter(i => (i.stock || 0) > 0 && th(i) > 0 && i.stock <= th(i));
+ const expL = await posExpiryList(env, c.expDays), out = items.filter(i => (i.stock || 0) <= 0), low = items.filter(i => (i.stock || 0) > 0 && th(i) > 0 && i.stock <= th(i));
  const val = items.reduce((t, i) => t + Math.max(0, i.stock || 0) * (i.cost || 0), 0), BAR = '━━━━━━━━━━━━━━', q = n => String(Math.round(n * 100) / 100);
  const build = cap => {
   const sec = (title, list, line) => list.length ? ['', title + ' (' + list.length + ')'].concat(list.slice(0, cap).map(line), list.length > cap ? ['…และอีก ' + (list.length - cap) + ' รายการ'] : []) : [];
   const r = ['🌅 สต๊อกร้านเช้านี้', thDate(today), BAR];
   const a = sec('❌ หมดแล้ว (ต้องสั่งของ)', out, i => '• ' + i.name), b = sec('⚠️ เหลือน้อย (ถึงเกณฑ์เตือน)', low, i => '• ' + i.name + ' · เหลือ ' + q(i.stock) + ' (เตือนที่ ≤ ' + q(th(i)) + ')');
-  const res = r.concat(a, b);
-  res.push('', out.length || low.length ? BAR : '✅ ไม่มีสินค้าหมดหรือเหลือน้อย', '📦 สินค้าทั้งหมด ' + items.length + ' รายการ · มูลค่าสต๊อก (ตามทุน) ' + money0(val) + ' บาท');
+  const e2 = sec('⏰ ใกล้หมดอายุ / หมดอายุแล้ว', expL, i => '• ' + i.name + ' · ' + (i.left < 0 ? 'หมดอายุแล้ว ' + (-i.left) + ' วัน' : i.left === 0 ? 'หมดอายุวันนี้' : 'อีก ' + i.left + ' วัน') + ' (' + q(i.qty) + ' ' + (i.unit || 'ชิ้น') + ')');
+  const res = r.concat(a, b, e2);
+  res.push('', out.length || low.length || expL.length ? BAR : '✅ ไม่มีสินค้าหมด เหลือน้อย หรือใกล้หมดอายุ', '📦 สินค้าทั้งหมด ' + items.length + ' รายการ · มูลค่าสต๊อก (ตามทุน) ' + money0(val) + ' บาท');
   return res.join('\n');
  };
  for (const cap of [60, 40, 25, 12, 5]) { const t = build(cap); if (t.length <= 4700) return t; }
@@ -825,7 +846,7 @@ async function posNotify(env, b) {
 }
 async function posReset(env, b) {
  if (str(b.confirm).trim() !== 'ล้างข้อมูล') throw fail('ต้องพิมพ์คำว่า ล้างข้อมูล เพื่อยืนยัน');
- await env.DB.batch([stmt(env, 'DELETE FROM pos_sales'), stmt(env, 'DELETE FROM pos_moves'), stmt(env, 'DELETE FROM pos_items'), stmt(env, 'DELETE FROM pos_cust'), stmt(env, 'DELETE FROM pos_debt'), stmt(env, 'DELETE FROM pos_exp'), stmt(env, 'DELETE FROM pos_close'), stmt(env, "DELETE FROM counters WHERE key LIKE 'pos%'")]);
+ await env.DB.batch([stmt(env, 'DELETE FROM pos_sales'), stmt(env, 'DELETE FROM pos_moves'), stmt(env, 'DELETE FROM pos_items'), stmt(env, 'DELETE FROM pos_cust'), stmt(env, 'DELETE FROM pos_debt'), stmt(env, 'DELETE FROM pos_exp'), stmt(env, 'DELETE FROM pos_lots'), stmt(env, 'DELETE FROM pos_buys'), stmt(env, 'DELETE FROM pos_close'), stmt(env, "DELETE FROM counters WHERE key LIKE 'pos%'")]);
  return { ok: true };
 }
 async function posMoves(env, b) { return { ok: true, moves: await all(env, 'SELECT at,kind,qty,cost,ref,note FROM pos_moves WHERE itemId=? ORDER BY id DESC LIMIT 60', str(b.id)) }; }
@@ -886,6 +907,75 @@ async function posCloseSave(env, b) {
  await stmt(env, 'INSERT INTO pos_close(day,at,float,counted,expected,diff,note) VALUES(?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(day) DO UPDATE SET at=?2,float=?3,counted=?4,expected=?5,diff=?6,note=?7', day, nowStr(), fl, counted, expected, diff, str(b.note).trim().slice(0, 150)).run();
  return posCloseGet(env, { day });
 }
+/* ---- คืนสินค้า / รับเข้าหลายรายการ+ใบซื้อ / ตรวจนับ / วันหมดอายุ / สำรองข้อมูล ---- */
+const ISO = /^\d{4}-\d{2}-\d{2}$/;
+async function posReturn(env, b) {
+ const s = await one(env, 'SELECT * FROM pos_sales WHERE saleNo=?', str(b.saleNo)); if (!s) throw fail('ไม่พบบิล');
+ if (s.status !== 'ปกติ') throw fail('บิลนี้ถูกยกเลิกแล้ว'); if (s.refNo) throw fail('บิลคืนสินค้าคืนซ้ำไม่ได้');
+ const so = posSaleOut(s), sub = so.items.reduce((t, l) => t + l.amt, 0), factor = sub > 0 ? s.total / sub : 1, prev = {};
+ (await all(env, "SELECT items FROM pos_sales WHERE refNo=? AND status='ปกติ'", s.saleNo)).forEach(r => { try { JSON.parse(r.items).forEach(l => { prev[l.ri] = (prev[l.ri] || 0) - l.qty; }); } catch (e) { /* ข้าม */ } });
+ const lines = []; let refund = 0, cost = 0;
+ for (const r of (Array.isArray(b.lines) ? b.lines : [])) {
+  const i = Number(r.i), ol = so.items[i]; if (!ol) continue; const q = posNum(r.qty, 'จำนวนคืน', 0, 99999); if (!(q > 0)) continue;
+  const left = r2(ol.qty - (prev[i] || 0)); if (q > left + 1e-9) throw fail(ol.name + ' คืนได้อีกไม่เกิน ' + left);
+  const amt = r2(ol.price * q * factor); refund = r2(refund + amt); cost = r2(cost + ol.cost * q);
+  lines.push({ ri: i, id: ol.id, name: ol.name, barcode: ol.barcode, unit: ol.unit, qty: -q, price: ol.price, cost: ol.cost, amt: -amt });
+ }
+ if (!lines.length) throw fail('ยังไม่ได้เลือกสินค้าที่จะคืน');
+ const method = s.method === 'credit' ? 'credit' : (b.method === 'transfer' ? 'transfer' : 'cash'), t = nowStr(), day = t.slice(0, 10), yy = String(Number(day.slice(0, 4)) + 543).slice(-2), ck = 'posr' + day.replace(/-/g, '');
+ await stmt(env, 'INSERT INTO counters(key,last) VALUES(?1,1) ON CONFLICT(key) DO UPDATE SET last=last+1', ck).run();
+ const n = (await one(env, 'SELECT last FROM counters WHERE key=?', ck)).last, no = 'R' + yy + day.slice(5, 7) + day.slice(8, 10) + '-' + String(n).padStart(3, '0');
+ const ops = [stmt(env, "INSERT INTO pos_sales(saleNo,clientId,at,day,total,cost,method,received,chg,status,voidedAt,voidReason,items,refNo,custId) VALUES(?,?,?,?,?,?,?,0,0,'ปกติ','','',?,?,?)", no, '', t, day, -refund, -cost, method, JSON.stringify(lines), s.saleNo, s.custId || '')];
+ if (method === 'credit' && s.custId) ops.push(stmt(env, "INSERT INTO pos_debt(custId,at,day,kind,amount,method,saleNo,note) VALUES(?,?,?,'charge',?,'',?,'คืนสินค้า')", s.custId, t, day, -refund, no));
+ for (const l of lines) { if (!l.id) continue; ops.push(stmt(env, 'UPDATE pos_items SET stock=stock-?,updatedAt=? WHERE id=?', l.qty, t, l.id)); ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'return',?,?,?,'คืนสินค้า')", t, l.id, -l.qty, l.cost, no)); }
+ await env.DB.batch(ops);
+ const ids = lines.filter(l => l.id).map(l => l.id);
+ return { ok: true, sale: posSaleOut(await one(env, 'SELECT * FROM pos_sales WHERE saleNo=?', no)), items: ids.length ? (await all(env, `SELECT * FROM pos_items WHERE id IN (${ids.map(() => '?').join(',')})`, ...ids)).map(posIt) : [] };
+}
+async function posReceiveBatch(env, b) {
+ const rows = Array.isArray(b.lines) ? b.lines : []; if (!rows.length) throw fail('ยังไม่มีรายการรับเข้า'); if (rows.length > 200) throw fail('รายการมากเกินไป (สูงสุด 200)');
+ const t = nowStr(), day = t.slice(0, 10), sup = str(b.sup).trim().slice(0, 80), inv = str(b.invoice).trim().slice(0, 40), ops = [], bi = [], ids = []; let tot = 0;
+ for (const r of rows) {
+  const id = str(r.id), it = await one(env, 'SELECT * FROM pos_items WHERE id=? AND active=1', id); if (!it) throw fail('ไม่พบสินค้าบางรายการ');
+  const q = posNum(r.qty, 'จำนวน', 0.001, 1e6), hasC = r.cost !== undefined && r.cost !== '' && r.cost !== null, cost = hasC ? posNum(r.cost, 'ต้นทุน') : (it.cost || 0);
+  ops.push(stmt(env, 'UPDATE pos_items SET stock=stock+?,cost=?,updatedAt=? WHERE id=?', q, cost, t, id));
+  ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'in',?,?,?,?)", t, id, q, cost, inv, ('รับเข้า' + (sup ? ' · ' + sup : '')).slice(0, 100)));
+  if (ISO.test(str(r.expiry))) ops.push(stmt(env, 'INSERT INTO pos_lots(itemId,at,qty,expiry) VALUES(?,?,?,?)', id, t, q, r.expiry));
+  if (sup) ops.push(stmt(env, "UPDATE pos_items SET sup=? WHERE id=? AND COALESCE(sup,'')=''", sup, id));
+  tot = r2(tot + q * cost); bi.push({ id, name: it.name, qty: q, cost }); ids.push(id);
+ }
+ ops.push(stmt(env, 'INSERT INTO pos_buys(at,day,sup,invoice,total,items) VALUES(?,?,?,?,?,?)', t, day, sup, inv, tot, JSON.stringify(bi)));
+ await env.DB.batch(ops);
+ return { ok: true, total: tot, items: (await all(env, `SELECT * FROM pos_items WHERE id IN (${ids.map(() => '?').join(',')})`, ...ids)).map(posIt) };
+}
+async function posAdjustBatch(env, b) {
+ const rows = Array.isArray(b.rows) ? b.rows : []; if (!rows.length) throw fail('ไม่มีรายการที่ต้องปรับ'); if (rows.length > 500) throw fail('รายการมากเกินไป (สูงสุด 500)');
+ const t = nowStr(), note = str(b.note || 'ตรวจนับสต๊อก').slice(0, 100), ops = [], ids = [];
+ for (const r of rows) {
+  const id = str(r.id), it = await one(env, 'SELECT * FROM pos_items WHERE id=? AND active=1', id); if (!it) continue;
+  const to = posNum(r.stock, 'จำนวนที่นับได้', -1e6, 1e7), d = r2(to - (it.stock || 0)); if (Math.abs(d) < 1e-9) continue;
+  ops.push(stmt(env, 'UPDATE pos_items SET stock=?,updatedAt=? WHERE id=?', to, t, id));
+  ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'adjust',?,?,'',?)", t, id, d, it.cost, note)); ids.push(id);
+ }
+ if (ops.length) await env.DB.batch(ops);
+ return { ok: true, changed: ids.length, items: ids.length ? (await all(env, `SELECT * FROM pos_items WHERE id IN (${ids.map(() => '?').join(',')})`, ...ids)).map(posIt) : [] };
+}
+// สต๊อกที่เหลืออยู่ถือว่าเป็นล็อตที่รับเข้าล่าสุด (ขายของเก่าก่อน) → เตือนล็อตที่ใกล้หมดอายุ
+async function posExpiryList(env, days) {
+ const d = Math.max(0, Number(days) || 0), today = nowStr().slice(0, 10), lim = new Date(Date.parse(today + 'T00:00:00Z') + d * 864e5).toISOString().slice(0, 10);
+ const lots = await all(env, 'SELECT l.itemId,l.qty,l.expiry,i.name,i.unit,i.stock FROM pos_lots l JOIN pos_items i ON i.id=l.itemId AND i.active=1 ORDER BY l.itemId, l.at DESC, l.id DESC'), out = [];
+ let cur = '', remain = 0;
+ for (const l of lots) {
+  if (l.itemId !== cur) { cur = l.itemId; remain = Math.max(0, l.stock || 0); }
+  const take = Math.min(remain, l.qty); remain = r2(remain - take);
+  if (take > 0 && l.expiry <= lim) out.push({ itemId: l.itemId, name: l.name, unit: l.unit || '', qty: r2(take), expiry: l.expiry, left: Math.round((Date.parse(l.expiry + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / 864e5) });
+ }
+ return out.sort((a, c) => a.expiry < c.expiry ? -1 : a.expiry > c.expiry ? 1 : 0);
+}
+async function posBackup(env) {
+ const g = sql => all(env, sql);
+ return { ok: true, app: 'pos', at: nowStr(), version: VERSION, cfg: await posCfg(env), items: await g('SELECT * FROM pos_items'), sales: await g('SELECT * FROM pos_sales ORDER BY at'), moves: await g('SELECT * FROM pos_moves ORDER BY id'), custs: await g('SELECT * FROM pos_cust'), debt: await g('SELECT * FROM pos_debt ORDER BY id'), expenses: await g('SELECT * FROM pos_exp ORDER BY id'), buys: await g('SELECT * FROM pos_buys ORDER BY id'), lots: await g('SELECT * FROM pos_lots ORDER BY id'), closes: await g('SELECT * FROM pos_close ORDER BY day') };
+}
 async function posApi(env, action, b) {
  switch (action) {
   case 'posInit': return posInit(env);
@@ -901,6 +991,11 @@ async function posApi(env, action, b) {
   case 'posReset': return posReset(env, b);
   case 'posNotify': return posNotify(env, b);
   case 'posNewCode': return posNewCode(env, b);
+  case 'posReturn': return posReturn(env, b);
+  case 'posReceiveBatch': return posReceiveBatch(env, b);
+  case 'posAdjustBatch': return posAdjustBatch(env, b);
+  case 'posBackup': return posBackup(env);
+  case 'posExpiry': return { ok: true, list: await posExpiryList(env, b.days) };
   case 'posCustSave': return posCustSave(env, b);
   case 'posCustDelete': return posCustDelete(env, b);
   case 'posDebtLog': return posDebtLog(env, b);
