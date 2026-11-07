@@ -47,7 +47,7 @@ async function doLogin(e){
  logging=false;render();return false;
 }
 function logout(){CRED=null;try{sessionStorage.removeItem(CRK)}catch(e){}render()}
-async function boot(){const j=await api({action:'posInit'});items=j.items;cfg=j.cfg;custs=j.custs||[];stats=j.today||{};expL=j.exp||[];view=view||'sell'}
+async function boot(){const j=await api({action:'posInit'});items=j.items;cfg=j.cfg;try{applyLook()}catch(e){}custs=j.custs||[];stats=j.today||{};expL=j.exp||[];view=view||'sell'}
 function render(){
  document.querySelectorAll('body > .paybar').forEach(e=>e.remove());
  if(!CRED){$('#app').innerHTML=loginView();return}
@@ -488,9 +488,9 @@ function bankPick(i,el){const fl=el.files&&el.files[0];if(!fl)return;const im=ne
 function bankClr(i){bankQr[i]='';const e=$('#bk_img'+i);if(e){e.removeAttribute('src');e.style.display='none'}}
 function setView(){
  const f=(id,l,v,ph='',t='')=>`<label class="fld"><span class="lbl">${l}</span><input id="${id}" class="inp" value="${esc(v)}" placeholder="${ph}" ${t}></label>`;
- const th=(()=>{try{const v=localStorage.getItem('posTheme');return v===null?'prem':v}catch(e){return 'prem'}})(),TH=[['prem','พรีเมียม','#7b6cff'],['','น้ำเงิน','#3563b0'],['mint','เขียวมิ้นต์','#2f8f6b'],['peach','ส้มพีช','#d9622b'],['lav','ม่วงลาเวนเดอร์','#6a4fc7'],['night','กลางคืน','#272c38']];
+ const th=themeNow(),TH=[['soft','ขาวนุ่ม','#e8e6e1'],['prem','ดำ','#17181c']];
  return `<div class="lhead"><h2 class="h2">ตั้งค่าร้าน</h2></div>
- <section class="sec"><h3>สีหน้าจอ</h3><p class="sub">เปลี่ยนเฉพาะสี ปุ่มนูนและการใช้งานเหมือนเดิม จำค่าไว้ในเครื่องนี้</p><div class="thm">${TH.map(t=>`<button type="button" aria-pressed="${th===t[0]}" onclick="setTheme('${t[0]}')"><i style="background:${t[2]}"></i>${t[1]}</button>`).join('')}</div></section>
+ <section class="sec"><h3>สีหน้าจอ</h3><p class="sub">ขาวนุ่ม (สบายตา ไม่จ้า) หรือ ดำ ซิงค์ทุกเครื่อง</p><div class="thm">${TH.map(t=>`<button type="button" aria-pressed="${th===t[0]}" onclick="setTheme('${t[0]}')"><i style="background:${t[2]}"></i>${t[1]}</button>`).join('')}</div>${festPicker()}</section>
  <section class="sec"><h3>ข้อมูลบนใบเสร็จ</h3>${f('s_shop','ชื่อร้าน',cfg.shop)}${f('s_addr','ที่อยู่',cfg.addr)}${f('s_tel','เบอร์โทร',cfg.tel)}${f('s_note','ข้อความท้ายใบเสร็จ',cfg.note)}</section>
 
  <section class="sec"><h3>บัญชีรับโอน / QR</h3><p class="sub">เพิ่มได้ 3 บัญชี ใส่เลขบัญชี รูป QR หรือทั้งสองอย่าง ตอนกดโอนเงินจะโชว์ให้ลูกค้า</p>${[0,1,2].map(i=>{const b=(cfg.banks||[])[i]||{};bankQr[i]=b.qr||'';return `<div class="bkcard"><b>บัญชี ${i+1}</b>${f('bk_b'+i,'ธนาคาร / พร้อมเพย์',b.bank||'','เช่น กสิกร, PromptPay')}${f('bk_n'+i,'ชื่อบัญชี',b.name||'')}${f('bk_no'+i,'เลขบัญชี (โชว์ให้ลูกค้า)',b.no||'','','inputmode="numeric"')}${f('bk_pp'+i,'เบอร์พร้อมเพย์ / เลขบัตร ปชช. (ให้ QR ใส่ยอดอัตโนมัติ)',b.pp||'','เช่น 0812345678','inputmode="numeric"')}<div class="bkup"><img id="bk_img${i}" class="bkth" ${b.qr?`src="${b.qr}"`:'style="display:none"'} alt=""><label class="btn sm">เลือกรูป QR<input type="file" accept="image/*" hidden onchange="bankPick(${i},this)"></label><button class="btn sm" onclick="bankClr(${i})">ลบ QR</button></div></div>`}).join('')}</section>
@@ -539,4 +539,5 @@ async function doReset(){
 })();
 window.addEventListener('beforeunload',saveCart);
 
-function setTheme(k){try{localStorage.setItem('posTheme',k)}catch(e){}if(k)document.body.dataset.theme=k;else delete document.body.dataset.theme;const m=document.querySelector('meta[name=theme-color]');if(m)m.content=getComputedStyle(document.body).getPropertyValue('--nbg').trim();render()}
+function themeNow(){try{const v=localStorage.getItem('posTheme');return v==='prem'||v==='night'?'prem':'soft'}catch(e){return 'soft'}}
+async function setTheme(k){await saveLook({theme:k});render()}

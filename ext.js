@@ -61,7 +61,7 @@ function sellExtras(){
  const al=(nl?`<button class="alc w1" onclick="icat='';flt='low';nav('items')"><i></i>สต๊อกต่ำ/หมด ${fm(nl)} รายการ</button>`:'')+(expL.length?`<button class="alc w2" onclick="expDlg()"><i></i>ใกล้หมดอายุ ${fm(expL.length)} รายการ</button>`:'');
  const acts=`<div class="qacts"><button class="qa c-hold" onclick="holdBill()"${cart.length?'':' disabled'}><i></i><span>พักบิล</span></button><button class="qa c-recall" onclick="heldDlg()"><i></i><span>เรียกบิล${held.length?` (${held.length})`:''}</span></button><button class="qa c-disc" onclick="discDlg()"${cart.length?'':' disabled'}><i></i><span>ส่วนลด</span></button><button class="qa c-open" onclick="openItemDlg()"><i></i><span>สินค้าทั่วไป</span></button><button class="qa c-pay" onclick="xferDlg()"><i></i><span>รับโอน</span></button></div>`;
  const fv=items.filter(i=>i.fav),grid=fv.length?`<div class="qgrid">${fv.map(i=>`<button class="qk" style="--h:${catHue(i.cat||i.name)}" onclick="addById('${i.id}',1)"><span class="qi">${esc(chIcon(i.name))}</span><b>${esc(i.name)}</b><small>${fm(i.price)}</small></button>`).join('')}</div>`:'';
- return ban+(al?`<div class="alcs">${al}</div>`:'')+acts+grid;
+ return festBanner()+ban+(al?`<div class="alcs">${al}</div>`:'')+acts+grid;
 }
 
 /* ----- หมวดหมู่ / ผู้ขาย / ปุ่มลัด ในฟอร์มสินค้า ----- */
@@ -163,3 +163,67 @@ async function backupDl(){
   a.href=URL.createObjectURL(blob);a.download=`สำรองข้อมูลร้านชำ-${today()}.json`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);toast('ดาวน์โหลดไฟล์สำรองแล้ว ('+j.sales.length+' บิล, '+j.items.length+' สินค้า)')}
  catch(e){toast(e.message)}
 }
+
+
+/* ----- ธีมตามเทศกาล (คำนวณวันจากปฏิทินจันทรคติ + ปรับวันเองได้ + ซิงค์ผ่านเซิร์ฟเวอร์) ----- */
+const FEST=[
+ {k:'ny',n:'ปีใหม่',e:'🎆',h:42,m:'สุขสันต์วันปีใหม่',b:3,a:2},
+ {k:'cny',n:'ตรุษจีน',e:'🧧',h:355,m:'ซินเจียยู่อี่ ซินนี้ฮวบไช้',b:3,a:3},
+ {k:'val',n:'วาเลนไทน์',e:'💝',h:336,m:'สุขสันต์วันวาเลนไทน์',b:2,a:0},
+ {k:'song',n:'สงกรานต์',e:'💦',h:192,m:'สุขสันต์วันสงกรานต์',b:2,a:2},
+ {k:'mom',n:'วันแม่',e:'💙',h:217,m:'สุขสันต์วันแม่แห่งชาติ',b:3,a:0},
+ {k:'loy',n:'ลอยกระทง',e:'🪷',h:28,m:'สุขสันต์วันลอยกระทง',b:2,a:2},
+ {k:'dad',n:'วันพ่อ',e:'💛',h:48,m:'สุขสันต์วันพ่อแห่งชาติ',b:2,a:0},
+ {k:'xmas',n:'คริสต์มาส',e:'🎄',h:140,m:'Merry Christmas',b:3,a:1}
+];
+/* เฟสดวงจันทร์ (Meeus ch.49) → วันที่ตามเวลาไทย/จีน; ph=0 วันดับ, 0.5 วันเพ็ญ */
+function moonJD(k){
+ const T=k/1236.85,R=Math.PI/180,full=k%1!==0;
+ let J=2451550.09766+29.530588861*k+0.00015437*T*T-0.00000015*T*T*T+7.3e-10*T*T*T*T;
+ const E=1-0.002516*T-0.0000074*T*T,M=(2.5534+29.1053567*k-0.0000014*T*T)*R,Mp=(201.5643+385.81693528*k+0.0107582*T*T)*R,F=(160.7108+390.67050284*k-0.0016118*T*T)*R,Om=(124.7746-1.56375588*k+0.0020672*T*T)*R,s=Math.sin;
+ const c=full?[-0.40614,0.17302,0.01614,0.01043,0.00734,-0.00515]:[-0.4072,0.17241,0.01608,0.01039,0.00739,-0.00514];
+ J+=c[0]*s(Mp)+c[1]*E*s(M)+c[2]*s(2*Mp)+c[3]*s(2*F)+c[4]*E*s(Mp-M)+c[5]*E*s(Mp+M)+0.00208*E*E*s(2*M)-0.00111*s(Mp-2*F)-0.00057*s(Mp+2*F)+0.00056*E*s(2*Mp+M)-0.00042*s(3*Mp)+0.00042*E*s(M+2*F)+0.00038*E*s(M-2*F)-0.00024*E*s(2*Mp-M)-0.00017*s(Om);
+ const A=[[299.77+0.107408*k,0.000325],[251.88+0.016321*k,0.000165],[251.83+26.651886*k,0.000164],[349.42+36.412478*k,0.000126],[84.66+18.206239*k,0.00011],[141.74+53.303771*k,0.000062],[207.14+2.453732*k,0.00006],[154.84+7.30686*k,0.000056],[34.52+27.261239*k,0.000047]];
+ for(const x of A)J+=x[1]*s(x[0]*R);
+ return J-69/86400; /* TT→UTC โดยประมาณ */
+}
+function jdToDate(J,off){const ms=(J-2440587.5)*864e5+off*36e5,d=new Date(ms);return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate())}
+function moonDate(y,m,d,full,off,minOff){ /* พระจันทร์ดวงแรก ตั้งแต่วันที่ m/d ของปี y */
+ const start=new Date(y,m-1,d);let k=Math.floor((y-2000)*12.3685)-2;
+ for(let i=0;i<30;i++,k++){const kk=k+(full?.5:0),dt=jdToDate(moonJD(kk),off);if(dt>=start)return dt}
+ return null;
+}
+function festCenter(k,y){
+ if(k==='ny')return new Date(y,0,1);
+ if(k==='cny')return moonDate(y,1,21,false,8);
+ if(k==='val')return new Date(y,1,14);
+ if(k==='song')return new Date(y,3,14);
+ if(k==='mom')return new Date(y,7,12);
+ if(k==='loy')return moonDate(y,10,30,true,7);
+ if(k==='dad')return new Date(y,11,5);
+ if(k==='xmas')return new Date(y,11,25);
+}
+function festAdj(k){const f=FEST.find(x=>x.k===k),v=(cfg.festAdj||{})[k]||{};return{shift:v.shift||0,before:v.before==null?f.b:v.before,after:v.after==null?f.a:v.after}}
+function festWin(k,y){const c=festCenter(k,y);if(!c)return null;const a=festAdj(k),D=864e5,t=c.getTime()+a.shift*D;return[new Date(t-a.before*D),new Date(t+a.after*D),new Date(t)]}
+function festAuto(d){
+ d=d||new Date();const t=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();
+ for(const f of FEST)for(const y of [d.getFullYear()-1,d.getFullYear(),d.getFullYear()+1]){const w=festWin(f.k,y);if(w&&t>=w[0].getTime()&&t<=w[1].getTime())return f.k}
+ return '';
+}
+function festSetting(){return cfg.festMode||'auto'}
+function festNow(){const s=festSetting();return s==='off'?'':s==='auto'?festAuto():s}
+function festInfo(){const k=festNow();return FEST.find(f=>f.k===k)||null}
+function applyFest(){const f=festInfo(),b=document.body;if(f){b.dataset.fest=f.k;b.style.setProperty('--fh',f.h)}else{delete b.dataset.fest;b.style.removeProperty('--fh')}}
+function applyLook(){const t=cfg.theme||themeNow();document.body.dataset.theme=t;try{localStorage.setItem('posTheme',t)}catch(e){}applyFest();const m=document.querySelector('meta[name=theme-color]');if(m)m.content=getComputedStyle(document.body).getPropertyValue('--nbg').trim()}
+async function saveLook(p){try{const j=await api({action:'posSaveCfg',cfg:Object.assign({},cfg,p)});cfg=j.cfg}catch(e){toast('บันทึกไม่สำเร็จ: '+e.message);cfg=Object.assign({},cfg,p)}applyLook()}
+const TH_D=d=>d.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
+function festPicker(){
+ const s=festSetting(),f=festInfo(),y=new Date().getFullYear(),tn=new Date(),cur=new Date(tn.getFullYear(),tn.getMonth(),tn.getDate()).getTime();
+ const rows=FEST.map(x=>{let w=festWin(x.k,y);if(w&&w[1].getTime()<cur)w=festWin(x.k,y+1);const a=festAdj(x.k);
+  return `<div class="fadj"><div><b>${x.e} ${x.n}</b><small>${w?`ตรงกับ ${TH_D(w[2])} · แสดง ${TH_D(w[0])} – ${TH_D(w[1])}`:''}</small></div><label>เลื่อน<input type="number" inputmode="numeric" id="fa_s_${x.k}" value="${a.shift}"></label><label>ก่อน<input type="number" inputmode="numeric" id="fa_b_${x.k}" value="${a.before}"></label><label>หลัง<input type="number" inputmode="numeric" id="fa_a_${x.k}" value="${a.after}"></label></div>`}).join('');
+ return `<h3 style="margin-top:16px">ธีมตามเทศกาล</h3><p class="sub">เปลี่ยนสีเด่นและขึ้นข้อความอวยพรตามเทศกาล วันที่คำนวณจากปฏิทินจันทรคติ (ตรุษจีน ลอยกระทง) และปฏิทินสากล ซิงค์ทุกเครื่อง${f?` · ตอนนี้: ${f.e} ${f.n}`:''}</p><label class="fld"><select class="inp" onchange="setFest(this.value)"><option value="auto"${s==='auto'?' selected':''}>อัตโนมัติ (เปลี่ยนเองตามวัน)</option><option value="off"${s==='off'?' selected':''}>ปิด</option>${FEST.map(x=>`<option value="${x.k}"${s===x.k?' selected':''}>ล็อกไว้: ${x.e} ${x.n}</option>`).join('')}</select></label>
+ <details class="fdet"><summary>ปรับวัน บวก/ลบ ของแต่ละเทศกาล</summary><p class="sub">เลื่อน = ขยับวันตรงเทศกาล (+/− วัน) · ก่อน/หลัง = แสดงธีมก่อนและหลังวันนั้นกี่วัน</p>${rows}<button class="btn pri w" onclick="saveFestAdj()">บันทึกการปรับวัน</button></details>`;
+}
+async function setFest(v){await saveLook({festMode:v});render()}
+async function saveFestAdj(){const adj={};FEST.forEach(f=>{const g=i=>Math.round(Number($('#'+i+f.k).value)||0);adj[f.k]={shift:g('fa_s_'),before:Math.max(0,g('fa_b_')),after:Math.max(0,g('fa_a_'))}});await saveLook({festAdj:adj});toast('บันทึกแล้ว');render()}
+function festBanner(){const f=festInfo();return f?`<div class="fest"><span class="fe">${f.e}</span><b>${f.m}</b><span class="fe">${f.e}</span></div>`:''}

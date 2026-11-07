@@ -1,7 +1,7 @@
 // worker/index.js — หลังบ้านเว็บสั่งซื้อ "แม่ดอนรุ่งเรืองฟู้ดส์" บน Cloudflare Workers + D1
 // - ก่อนกดย้ายข้อมูล: ส่งต่อทุกคำขอ /api ไปที่ Apps Script (Google Sheets) เหมือนเดิม
 // - หลังกดย้ายข้อมูล: ใช้ฐานข้อมูล D1 (ตาราง SQLite) แทน — กดกลับไป Sheets ได้ในหน้าแอดมิน > ตั้งค่า
-const VERSION = 'd1-v29-2026-11-07';
+const VERSION = 'd1-v30-2026-11-07';
 const ST_WAIT = 'รอจัดเตรียมและจัดส่ง', ST_SHIP = 'จัดส่งแล้ว', ST_CANCEL = 'ยกเลิก';
 const ST_UNPAID = 'รอชำระเงิน', ST_PAID = 'ชำระแล้ว';
 const TRACK_DAYS = 3, MAX_ITEMS = 80, SALES_TTL = 60000;
@@ -662,19 +662,22 @@ async function proxy(env, request, url, text) {
 /* ---------- ทางเข้า ---------- */
 
 /* ================= POS ร้านค้าปลีก (บิลเงินสด) — ตารางแยกจากร้านสั่งซื้อ ================= */
-const POS_CFG0 = { shop: '', addr: '', tel: '', mk: 30, note: 'ขอบคุณที่อุดหนุน', paper: '80', autoPrint: false, notiStock: true, stockHour: 8, notiSales: true, salesHour: 20, lowDefault: 0, expDays: 14, banks: [] };
+const POS_CFG0 = { shop: '', addr: '', tel: '', mk: 30, note: 'ขอบคุณที่อุดหนุน', paper: '80', autoPrint: false, notiStock: true, stockHour: 8, notiSales: true, salesHour: 20, lowDefault: 0, expDays: 14, banks: [], theme: '', festMode: 'auto', festAdj: {} };
 const r2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const posNum = (v, name, min = 0, max = 1e9) => { const n = Number(v); if (!isFinite(n) || n < min || n > max) throw fail(name + ' ไม่ถูกต้อง'); return n; };
 const posIt = r => r && ({ id: r.id, barcode: r.barcode || '', name: r.name, unit: r.unit || '', cost: r.cost || 0, price: r.price || 0, maxPrice: r.maxPrice || 0, mk: r.mk == null ? '' : r.mk, stock: r.stock || 0, minStock: r.minStock || 0, cat: r.cat || '', fav: r.fav ? 1 : 0, sup: r.sup || '' });
 async function posCfg(env) { let c = {}; try { c = JSON.parse((await metaGet(env, 'pos.cfg')) || '{}'); } catch (e) { /* ใช้ค่าเริ่มต้น */ } return { ...POS_CFG0, ...c }; }
 async function posSaveCfg(env, b) {
- const c = b.cfg || {}, o = {
+ const c = b.cfg || {}, old = await posCfg(env), FK = ['ny', 'cny', 'val', 'song', 'mom', 'loy', 'dad', 'xmas'], o = {
   shop: str(c.shop).trim().slice(0, 120), addr: str(c.addr).trim().slice(0, 300), tel: str(c.tel).trim().slice(0, 40),
   note: str(c.note).trim().slice(0, 200), mk: posNum(c.mk, 'กำไร', 0, 1000),
   paper: ['80', '58', 'a4'].includes(str(c.paper)) ? str(c.paper) : '80', autoPrint: c.autoPrint === true,
   notiStock: c.notiStock !== false, stockHour: Math.round(posNum(c.stockHour === undefined ? 8 : c.stockHour, 'เวลาแจ้งสต๊อก', 0, 23)),
   notiSales: c.notiSales !== false, salesHour: Math.round(posNum(c.salesHour === undefined ? 20 : c.salesHour, 'เวลาสรุปยอดขาย', 0, 23)), lowDefault: posNum(c.lowDefault || 0, 'เกณฑ์สต๊อกเหลือน้อย', 0, 100000), expDays: Math.round(posNum(c.expDays === undefined ? 14 : c.expDays, 'เตือนก่อนหมดอายุ (วัน)', 0, 365))
  };
+ o.theme = c.theme === undefined ? old.theme : (['soft', 'prem'].includes(str(c.theme)) ? str(c.theme) : '');
+ o.festMode = c.festMode === undefined ? old.festMode : (['auto', 'off', ...FK].includes(str(c.festMode)) ? str(c.festMode) : 'auto');
+ { const src = c.festAdj === undefined ? old.festAdj : c.festAdj, adj = {}; for (const k of FK) { const v = src && src[k]; if (v && typeof v === 'object') { const n = (x, lo, hi) => Math.max(lo, Math.min(hi, Math.round(Number(x) || 0))); adj[k] = { shift: n(v.shift, -60, 60), before: n(v.before, 0, 30), after: n(v.after, 0, 30) }; } } o.festAdj = adj; }
  o.banks = (Array.isArray(c.banks) ? c.banks : []).slice(0, 3).map(x => ({ bank: str(x && x.bank).trim().slice(0, 60), name: str(x && x.name).trim().slice(0, 100), no: str(x && x.no).trim().slice(0, 40), pp: (() => { const d = str(x && x.pp).replace(/\D/g, ''); if (d && ![9, 10, 13, 15].includes(d.length)) throw new Error('เลขพร้อมเพย์ต้องเป็นเบอร์โทร 10 หลัก หรือเลขบัตร 13 หลัก'); return d; })(), qr: /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/.test(str(x && x.qr)) && str(x.qr).length <= 200000 ? str(x.qr) : '' })).filter(x => x.bank || x.name || x.no || x.qr || x.pp);
  await stmt(env, "INSERT INTO meta(key,value) VALUES('pos.cfg',?1) ON CONFLICT(key) DO UPDATE SET value=?1", JSON.stringify(o)).run();
  return { ok: true, cfg: o };

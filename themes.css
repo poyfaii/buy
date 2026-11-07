@@ -232,3 +232,21 @@ body.neu.pos .qacts .qa span{font-size:.72rem}
 .bknote{display:block;text-align:center;opacity:.8}.bknote.ok{color:#4ade80;opacity:1}.bknote.warn{color:#fbbf24;opacity:1}
 .bkqr svg{width:min(62vw,240px);height:auto;display:block}.bkqr:not(img){background:#fff;padding:8px;border-radius:14px;line-height:0}
 .bkbig .bkqr svg{width:min(88vw,70vh)}.xamt{font-size:1.6rem;font-weight:700;text-align:center}
+
+/* ===== ธีม ขาวนุ่ม (ไม่จ้า) ===== */
+body.neu[data-theme="soft"]{--nbg:#e9e7e2;--nsh:#c8c4bb;--nhi:#f7f5f1;--nav:#2a2e36;--blue:#5b5bd6;--blue2:#4343b8;--slate:#6b6f7a;--rose:#d9455f;--g1:#6b6bea;--g2:#4a47d0;--ok:#2f9e63;--line:rgba(42,46,54,.12);--soft:rgba(42,46,54,.06);--accs:rgba(91,91,214,.1);--gline:rgba(91,91,214,.35);--gl:rgba(91,91,214,.12)}
+body.neu[data-theme="soft"]::before{background:radial-gradient(700px 480px at 0% -6%,rgba(91,91,214,.10),transparent 62%),radial-gradient(600px 440px at 100% 104%,rgba(20,184,166,.08),transparent 62%)}
+/* ธีมดำ: พื้นดำสนิทนุ่ม ลดม่วง */
+body.neu[data-theme="prem"]{--nbg:#17181c;--nsh:#0a0b0d;--nhi:#26282e;--slate:#a3a7b3;--line:rgba(241,242,255,.12)}
+body.neu[data-theme="prem"]::before{background:radial-gradient(760px 520px at 0% -6%,rgba(139,123,255,.16),transparent 62%),radial-gradient(640px 460px at 100% 104%,rgba(20,184,166,.10),transparent 62%)}
+body.neu[data-theme="prem"] #toast{background:#000}
+/* ===== เทศกาล ===== */
+body.neu[data-fest]{--blue:hsl(var(--fh) 72% 52%);--blue2:hsl(var(--fh) 72% 38%);--g1:hsl(var(--fh) 75% 58%);--g2:hsl(var(--fh) 78% 42%);--accs:hsl(var(--fh) 70% 50%/.12);--gline:hsl(var(--fh) 70% 50%/.4);--gl:hsl(var(--fh) 70% 50%/.14)}
+body.neu[data-fest][data-theme="prem"]{--blue2:hsl(var(--fh) 95% 78%)}
+body.neu[data-fest]::before{background:radial-gradient(760px 520px at 0% -6%,hsl(var(--fh) 80% 55%/.16),transparent 62%),radial-gradient(640px 460px at 100% 104%,hsl(calc(var(--fh) + 40) 80% 55%/.10),transparent 62%)}
+.fest{display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 0;padding:9px 14px;border-radius:18px;color:#fff;font-weight:700;text-align:center;background:linear-gradient(110deg,hsl(var(--fh) 75% 56%),hsl(calc(var(--fh) + 28) 80% 46%));box-shadow:0 8px 20px -8px hsl(var(--fh) 80% 40%/.7)}
+.fest .fe{font-size:1.25rem}
+.fdet{margin-top:10px}.fdet summary{cursor:pointer;font-weight:600;padding:8px 0}
+.fadj{display:grid;grid-template-columns:1fr repeat(3,58px);gap:6px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.fadj small{display:block;opacity:.7;font-size:.72rem}.fadj label{display:flex;flex-direction:column;font-size:.7rem;gap:2px}
+.fadj input{width:100%;padding:6px 4px;border:0;border-radius:10px;text-align:center;background:var(--nbg);color:var(--nav);box-shadow:var(--inset);font:inherit}
