@@ -208,22 +208,49 @@ async function doCash(){
  if(!isFinite(n)||n+.001<t){$('#perr').textContent='เงินที่รับน้อยกว่ายอดรวม';return}
  await submitSale('cash',n);
 }
-function bankList(){return (cfg.banks||[]).filter(b=>b&&(b.no||b.qr))}
+function bankList(){return (cfg.banks||[]).filter(b=>b&&(b.no||b.qr||b.pp))}
+function crc16(s){let c=0xFFFF;for(let i=0;i<s.length;i++){c^=s.charCodeAt(i)<<8;for(let k=0;k<8;k++)c=(c&0x8000)?((c<<1)^0x1021)&0xFFFF:(c<<1)&0xFFFF}return c.toString(16).toUpperCase().padStart(4,'0')}
+function ppPayload(id,amt){
+ id=String(id||'').replace(/\D/g,'');if(!id)return '';
+ const T=(t,v)=>t+String(v.length).padStart(2,'0')+v;
+ let sub,val;if(id.length===10||id.length===9){sub='01';val='0066'+id.slice(1)}else if(id.length===13){sub='02';val=id}else{sub='03';val=id}
+ const a=amt>0?Number(amt).toFixed(2):'';
+ const s=T('00','01')+T('01',a?'12':'11')+T('29',T('00','A000000677010111')+T(sub,val))+T('53','764')+(a?T('54',a):'')+T('58','TH')+'6304';
+ return s+crc16(s);
+}
+let _bkAmt=0,_bkHtml='';
 function bankShow(i){
- const L=bankList(),b=L[i];if(!b)return;window._bk=i;
+ const L=bankList(),b=L[i];if(!b)return;
  document.querySelectorAll('.bkchip').forEach((e,k)=>e.classList.toggle('on',k===i));
- $('#bkpanel').innerHTML=`${b.qr?`<img class="bkqr" src="${b.qr}" alt="QR รับโอน" onclick="bankBig(${i})">`:''}<div class="bkinfo"><b>${esc(b.bank||'บัญชีรับโอน')}</b>${b.name?`<span>${esc(b.name)}</span>`:''}${b.no?`<div class="bkno" onclick="bankCopy(${i})">${esc(b.no)}</div><button class="btn sm" onclick="bankCopy(${i})">คัดลอกเลขบัญชี</button>`:''}</div>`;
+ const amt=_bkAmt>0?_bkAmt:0;let img='',note='';
+ if(b.pp){img=`<div class="bkqr">${qrSvg(ppPayload(b.pp,amt))}</div>`;note=amt?`<small class="bknote ok">QR นี้ใส่ยอด ${fm(amt)} บาทให้แล้ว</small>`:`<small class="bknote">QR พร้อมเพย์ (ไม่ระบุยอด)</small>`}
+ else if(b.qr){img=`<img class="bkqr" src="${b.qr}" alt="QR รับโอน">`;note=amt?`<small class="bknote warn">QR รูปนี้ไม่ใส่ยอดให้ ลูกค้าต้องกรอก ${fm(amt)} บาทเอง (ใส่เลขพร้อมเพย์ในตั้งค่าเพื่อให้ใส่ยอดอัตโนมัติ)</small>`:''}
+ _bkHtml=img;
+ $('#bkpanel').innerHTML=`${img?`<div onclick="bankBig()">${img}</div>`:''}${note}<div class="bkinfo"><b>${esc(b.bank||'บัญชีรับโอน')}</b>${b.name?`<span>${esc(b.name)}</span>`:''}${b.no?`<div class="bkno" onclick="bankCopy(${i})">${esc(b.no)}</div><button class="btn sm" onclick="bankCopy(${i})">คัดลอกเลขบัญชี</button>`:''}</div>`;
 }
 function bankCopy(i){const b=bankList()[i];if(!b||!b.no)return;const t=b.no.replace(/[^0-9A-Za-z]/g,'');try{navigator.clipboard.writeText(t).then(()=>toast('คัดลอกเลขบัญชีแล้ว'),()=>toast(t))}catch(e){toast(t)}}
-function bankBig(i){const b=bankList()[i];if(!b||!b.qr)return;const o=document.createElement('div');o.className='bkbig';o.onclick=()=>o.remove();o.innerHTML=`<img src="${b.qr}" alt="QR"><p>${esc(b.bank||'')} ${esc(b.no||'')}</p><small>แตะเพื่อปิด</small>`;document.body.appendChild(o)}
+function bankBig(){if(!_bkHtml)return;const o=document.createElement('div');o.className='bkbig';o.onclick=()=>o.remove();o.innerHTML=`${_bkHtml}${_bkAmt>0?`<p>ยอดโอน ${fm(_bkAmt)} บาท</p>`:''}<small>แตะเพื่อปิด</small>`;document.body.appendChild(o)}
+function bankBlock(){
+ const L=bankList();
+ if(!L.length)return `<p class="sub" style="text-align:center">ยังไม่ได้ตั้งบัญชีรับโอน เพิ่มได้ที่ ตั้งค่า</p>`;
+ return `<div class="bkchips">${L.map((b,i)=>`<button class="bkchip" onclick="bankShow(${i})">${esc(b.bank||('บัญชี '+(i+1)))}</button>`).join('')}</div><div id="bkpanel" class="bkpanel"><p class="sub">เลือกบัญชีให้ลูกค้าสแกน</p></div>`;
+}
 function payTransfer(){
- if(!cart.length)return;cid=newCid();const t=total(),L=bankList();
- dlg(`<h3>โอนเงิน</h3><div class="big">${fm(t)}</div>
- ${L.length?`<div class="bkchips">${L.map((b,i)=>`<button class="bkchip" onclick="bankShow(${i})">${esc(b.bank||('บัญชี '+(i+1)))}</button>`).join('')}</div><div id="bkpanel" class="bkpanel"></div>`:`<p class="sub" style="text-align:center">ให้ลูกค้าสแกนจ่ายตามยอดนี้ (เพิ่มบัญชี/QR ได้ที่ ตั้งค่า)</p>`}
+ if(!cart.length)return;cid=newCid();const t=total();_bkAmt=t;
+ dlg(`<h3>โอนเงิน</h3><div class="big">${fm(t)}</div>${bankBlock()}
  <p class="sub" style="text-align:center">ตรวจว่าเงินเข้าแล้วจึงกดบันทึก</p><div id="perr" class="err" role="alert"></div>
  <div class="acts2"><button id="okb" class="btn pri lg" onclick="submitSale('transfer')">ได้รับเงินแล้ว บันทึกบิล</button><button class="btn" onclick="closeDlg()">ยกเลิก</button></div>`);
- if(L.length)bankShow(0);
+ if(bankList().length===1)bankShow(0);
 }
+/* หน้าโอนเงินแยก: ใส่ยอดเอง เผื่อสินค้าที่ยังไม่มีรายการ */
+function xferDlg(){
+ _bkAmt=0;
+ dlg(`<h3>รับโอนเงิน</h3><label class="fld"><span class="lbl">ยอดที่ให้ลูกค้าโอน (บาท)</span><input id="x_amt" class="inp xamt" inputmode="decimal" placeholder="0" oninput="xferAmt()"></label>${bankBlock()}
+ <div id="perr" class="err" role="alert"></div><div class="acts2"><button class="btn pri" onclick="xferAdd()">ใส่ยอดนี้เป็นรายการในบิล</button><button class="btn" onclick="closeDlg()">ปิด</button></div>`,'x_amt');
+ if(bankList().length===1)bankShow(0);
+}
+function xferAmt(){const v=Number($('#x_amt').value);_bkAmt=v>0?r2(v):0;const on=document.querySelector('.bkchip.on');if(on)bankShow([...document.querySelectorAll('.bkchip')].indexOf(on))}
+function xferAdd(){const v=Number($('#x_amt').value);if(!(v>0)){$('#perr').textContent='กรุณาใส่ยอดก่อน';return}cart.push({id:'',name:'สินค้าทั่วไป',unit:'',price:r2(v),qty:1,cost:0,open:true});saveCart();closeDlg(true);beep(true);repaintSell(false)}
 async function submitSale(method,rec,custId){
  if(busy)return;busy=true;const b=$('#okb');if(b){b.disabled=true;b.textContent='กำลังบันทึก…'}
  try{
@@ -466,7 +493,7 @@ function setView(){
  <section class="sec"><h3>สีหน้าจอ</h3><p class="sub">เปลี่ยนเฉพาะสี ปุ่มนูนและการใช้งานเหมือนเดิม จำค่าไว้ในเครื่องนี้</p><div class="thm">${TH.map(t=>`<button type="button" aria-pressed="${th===t[0]}" onclick="setTheme('${t[0]}')"><i style="background:${t[2]}"></i>${t[1]}</button>`).join('')}</div></section>
  <section class="sec"><h3>ข้อมูลบนใบเสร็จ</h3>${f('s_shop','ชื่อร้าน',cfg.shop)}${f('s_addr','ที่อยู่',cfg.addr)}${f('s_tel','เบอร์โทร',cfg.tel)}${f('s_note','ข้อความท้ายใบเสร็จ',cfg.note)}</section>
 
- <section class="sec"><h3>บัญชีรับโอน / QR</h3><p class="sub">เพิ่มได้ 3 บัญชี ใส่เลขบัญชี รูป QR หรือทั้งสองอย่าง ตอนกดโอนเงินจะโชว์ให้ลูกค้า</p>${[0,1,2].map(i=>{const b=(cfg.banks||[])[i]||{};bankQr[i]=b.qr||'';return `<div class="bkcard"><b>บัญชี ${i+1}</b>${f('bk_b'+i,'ธนาคาร / พร้อมเพย์',b.bank||'','เช่น กสิกร, PromptPay')}${f('bk_n'+i,'ชื่อบัญชี',b.name||'')}${f('bk_no'+i,'เลขบัญชี / เบอร์พร้อมเพย์',b.no||'','','inputmode="numeric"')}<div class="bkup"><img id="bk_img${i}" class="bkth" ${b.qr?`src="${b.qr}"`:'style="display:none"'} alt=""><label class="btn sm">เลือกรูป QR<input type="file" accept="image/*" hidden onchange="bankPick(${i},this)"></label><button class="btn sm" onclick="bankClr(${i})">ลบ QR</button></div></div>`}).join('')}</section>
+ <section class="sec"><h3>บัญชีรับโอน / QR</h3><p class="sub">เพิ่มได้ 3 บัญชี ใส่เลขบัญชี รูป QR หรือทั้งสองอย่าง ตอนกดโอนเงินจะโชว์ให้ลูกค้า</p>${[0,1,2].map(i=>{const b=(cfg.banks||[])[i]||{};bankQr[i]=b.qr||'';return `<div class="bkcard"><b>บัญชี ${i+1}</b>${f('bk_b'+i,'ธนาคาร / พร้อมเพย์',b.bank||'','เช่น กสิกร, PromptPay')}${f('bk_n'+i,'ชื่อบัญชี',b.name||'')}${f('bk_no'+i,'เลขบัญชี (โชว์ให้ลูกค้า)',b.no||'','','inputmode="numeric"')}${f('bk_pp'+i,'เบอร์พร้อมเพย์ / เลขบัตร ปชช. (ให้ QR ใส่ยอดอัตโนมัติ)',b.pp||'','เช่น 0812345678','inputmode="numeric"')}<div class="bkup"><img id="bk_img${i}" class="bkth" ${b.qr?`src="${b.qr}"`:'style="display:none"'} alt=""><label class="btn sm">เลือกรูป QR<input type="file" accept="image/*" hidden onchange="bankPick(${i},this)"></label><button class="btn sm" onclick="bankClr(${i})">ลบ QR</button></div></div>`}).join('')}</section>
  <section class="sec"><h3>กำไร</h3><p class="sub">ใส่ราคาทุนแล้วระบบบวกกำไรตามนี้ ปัดขึ้นเป็นบาทเต็ม ไม่มีเศษทศนิยม เช่น ทุน 7 บวก 30% ได้ 9.1 ขาย 10 บาท</p>
  ${f('s_mk','กำไร (%) ของทุกรายการ',cfg.mk,'30','inputmode="decimal"')}</section>
  <section class="sec"><h3>วันหมดอายุ และสำรองข้อมูล</h3><label class="fld"><span class="lbl">เตือนสินค้าใกล้หมดอายุล่วงหน้า (วัน)</span><input id="s_exp" class="inp" inputmode="numeric" value="${cfg.expDays==null?14:cfg.expDays}"></label><p class="sub">ใส่วันหมดอายุได้ตอนรับของเข้า ระบบเตือนในหน้าสินค้าและ LINE ตอนเช้า</p>
@@ -492,7 +519,7 @@ async function testNoti(kind){
 }
 async function saveCfg(){
  const g=i=>$('#'+i).value.trim();
- try{const j=await api({action:'posSaveCfg',cfg:{shop:g('s_shop'),addr:g('s_addr'),tel:g('s_tel'),note:g('s_note'),mk:Number(g('s_mk')),paper:$('#s_paper').value,autoPrint:$('#s_auto').checked,notiStock:$('#s_nst').checked,stockHour:Number($('#s_sth').value),notiSales:$('#s_nsa').checked,salesHour:Number($('#s_sah').value),lowDefault:Number(g('s_low')||0),expDays:Number(g('s_exp')||0),banks:[0,1,2].map(i=>({bank:g('bk_b'+i),name:g('bk_n'+i),no:g('bk_no'+i),qr:bankQr[i]||''}))}});cfg=j.cfg;toast('บันทึกตั้งค่าแล้ว');render()}catch(e){$('#perr').textContent=e.message}
+ try{const j=await api({action:'posSaveCfg',cfg:{shop:g('s_shop'),addr:g('s_addr'),tel:g('s_tel'),note:g('s_note'),mk:Number(g('s_mk')),paper:$('#s_paper').value,autoPrint:$('#s_auto').checked,notiStock:$('#s_nst').checked,stockHour:Number($('#s_sth').value),notiSales:$('#s_nsa').checked,salesHour:Number($('#s_sah').value),lowDefault:Number(g('s_low')||0),expDays:Number(g('s_exp')||0),banks:[0,1,2].map(i=>({bank:g('bk_b'+i),name:g('bk_n'+i),no:g('bk_no'+i),pp:g('bk_pp'+i),qr:bankQr[i]||''}))}});cfg=j.cfg;toast('บันทึกตั้งค่าแล้ว');render()}catch(e){$('#perr').textContent=e.message}
 }
 
 function resetDlg(){

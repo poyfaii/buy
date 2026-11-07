@@ -675,7 +675,7 @@ async function posSaveCfg(env, b) {
   notiStock: c.notiStock !== false, stockHour: Math.round(posNum(c.stockHour === undefined ? 8 : c.stockHour, 'เวลาแจ้งสต๊อก', 0, 23)),
   notiSales: c.notiSales !== false, salesHour: Math.round(posNum(c.salesHour === undefined ? 20 : c.salesHour, 'เวลาสรุปยอดขาย', 0, 23)), lowDefault: posNum(c.lowDefault || 0, 'เกณฑ์สต๊อกเหลือน้อย', 0, 100000), expDays: Math.round(posNum(c.expDays === undefined ? 14 : c.expDays, 'เตือนก่อนหมดอายุ (วัน)', 0, 365))
  };
- o.banks = (Array.isArray(c.banks) ? c.banks : []).slice(0, 3).map(x => ({ bank: str(x && x.bank).trim().slice(0, 60), name: str(x && x.name).trim().slice(0, 100), no: str(x && x.no).trim().slice(0, 40), qr: /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/.test(str(x && x.qr)) && str(x.qr).length <= 200000 ? str(x.qr) : '' })).filter(x => x.bank || x.name || x.no || x.qr);
+ o.banks = (Array.isArray(c.banks) ? c.banks : []).slice(0, 3).map(x => ({ bank: str(x && x.bank).trim().slice(0, 60), name: str(x && x.name).trim().slice(0, 100), no: str(x && x.no).trim().slice(0, 40), pp: (() => { const d = str(x && x.pp).replace(/\D/g, ''); if (d && ![9, 10, 13, 15].includes(d.length)) throw new Error('เลขพร้อมเพย์ต้องเป็นเบอร์โทร 10 หลัก หรือเลขบัตร 13 หลัก'); return d; })(), qr: /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/.test(str(x && x.qr)) && str(x.qr).length <= 200000 ? str(x.qr) : '' })).filter(x => x.bank || x.name || x.no || x.qr || x.pp);
  await stmt(env, "INSERT INTO meta(key,value) VALUES('pos.cfg',?1) ON CONFLICT(key) DO UPDATE SET value=?1", JSON.stringify(o)).run();
  return { ok: true, cfg: o };
 }
