@@ -662,7 +662,7 @@ async function proxy(env, request, url, text) {
 /* ---------- ทางเข้า ---------- */
 
 /* ================= POS ร้านค้าปลีก (บิลเงินสด) — ตารางแยกจากร้านสั่งซื้อ ================= */
-const POS_CFG0 = { shop: '', addr: '', tel: '', mk: 30, note: 'ขอบคุณที่อุดหนุน', paper: '80', autoPrint: false, notiStock: true, stockHour: 8, notiSales: true, salesHour: 20, lowDefault: 0, expDays: 14, banks: [], theme: '', festMode: 'auto', festAdj: {} };
+const POS_CFG0 = { shop: '', addr: '', tel: '', mk: 30, note: 'ขอบคุณที่อุดหนุน', paper: '80', autoPrint: false, notiStock: true, stockHour: 8, notiSales: true, salesHour: 20, lowDefault: 0, expDays: 14, banks: [], theme: '', festMode: 'auto', festAdj: {}, fx: 'on' };
 const r2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const posNum = (v, name, min = 0, max = 1e9) => { const n = Number(v); if (!isFinite(n) || n < min || n > max) throw fail(name + ' ไม่ถูกต้อง'); return n; };
 const posIt = r => r && ({ id: r.id, barcode: r.barcode || '', name: r.name, unit: r.unit || '', cost: r.cost || 0, price: r.price || 0, maxPrice: r.maxPrice || 0, mk: r.mk == null ? '' : r.mk, stock: r.stock || 0, minStock: r.minStock || 0, cat: r.cat || '', fav: r.fav ? 1 : 0, sup: r.sup || '' });
@@ -676,6 +676,7 @@ async function posSaveCfg(env, b) {
   notiSales: c.notiSales !== false, salesHour: Math.round(posNum(c.salesHour === undefined ? 20 : c.salesHour, 'เวลาสรุปยอดขาย', 0, 23)), lowDefault: posNum(c.lowDefault || 0, 'เกณฑ์สต๊อกเหลือน้อย', 0, 100000), expDays: Math.round(posNum(c.expDays === undefined ? 14 : c.expDays, 'เตือนก่อนหมดอายุ (วัน)', 0, 365))
  };
  o.theme = c.theme === undefined ? old.theme : (['soft', 'prem'].includes(str(c.theme)) ? str(c.theme) : '');
+ o.fx = c.fx === undefined ? old.fx : (c.fx === 'off' ? 'off' : 'on');
  o.festMode = c.festMode === undefined ? old.festMode : (['auto', 'off', ...FK].includes(str(c.festMode)) ? str(c.festMode) : 'auto');
  { const src = c.festAdj === undefined ? old.festAdj : c.festAdj, adj = {}; for (const k of FK) { const v = src && src[k]; if (v && typeof v === 'object') { const n = (x, lo, hi) => Math.max(lo, Math.min(hi, Math.round(Number(x) || 0))); adj[k] = { shift: n(v.shift, -60, 60), before: n(v.before, 0, 30), after: n(v.after, 0, 30) }; } } o.festAdj = adj; }
  o.banks = (Array.isArray(c.banks) ? c.banks : []).slice(0, 3).map(x => ({ bank: str(x && x.bank).trim().slice(0, 60), name: str(x && x.name).trim().slice(0, 100), no: str(x && x.no).trim().slice(0, 40), pp: (() => { const d = str(x && x.pp).replace(/\D/g, ''); if (d && ![9, 10, 13, 15].includes(d.length)) throw new Error('เลขพร้อมเพย์ต้องเป็นเบอร์โทร 10 หลัก หรือเลขบัตร 13 หลัก'); return d; })(), qr: /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+\/=]+$/.test(str(x && x.qr)) && str(x.qr).length <= 200000 ? str(x.qr) : '' })).filter(x => x.bank || x.name || x.no || x.qr || x.pp);

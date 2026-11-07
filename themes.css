@@ -250,3 +250,10 @@ body.neu[data-fest]::before{background:radial-gradient(760px 520px at 0% -6%,hsl
 .fadj{display:grid;grid-template-columns:1fr repeat(3,58px);gap:6px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
 .fadj small{display:block;opacity:.7;font-size:.72rem}.fadj label{display:flex;flex-direction:column;font-size:.7rem;gap:2px}
 .fadj input{width:100%;padding:6px 4px;border:0;border-radius:10px;text-align:center;background:var(--nbg);color:var(--nav);box-shadow:var(--inset);font:inherit}
+.fxmas{position:fixed;bottom:calc(92px + env(safe-area-inset-bottom));left:0;z-index:8999;font-size:34px;line-height:1;cursor:pointer;will-change:transform;filter:drop-shadow(0 4px 4px rgba(0,0,0,.35))}
+.fxmas span{display:block;animation:fxhop .55s ease-in-out infinite}
+.fxmas.fr{animation:fxr 14s linear forwards}.fxmas.fl{animation:fxl 14s linear forwards}.fxmas.fl span{transform:scaleX(-1)}
+@keyframes fxr{from{transform:translateX(-60px)}to{transform:translateX(100vw)}}
+@keyframes fxl{from{transform:translateX(100vw)}to{transform:translateX(-60px)}}
+@keyframes fxhop{0%,100%{translate:0 0}50%{translate:0 -12px}}
+@media(prefers-reduced-motion:reduce){.fxmas{display:none}}

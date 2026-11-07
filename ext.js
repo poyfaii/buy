@@ -214,7 +214,7 @@ function festSetting(){return cfg.festMode||'auto'}
 function festNow(){const s=festSetting();return s==='off'?'':s==='auto'?festAuto():s}
 function festInfo(){const k=festNow();return FEST.find(f=>f.k===k)||null}
 function applyFest(){const f=festInfo(),b=document.body;if(f){b.dataset.fest=f.k;b.style.setProperty('--fh',f.h)}else{delete b.dataset.fest;b.style.removeProperty('--fh')}}
-function applyLook(){const t=cfg.theme||themeNow();document.body.dataset.theme=t;try{localStorage.setItem('posTheme',t)}catch(e){}applyFest();const m=document.querySelector('meta[name=theme-color]');if(m)m.content=getComputedStyle(document.body).getPropertyValue('--nbg').trim()}
+function applyLook(){const t=cfg.theme||themeNow();document.body.dataset.theme=t;try{localStorage.setItem('posTheme',t)}catch(e){}applyFest();const m=document.querySelector('meta[name=theme-color]');if(m)m.content=getComputedStyle(document.body).getPropertyValue('--nbg').trim();try{fxSync()}catch(x){}}
 async function saveLook(p){try{const j=await api({action:'posSaveCfg',cfg:Object.assign({},cfg,p)});cfg=j.cfg}catch(e){toast('บันทึกไม่สำเร็จ: '+e.message);cfg=Object.assign({},cfg,p)}applyLook()}
 const TH_D=d=>d.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
 function festPicker(){
@@ -222,8 +222,69 @@ function festPicker(){
  const rows=FEST.map(x=>{let w=festWin(x.k,y);if(w&&w[1].getTime()<cur)w=festWin(x.k,y+1);const a=festAdj(x.k);
   return `<div class="fadj"><div><b>${x.e} ${x.n}</b><small>${w?`ตรงกับ ${TH_D(w[2])} · แสดง ${TH_D(w[0])} – ${TH_D(w[1])}`:''}</small></div><label>เลื่อน<input type="number" inputmode="numeric" id="fa_s_${x.k}" value="${a.shift}"></label><label>ก่อน<input type="number" inputmode="numeric" id="fa_b_${x.k}" value="${a.before}"></label><label>หลัง<input type="number" inputmode="numeric" id="fa_a_${x.k}" value="${a.after}"></label></div>`}).join('');
  return `<h3 style="margin-top:16px">ธีมตามเทศกาล</h3><p class="sub">เปลี่ยนสีเด่นและขึ้นข้อความอวยพรตามเทศกาล วันที่คำนวณจากปฏิทินจันทรคติ (ตรุษจีน ลอยกระทง) และปฏิทินสากล ซิงค์ทุกเครื่อง${f?` · ตอนนี้: ${f.e} ${f.n}`:''}</p><label class="fld"><select class="inp" onchange="setFest(this.value)"><option value="auto"${s==='auto'?' selected':''}>อัตโนมัติ (เปลี่ยนเองตามวัน)</option><option value="off"${s==='off'?' selected':''}>ปิด</option>${FEST.map(x=>`<option value="${x.k}"${s===x.k?' selected':''}>ล็อกไว้: ${x.e} ${x.n}</option>`).join('')}</select></label>
+ <label class="fld"><span class="lbl">เอฟเฟกต์เคลื่อนไหว (พลุ ของตกลงมา ตัวการ์ตูนวิ่ง)</span><select class="inp" onchange="setFx(this.value)"><option value="on"${cfg.fx!=='off'?' selected':''}>เปิด (เฉพาะวันเทศกาล)</option><option value="off"${cfg.fx==='off'?' selected':''}>ปิด</option></select></label><button class="btn w" onclick="fxPreview()" style="margin-top:8px">ดูตัวอย่างพลุ/เอฟเฟกต์</button>
  <details class="fdet"><summary>ปรับวัน บวก/ลบ ของแต่ละเทศกาล</summary><p class="sub">เลื่อน = ขยับวันตรงเทศกาล (+/− วัน) · ก่อน/หลัง = แสดงธีมก่อนและหลังวันนั้นกี่วัน</p>${rows}<button class="btn pri w" onclick="saveFestAdj()">บันทึกการปรับวัน</button></details>`;
 }
 async function setFest(v){await saveLook({festMode:v});render()}
 async function saveFestAdj(){const adj={};FEST.forEach(f=>{const g=i=>Math.round(Number($('#'+i+f.k).value)||0);adj[f.k]={shift:g('fa_s_'),before:Math.max(0,g('fa_b_')),after:Math.max(0,g('fa_a_'))}});await saveLook({festAdj:adj});toast('บันทึกแล้ว');render()}
 function festBanner(){const f=festInfo();return f?`<div class="fest"><span class="fe">${f.e}</span><b>${f.m}</b><span class="fe">${f.e}</span></div>`:''}
+
+/* ----- เอฟเฟกต์เทศกาล: พลุ / ของตกลงมา / ตัวการ์ตูนวิ่ง (canvas, ไม่บังการกด) ----- */
+const FX={
+ ny:{sym:['✨','🎊','🎉'],dir:1,n:14,fw:1,mas:'🥳'},
+ cny:{sym:['🧧','🏮','🪙'],dir:1,n:16,fw:1,mas:'🐉'},
+ val:{sym:['💗','💖','💕'],dir:-1,n:16,fw:0,mas:'🐻'},
+ song:{sym:['💧','💦','🫧'],dir:1,n:22,fw:0,mas:'🐘'},
+ mom:{sym:['💙','🤍','🌼'],dir:1,n:16,fw:0,mas:'🐰'},
+ loy:{sym:['🏮','🪷','✨'],dir:-1,n:14,fw:1,mas:'🪷'},
+ dad:{sym:['💛','🌻','⭐'],dir:1,n:14,fw:0,mas:'🦁'},
+ xmas:{sym:['❄️','❄️','⭐'],dir:1,n:26,fw:1,mas:'🎅'}
+};
+let fxC=null,fxX=null,fxP=[],fxS=[],fxRun=false,fxLast=0,fxNext=0,fxKey='',fxMas=null,fxMasT=0,fxForce=0;
+const fxReduce=()=>window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+function fxOn(){const f=festInfo();return !!f&&cfg.fx!=='off'&&!fxReduce()}
+function fxEnsure(){
+ if(fxC)return;fxC=document.createElement('canvas');fxC.id='fxc';fxC.setAttribute('aria-hidden','true');
+ fxC.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9000';document.body.appendChild(fxC);fxX=fxC.getContext('2d');fxSize();addEventListener('resize',fxSize);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)fxSync()});
+}
+function fxSize(){if(!fxC)return;const d=Math.min(2,devicePixelRatio||1);fxC.width=innerWidth*d;fxC.height=innerHeight*d;fxX.setTransform(d,0,0,d,0,0)}
+function fxSpawn(cfg0,top){
+ const W=innerWidth,H=innerHeight;
+ return{x:Math.random()*W,y:top?(cfg0.dir>0?-30:H+30):Math.random()*H,v:(20+Math.random()*40)*cfg0.dir,sw:Math.random()*6.28,sa:10+Math.random()*22,s:16+Math.random()*14,sym:cfg0.sym[Math.floor(Math.random()*cfg0.sym.length)],r:Math.random()*6.28,rv:(Math.random()-.5)*1.2}
+}
+function fxBoom(x,y,h){
+ const hue=h==null?Math.random()*360:h,n=34+Math.floor(Math.random()*14);
+ for(let i=0;i<n;i++){const a=i/n*6.283+Math.random()*.2,sp=70+Math.random()*130;fxS.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,l:1,hu:hue+(Math.random()*50-25)})}
+}
+function fxBurst(){if(!fxOn())return;fxEnsure();const f=festInfo(),W=innerWidth,H=innerHeight;fxBoom(W*.3,H*.28,f.h);setTimeout(()=>fxBoom(W*.7,H*.22,f.h+40),180);setTimeout(()=>fxBoom(W*.5,H*.34,f.h+80),380);fxStart()}
+function fxPreview(){const f=festInfo()||FEST[1],W=innerWidth,H=innerHeight;if(cfg.fx==='off'){toast('เอฟเฟกต์ปิดอยู่');return}if(fxReduce()){toast('เครื่องตั้งไว้ลดการเคลื่อนไหว');return}fxForce=Date.now()+9000;fxKey=f.k;fxEnsure();fxP=[];const c=FX[f.k];for(let i=0;i<c.n;i++)fxP.push(fxSpawn(c,false));fxBoom(W*.3,H*.28,f.h);setTimeout(()=>fxBoom(W*.7,H*.22,f.h+40),250);setTimeout(()=>fxBoom(W*.5,H*.34,f.h+80),500);fxMascot(true);fxStart()}
+function fxMascot(now){
+ const f=festInfo()||FEST.find(x=>x.k===fxKey);if(!f||fxMas)return;const c=FX[f.k];
+ const m=document.createElement('div');const dir=Math.random()<.5?1:-1;m.className='fxmas '+(dir>0?'fr':'fl');m.innerHTML=`<span>${c.mas}</span>`;m.onclick=()=>{fxBoom(m.getBoundingClientRect().left+20,innerHeight-160,f.h);fxStart()};
+ document.body.appendChild(m);fxMas=m;m.addEventListener('animationend',()=>{m.remove();fxMas=null});
+}
+function fxStart(){if(fxRun)return;fxRun=true;fxLast=performance.now();requestAnimationFrame(fxLoop)}
+function fxLoop(t){
+ if(!fxRun)return;
+ const forced=Date.now()<fxForce,f=festInfo(),on=fxOn()||forced;
+ if(!on||document.hidden){fxRun=false;fxP=[];fxS=[];if(fxX)fxX.clearRect(0,0,innerWidth,innerHeight);return}
+ const k=forced?fxKey:f.k,c=FX[k];if(k!==fxKey){fxKey=k;fxP=[];for(let i=0;i<c.n;i++)fxP.push(fxSpawn(c,false))}
+ if(t-fxLast<33){requestAnimationFrame(fxLoop);return}
+ const dt=Math.min(.06,(t-fxLast)/1000);fxLast=t;const W=innerWidth,H=innerHeight,x=fxX;x.clearRect(0,0,W,H);
+ if(!fxP.length)for(let i=0;i<c.n;i++)fxP.push(fxSpawn(c,false));
+ x.textAlign='center';x.textBaseline='middle';
+ for(const p of fxP){p.y+=p.v*dt;p.sw+=dt*1.6;p.r+=p.rv*dt;const px=p.x+Math.sin(p.sw)*p.sa;
+  if((c.dir>0&&p.y>H+30)||(c.dir<0&&p.y<-30)){Object.assign(p,fxSpawn(c,true))}
+  x.save();x.globalAlpha=.85;x.translate(px,p.y);x.rotate(Math.sin(p.r)*.5);x.font=p.s+'px serif';x.fillText(p.sym,0,0);x.restore()}
+ if(c.fw&&t>fxNext){fxBoom(W*(.15+Math.random()*.7),H*(.12+Math.random()*.3),f?f.h+Math.random()*60-30:null);fxNext=t+2800+Math.random()*3200}
+ for(let i=fxS.length-1;i>=0;i--){const s=fxS[i];s.vy+=90*dt;s.x+=s.vx*dt;s.y+=s.vy*dt;s.vx*=.985;s.l-=dt*.75;
+  if(s.l<=0){fxS.splice(i,1);continue}
+  x.globalAlpha=Math.max(0,s.l);x.fillStyle=`hsl(${s.hu} 95% 62%)`;x.beginPath();x.arc(s.x,s.y,2.2*s.l+.6,0,6.283);x.fill()}
+ x.globalAlpha=1;
+ if(fxMasT<t&&!fxMas){fxMascot();fxMasT=t+16000+Math.random()*14000}
+ requestAnimationFrame(fxLoop);
+}
+function fxSync(){if(fxOn()){fxEnsure();if(!fxMasT)fxMasT=performance.now()+4000;fxStart()}else if(!(Date.now()<fxForce)){fxRun=false;if(fxX)fxX.clearRect(0,0,innerWidth,innerHeight);if(fxMas){fxMas.remove();fxMas=null}}}
+async function setFx(v){await saveLook({fx:v});render()}
+(function(){const o=window.showReceipt;if(typeof o==='function')window.showReceipt=function(s,fresh){if(fresh)try{fxBurst()}catch(e){}return o.apply(this,arguments)}})();
