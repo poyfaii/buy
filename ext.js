@@ -167,14 +167,14 @@ async function backupDl(){
 
 /* ----- ธีมตามเทศกาล (คำนวณวันจากปฏิทินจันทรคติ + ปรับวันเองได้ + ซิงค์ผ่านเซิร์ฟเวอร์) ----- */
 const FEST=[
- {k:'ny',n:'ปีใหม่',e:'🎆',h:42,m:'สุขสันต์วันปีใหม่',b:3,a:2},
- {k:'cny',n:'ตรุษจีน',e:'🧧',h:355,m:'ซินเจียยู่อี่ ซินนี้ฮวบไช้',b:3,a:3},
- {k:'val',n:'วาเลนไทน์',e:'💝',h:336,m:'สุขสันต์วันวาเลนไทน์',b:2,a:0},
- {k:'song',n:'สงกรานต์',e:'💦',h:192,m:'สุขสันต์วันสงกรานต์',b:2,a:2},
- {k:'mom',n:'วันแม่',e:'💙',h:217,m:'สุขสันต์วันแม่แห่งชาติ',b:3,a:0},
- {k:'loy',n:'ลอยกระทง',e:'🪷',h:28,m:'สุขสันต์วันลอยกระทง',b:2,a:2},
- {k:'dad',n:'วันพ่อ',e:'💛',h:48,m:'สุขสันต์วันพ่อแห่งชาติ',b:2,a:0},
- {k:'xmas',n:'คริสต์มาส',e:'🎄',h:140,m:'Merry Christmas',b:3,a:1}
+ {k:'ny',n:'ปีใหม่',e:'🎆',h:42,m:'สุขสันต์วันปีใหม่',b:3,a:2,t:['🛍️','🎁','🎈','🎆','💰','🎊'],q:['⏸️','🔄','🏷️','🎁','📲'],g:['🎈','🎉','🎆','🎊','🎈','🎉','🎆'],eb:'🎉',pt:'🎆'},
+ {k:'cny',n:'ตรุษจีน',e:'🧧',h:355,m:'ซินเจียยู่อี่ ซินนี้ฮวบไช้',b:3,a:3,t:['🧧','🏮','🧨','🐉','💰','🎋'],q:['⏸️','🔄','🧧','🏮','📲'],g:['🏮','🧧','🏮','🧨','🏮','🧧','🏮'],eb:'🏮',pt:'🧧'},
+ {k:'val',n:'วาเลนไทน์',e:'💝',h:336,m:'สุขสันต์วันวาเลนไทน์',b:2,a:0,t:['💝','💌','🍫','💖','💳','🌹'],q:['⏸️','🔄','💝','💌','📲'],g:['💗','💖','💗','💕','💗','💖','💗'],eb:'💝',pt:'💗'},
+ {k:'song',n:'สงกรานต์',e:'💦',h:192,m:'สุขสันต์วันสงกรานต์',b:2,a:2,t:['💦','🪣','🐘','🌺','💰','🌞'],q:['⏸️','🔄','💦','🪣','📲'],g:['💧','🌺','💦','🌸','💧','🌺','💦'],eb:'💦',pt:'💧'},
+ {k:'mom',n:'วันแม่',e:'💙',h:217,m:'สุขสันต์วันแม่แห่งชาติ',b:3,a:0,t:['💙','🌼','🎀','🌸','💳','🕊️'],q:['⏸️','🔄','💙','🌼','📲'],g:['🌼','💙','🌸','💙','🌼','💙','🌸'],eb:'💙',pt:'🌼'},
+ {k:'loy',n:'ลอยกระทง',e:'🪷',h:28,m:'สุขสันต์วันลอยกระทง',b:2,a:2,t:['🪷','🏮','🌕','🕯️','💰','🌿'],q:['⏸️','🔄','🪷','🏮','📲'],g:['🏮','🪷','🏮','🌕','🏮','🪷','🏮'],eb:'🪷',pt:'🪷'},
+ {k:'dad',n:'วันพ่อ',e:'💛',h:48,m:'สุขสันต์วันพ่อแห่งชาติ',b:2,a:0,t:['💛','🌻','👔','⭐','💳','🛠️'],q:['⏸️','🔄','💛','🌻','📲'],g:['🌻','💛','⭐','💛','🌻','💛','⭐'],eb:'💛',pt:'🌻'},
+ {k:'xmas',n:'คริสต์มาส',e:'🎄',h:140,m:'Merry Christmas',b:3,a:1,t:['🎄','🎁','🧦','⛄','💰','🔔'],q:['⏸️','🔄','🎁','🎅','📲'],g:['🔴','🟡','🟢','🔵','🔴','🟡','🟢'],eb:'🎄',pt:'❄️'}
 ];
 /* เฟสดวงจันทร์ (Meeus ch.49) → วันที่ตามเวลาไทย/จีน; ph=0 วันดับ, 0.5 วันเพ็ญ */
 function moonJD(k){
@@ -213,7 +213,20 @@ function festAuto(d){
 function festSetting(){return cfg.festMode||'auto'}
 function festNow(){const s=festSetting();return s==='off'?'':s==='auto'?festAuto():s}
 function festInfo(){const k=festNow();return FEST.find(f=>f.k===k)||null}
-function applyFest(){const f=festInfo(),b=document.body;if(f){b.dataset.fest=f.k;b.style.setProperty('--fh',f.h)}else{delete b.dataset.fest;b.style.removeProperty('--fh')}}
+function applyFest(){
+ const f=festInfo(),b=document.body,st=b.style,names=[...Array(6)].map((_,i)=>'--e'+(i+1)).concat([...Array(5)].map((_,i)=>'--q'+(i+1)),['--eb','--pat','--fh']);
+ if(f){b.dataset.fest=f.k;st.setProperty('--fh',f.h);f.t.forEach((x,i)=>st.setProperty('--e'+(i+1),`'${x}'`));f.q.forEach((x,i)=>st.setProperty('--q'+(i+1),`'${x}'`));st.setProperty('--eb',`'${f.eb}'`);
+  const svg=`<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150'><text x='20' y='48' font-size='30' opacity='.10'>${f.pt}</text><text x='92' y='122' font-size='26' opacity='.08'>${f.eb}</text></svg>`;st.setProperty('--pat',`url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`)}
+ else{delete b.dataset.fest;names.forEach(n=>st.removeProperty(n))}
+ festDecor();
+}
+function festDecor(){
+ document.querySelectorAll('.garland').forEach(x=>x.remove());const f=festInfo(),top=document.querySelector('header.top');
+ if(!f||!top||document.body.dataset.fest===undefined)return;
+ const g=document.createElement('div');g.className='garland';g.setAttribute('aria-hidden','true');
+ g.innerHTML='<i class="gl-line"></i>'+f.g.map((x,i)=>`<span style="--len:${[6,16,4,20,8,14,5][i%7]}px;--dl:${(i*.37).toFixed(2)}s">${x}</span>`).join('');
+ top.insertBefore(g,top.firstChild);
+}
 function applyLook(){const t=cfg.theme||themeNow();document.body.dataset.theme=t;try{localStorage.setItem('posTheme',t)}catch(e){}applyFest();const m=document.querySelector('meta[name=theme-color]');if(m)m.content=getComputedStyle(document.body).getPropertyValue('--nbg').trim();try{fxSync()}catch(x){}}
 async function saveLook(p){try{const j=await api({action:'posSaveCfg',cfg:Object.assign({},cfg,p)});cfg=j.cfg}catch(e){toast('บันทึกไม่สำเร็จ: '+e.message);cfg=Object.assign({},cfg,p)}applyLook()}
 const TH_D=d=>d.toLocaleDateString('th-TH',{day:'numeric',month:'short'});
@@ -288,3 +301,6 @@ function fxLoop(t){
 function fxSync(){if(fxOn()){fxEnsure();if(!fxMasT)fxMasT=performance.now()+4000;fxStart()}else if(!(Date.now()<fxForce)){fxRun=false;if(fxX)fxX.clearRect(0,0,innerWidth,innerHeight);if(fxMas){fxMas.remove();fxMas=null}}}
 async function setFx(v){await saveLook({fx:v});render()}
 (function(){const o=window.showReceipt;if(typeof o==='function')window.showReceipt=function(s,fresh){if(fresh)try{fxBurst()}catch(e){}return o.apply(this,arguments)}})();
+
+(function(){const o=window.render;if(typeof o==='function')window.render=function(){const r=o.apply(this,arguments);try{festDecor()}catch(x){}return r}})();
+(function(){const o=window.showReceipt;if(typeof o==='function')window.showReceipt=function(s,fresh){const r=o.apply(this,arguments);try{const f=festInfo(),d=document.querySelector('.dlg');if(fresh&&f&&d)d.insertAdjacentHTML('afterbegin',`<div class="fest"><span class="fe">${f.e}</span><b>${f.m}</b><span class="fe">${f.e}</span></div>`)}catch(x){}return r}})();
