@@ -208,11 +208,21 @@ async function doCash(){
  if(!isFinite(n)||n+.001<t){$('#perr').textContent='เงินที่รับน้อยกว่ายอดรวม';return}
  await submitSale('cash',n);
 }
+function bankList(){return (cfg.banks||[]).filter(b=>b&&(b.no||b.qr))}
+function bankShow(i){
+ const L=bankList(),b=L[i];if(!b)return;window._bk=i;
+ document.querySelectorAll('.bkchip').forEach((e,k)=>e.classList.toggle('on',k===i));
+ $('#bkpanel').innerHTML=`${b.qr?`<img class="bkqr" src="${b.qr}" alt="QR รับโอน" onclick="bankBig(${i})">`:''}<div class="bkinfo"><b>${esc(b.bank||'บัญชีรับโอน')}</b>${b.name?`<span>${esc(b.name)}</span>`:''}${b.no?`<div class="bkno" onclick="bankCopy(${i})">${esc(b.no)}</div><button class="btn sm" onclick="bankCopy(${i})">คัดลอกเลขบัญชี</button>`:''}</div>`;
+}
+function bankCopy(i){const b=bankList()[i];if(!b||!b.no)return;const t=b.no.replace(/[^0-9A-Za-z]/g,'');try{navigator.clipboard.writeText(t).then(()=>toast('คัดลอกเลขบัญชีแล้ว'),()=>toast(t))}catch(e){toast(t)}}
+function bankBig(i){const b=bankList()[i];if(!b||!b.qr)return;const o=document.createElement('div');o.className='bkbig';o.onclick=()=>o.remove();o.innerHTML=`<img src="${b.qr}" alt="QR"><p>${esc(b.bank||'')} ${esc(b.no||'')}</p><small>แตะเพื่อปิด</small>`;document.body.appendChild(o)}
 function payTransfer(){
- if(!cart.length)return;cid=newCid();const t=total();
+ if(!cart.length)return;cid=newCid();const t=total(),L=bankList();
  dlg(`<h3>โอนเงิน</h3><div class="big">${fm(t)}</div>
- <p class="sub" style="text-align:center">ให้ลูกค้าสแกนจ่ายตามยอดนี้ ตรวจว่าเงินเข้าแล้วจึงกดบันทึก</p><div id="perr" class="err" role="alert"></div>
+ ${L.length?`<div class="bkchips">${L.map((b,i)=>`<button class="bkchip" onclick="bankShow(${i})">${esc(b.bank||('บัญชี '+(i+1)))}</button>`).join('')}</div><div id="bkpanel" class="bkpanel"></div>`:`<p class="sub" style="text-align:center">ให้ลูกค้าสแกนจ่ายตามยอดนี้ (เพิ่มบัญชี/QR ได้ที่ ตั้งค่า)</p>`}
+ <p class="sub" style="text-align:center">ตรวจว่าเงินเข้าแล้วจึงกดบันทึก</p><div id="perr" class="err" role="alert"></div>
  <div class="acts2"><button id="okb" class="btn pri lg" onclick="submitSale('transfer')">ได้รับเงินแล้ว บันทึกบิล</button><button class="btn" onclick="closeDlg()">ยกเลิก</button></div>`);
+ if(L.length)bankShow(0);
 }
 async function submitSale(method,rec,custId){
  if(busy)return;busy=true;const b=$('#okb');if(b){b.disabled=true;b.textContent='กำลังบันทึก…'}
@@ -446,12 +456,17 @@ function exportDays(){const r=report;csvDl(`สรุปยอดขายรา
 function exportBills(){const r=report;csvDl(`รายการบิล-${r.from}-${r.to}.csv`,[['เลขที่บิล','วันเวลา','ยอดรวม','ชำระโดย','สถานะ','รายการสินค้า']].concat(r.sales.slice().reverse().map(s=>[s.saleNo,s.at,s.total,s.method==='cash'?'เงินสด':s.method==='credit'?'ขายเชื่อ':'โอน',s.status,s.items.map(l=>`${l.name} x${l.qty}`).join('; ')])))}
 
 /* ---------- ตั้งค่า ---------- */
+let bankQr=['','',''];
+function bankPick(i,el){const fl=el.files&&el.files[0];if(!fl)return;const im=new Image(),u=URL.createObjectURL(fl);im.onload=()=>{const m=520,s=Math.min(1,m/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);x.drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);bankQr[i]=c.toDataURL('image/jpeg',.88);const e=$('#bk_img'+i);e.src=bankQr[i];e.style.display='block'};im.onerror=()=>toast('อ่านรูปไม่ได้');im.src=u}
+function bankClr(i){bankQr[i]='';const e=$('#bk_img'+i);if(e){e.removeAttribute('src');e.style.display='none'}}
 function setView(){
  const f=(id,l,v,ph='',t='')=>`<label class="fld"><span class="lbl">${l}</span><input id="${id}" class="inp" value="${esc(v)}" placeholder="${ph}" ${t}></label>`;
  const th=(()=>{try{const v=localStorage.getItem('posTheme');return v===null?'prem':v}catch(e){return 'prem'}})(),TH=[['prem','พรีเมียม','#7b6cff'],['','น้ำเงิน','#3563b0'],['mint','เขียวมิ้นต์','#2f8f6b'],['peach','ส้มพีช','#d9622b'],['lav','ม่วงลาเวนเดอร์','#6a4fc7'],['night','กลางคืน','#272c38']];
  return `<div class="lhead"><h2 class="h2">ตั้งค่าร้าน</h2></div>
  <section class="sec"><h3>สีหน้าจอ</h3><p class="sub">เปลี่ยนเฉพาะสี ปุ่มนูนและการใช้งานเหมือนเดิม จำค่าไว้ในเครื่องนี้</p><div class="thm">${TH.map(t=>`<button type="button" aria-pressed="${th===t[0]}" onclick="setTheme('${t[0]}')"><i style="background:${t[2]}"></i>${t[1]}</button>`).join('')}</div></section>
  <section class="sec"><h3>ข้อมูลบนใบเสร็จ</h3>${f('s_shop','ชื่อร้าน',cfg.shop)}${f('s_addr','ที่อยู่',cfg.addr)}${f('s_tel','เบอร์โทร',cfg.tel)}${f('s_note','ข้อความท้ายใบเสร็จ',cfg.note)}</section>
+
+ <section class="sec"><h3>บัญชีรับโอน / QR</h3><p class="sub">เพิ่มได้ 3 บัญชี ใส่เลขบัญชี รูป QR หรือทั้งสองอย่าง ตอนกดโอนเงินจะโชว์ให้ลูกค้า</p>${[0,1,2].map(i=>{const b=(cfg.banks||[])[i]||{};bankQr[i]=b.qr||'';return `<div class="bkcard"><b>บัญชี ${i+1}</b>${f('bk_b'+i,'ธนาคาร / พร้อมเพย์',b.bank||'','เช่น กสิกร, PromptPay')}${f('bk_n'+i,'ชื่อบัญชี',b.name||'')}${f('bk_no'+i,'เลขบัญชี / เบอร์พร้อมเพย์',b.no||'','','inputmode="numeric"')}<div class="bkup"><img id="bk_img${i}" class="bkth" ${b.qr?`src="${b.qr}"`:'style="display:none"'} alt=""><label class="btn sm">เลือกรูป QR<input type="file" accept="image/*" hidden onchange="bankPick(${i},this)"></label><button class="btn sm" onclick="bankClr(${i})">ลบ QR</button></div></div>`}).join('')}</section>
  <section class="sec"><h3>กำไร</h3><p class="sub">ใส่ราคาทุนแล้วระบบบวกกำไรตามนี้ ปัดขึ้นเป็นบาทเต็ม ไม่มีเศษทศนิยม เช่น ทุน 7 บวก 30% ได้ 9.1 ขาย 10 บาท</p>
  ${f('s_mk','กำไร (%) ของทุกรายการ',cfg.mk,'30','inputmode="decimal"')}</section>
  <section class="sec"><h3>วันหมดอายุ และสำรองข้อมูล</h3><label class="fld"><span class="lbl">เตือนสินค้าใกล้หมดอายุล่วงหน้า (วัน)</span><input id="s_exp" class="inp" inputmode="numeric" value="${cfg.expDays==null?14:cfg.expDays}"></label><p class="sub">ใส่วันหมดอายุได้ตอนรับของเข้า ระบบเตือนในหน้าสินค้าและ LINE ตอนเช้า</p>
@@ -477,7 +492,7 @@ async function testNoti(kind){
 }
 async function saveCfg(){
  const g=i=>$('#'+i).value.trim();
- try{const j=await api({action:'posSaveCfg',cfg:{shop:g('s_shop'),addr:g('s_addr'),tel:g('s_tel'),note:g('s_note'),mk:Number(g('s_mk')),paper:$('#s_paper').value,autoPrint:$('#s_auto').checked,notiStock:$('#s_nst').checked,stockHour:Number($('#s_sth').value),notiSales:$('#s_nsa').checked,salesHour:Number($('#s_sah').value),lowDefault:Number(g('s_low')||0),expDays:Number(g('s_exp')||0)}});cfg=j.cfg;toast('บันทึกตั้งค่าแล้ว');render()}catch(e){$('#perr').textContent=e.message}
+ try{const j=await api({action:'posSaveCfg',cfg:{shop:g('s_shop'),addr:g('s_addr'),tel:g('s_tel'),note:g('s_note'),mk:Number(g('s_mk')),paper:$('#s_paper').value,autoPrint:$('#s_auto').checked,notiStock:$('#s_nst').checked,stockHour:Number($('#s_sth').value),notiSales:$('#s_nsa').checked,salesHour:Number($('#s_sah').value),lowDefault:Number(g('s_low')||0),expDays:Number(g('s_exp')||0),banks:[0,1,2].map(i=>({bank:g('bk_b'+i),name:g('bk_n'+i),no:g('bk_no'+i),qr:bankQr[i]||''}))}});cfg=j.cfg;toast('บันทึกตั้งค่าแล้ว');render()}catch(e){$('#perr').textContent=e.message}
 }
 
 function resetDlg(){
