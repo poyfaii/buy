@@ -1,7 +1,7 @@
 // worker/index.js — หลังบ้านเว็บสั่งซื้อ "แม่ดอนรุ่งเรืองฟู้ดส์" บน Cloudflare Workers + D1
 // - ก่อนกดย้ายข้อมูล: ส่งต่อทุกคำขอ /api ไปที่ Apps Script (Google Sheets) เหมือนเดิม
 // - หลังกดย้ายข้อมูล: ใช้ฐานข้อมูล D1 (ตาราง SQLite) แทน — กดกลับไป Sheets ได้ในหน้าแอดมิน > ตั้งค่า
-const VERSION = 'd1-v30-2026-11-07';
+const VERSION = 'd1-v31-2026-11-09';
 const ST_WAIT = 'รอจัดเตรียมและจัดส่ง', ST_SHIP = 'จัดส่งแล้ว', ST_CANCEL = 'ยกเลิก';
 const ST_UNPAID = 'รอชำระเงิน', ST_PAID = 'ชำระแล้ว';
 const TRACK_DAYS = 3, MAX_ITEMS = 80, SALES_TTL = 60000;
@@ -811,18 +811,20 @@ async function posReport(env, b) {
 const thDate = d => d.slice(8, 10) + '/' + d.slice(5, 7) + '/' + (+d.slice(0, 4) + 543);
 const THM = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 const money0 = n => Math.round(Number(n) || 0).toLocaleString('en-US');
-async function posStockText(env) {
+async function posStockText(env, mode) {
+ mode = mode === 'low' || mode === 'exp' ? mode : 'all';
  const c = await posCfg(env), today = nowStr().slice(0, 10), items = await all(env, 'SELECT name,stock,minStock,cost FROM pos_items WHERE active=1 ORDER BY name');
  const th = i => (i.minStock > 0 ? i.minStock : c.lowDefault || 0);
  const expL = await posExpiryList(env, c.expDays), out = items.filter(i => (i.stock || 0) <= 0), low = items.filter(i => (i.stock || 0) > 0 && th(i) > 0 && i.stock <= th(i));
  const val = items.reduce((t, i) => t + Math.max(0, i.stock || 0) * (i.cost || 0), 0), BAR = '━━━━━━━━━━━━━━', q = n => String(Math.round(n * 100) / 100);
  const build = cap => {
   const sec = (title, list, line) => list.length ? ['', title + ' (' + list.length + ')'].concat(list.slice(0, cap).map(line), list.length > cap ? ['…และอีก ' + (list.length - cap) + ' รายการ'] : []) : [];
-  const r = ['🌅 สต๊อกร้านเช้านี้', thDate(today), BAR];
+  const r = [mode === 'low' ? '⚠️ ของหมด / เหลือน้อย' : mode === 'exp' ? '⏰ สินค้าใกล้หมดอายุ' : '🌅 สต๊อกร้านเช้านี้', thDate(today), BAR];
   const a = sec('❌ หมดแล้ว (ต้องสั่งของ)', out, i => '• ' + i.name), b = sec('⚠️ เหลือน้อย (ถึงเกณฑ์เตือน)', low, i => '• ' + i.name + ' · เหลือ ' + q(i.stock) + ' (เตือนที่ ≤ ' + q(th(i)) + ')');
   const e2 = sec('⏰ ใกล้หมดอายุ / หมดอายุแล้ว', expL, i => '• ' + i.name + ' · ' + (i.left < 0 ? 'หมดอายุแล้ว ' + (-i.left) + ' วัน' : i.left === 0 ? 'หมดอายุวันนี้' : 'อีก ' + i.left + ' วัน') + ' (' + q(i.qty) + ' ' + (i.unit || 'ชิ้น') + ')');
-  const res = r.concat(a, b, e2);
-  res.push('', out.length || low.length || expL.length ? BAR : '✅ ไม่มีสินค้าหมด เหลือน้อย หรือใกล้หมดอายุ', '📦 สินค้าทั้งหมด ' + items.length + ' รายการ · มูลค่าสต๊อก (ตามทุน) ' + money0(val) + ' บาท');
+  const res = r.concat(mode === 'exp' ? [] : a.concat(b), mode === 'low' ? [] : e2), none = (mode === 'exp' ? 0 : out.length + low.length) + (mode === 'low' ? 0 : expL.length) === 0;
+  if (mode === 'all') res.push('', none ? '✅ ไม่มีสินค้าหมด เหลือน้อย หรือใกล้หมดอายุ' : BAR, '📦 สินค้าทั้งหมด ' + items.length + ' รายการ · มูลค่าสต๊อก (ตามทุน) ' + money0(val) + ' บาท');
+  else if (none) res.push('', mode === 'low' ? '✅ ไม่มีสินค้าหมดหรือเหลือน้อย' : '✅ ไม่มีสินค้าใกล้หมดอายุ');
   return res.join('\n');
  };
  for (const cap of [60, 40, 25, 12, 5]) { const t = build(cap); if (t.length <= 4700) return t; }
@@ -848,6 +850,100 @@ async function posNotify(env, b) {
  const kind = b.kind === 'sales' ? 'sales' : 'stock', text = kind === 'sales' ? await posSalesText(env) : await posStockText(env);
  const res = await notifyLine(env, text);
  return { ok: !!(res && res.every(x => x.ok)), sent: !!res, error: res && !res.every(x => x.ok) ? ('LINE ตอบ ' + res.map(x => x.status).join(',')) : undefined };
+}
+
+async function posDebtText(env) {
+ const BAR = '━━━━━━━━━━━━━━', L = (await posCusts(env)).filter(c => c.bal > 0.004).sort((a, b) => b.bal - a.bal);
+ if (!L.length) return ['🧾 ลูกหนี้', thDate(nowStr().slice(0, 10)), BAR, '✅ ไม่มียอดค้างชำระ'].join('\n');
+ const r = ['🧾 ลูกหนี้ค้างชำระ', thDate(nowStr().slice(0, 10)), BAR, 'รวม ' + money0(L.reduce((t, c) => t + c.bal, 0)) + ' บาท · ' + L.length + ' ราย', ''];
+ L.slice(0, 40).forEach(c => r.push('• ' + c.name + ' · ' + money0(c.bal) + ' บาท' + (c.phone ? ' (' + c.phone + ')' : '')));
+ if (L.length > 40) r.push('…และอีก ' + (L.length - 40) + ' ราย');
+ return r.join('\n').slice(0, 4800);
+}
+async function posMonthText(env) {
+ const today = nowStr().slice(0, 10), ym = today.slice(0, 7), BAR = '━━━━━━━━━━━━━━', r = await posReport(env, { from: ym + '-01', to: today });
+ const o = ['📊 สรุปเดือนนี้ (' + THM[+ym.slice(5) - 1] + ' ' + (+ym.slice(0, 4) + 543) + ')', 'ถึงวันที่ ' + thDate(today), BAR,
+  '💰 ยอดขาย ' + money0(r.total) + ' บาท · ' + r.bills + ' บิล', '  เงินสด ' + money0(r.cash) + ' · โอน ' + money0(r.transfer) + (r.credit ? ' · เชื่อ ' + money0(r.credit) : ''),
+  '📈 กำไรขั้นต้น ' + money0(r.profit) + ' บาท (ต้นทุน ' + money0(r.cost) + ')'];
+ if (r.disc) o.push('🏷️ ส่วนลด ' + money0(r.disc) + ' บาท');
+ if (r.returns) o.push('↩️ คืนสินค้า ' + money0(r.returns) + ' บาท');
+ if (r.buys) o.push('📥 ซื้อของเข้า ' + money0(r.buys) + ' บาท');
+ if (r.exp) o.push('🧾 ค่าใช้จ่าย ' + money0(r.exp) + ' บาท', '✅ กำไรสุทธิ ' + money0(r.net) + ' บาท');
+ if (r.top && r.top.length) o.push('', BAR, '🏆 ขายดี (ตามยอดเงิน)', ...r.top.slice(0, 5).map((x, i) => (i + 1) + '. ' + x.name + ' · ' + money0(x.amt) + ' บาท'));
+ if (r.owed > 0.5) o.push('', '🧾 ลูกหนี้ค้างรวม ' + money0(r.owed) + ' บาท');
+ return o.join('\n');
+}
+const LINE_KEYS = { stock: ['สต๊อก', 'สต็อก', 'stock'], sales: ['ยอดขาย', 'ขาย', 'วันนี้', 'sales'], low: ['ของหมด', 'หมด', 'เหลือน้อย', 'low'], exp: ['หมดอายุ', 'ใกล้หมดอายุ', 'exp'], debt: ['ลูกหนี้', 'ค้างจ่าย', 'debt'], month: ['เดือน', 'สรุปเดือน', 'เดือนนี้', 'month'] };
+function lineKey(t) {
+ t = String(t || '').trim().toLowerCase().replace(/\s+/g, '');
+ for (const k of ['exp', 'low', 'month', 'debt', 'stock', 'sales']) if (LINE_KEYS[k].some(x => t === x.toLowerCase() || (k !== 'sales' && t.includes(x.toLowerCase())))) return k;
+ return '';
+}
+async function lineAnswer(env, key) {
+ if (key === 'stock') return posStockText(env, 'all');
+ if (key === 'sales') return posSalesText(env);
+ if (key === 'low') return posStockText(env, 'low');
+ if (key === 'exp') return posStockText(env, 'exp');
+ if (key === 'debt') return posDebtText(env);
+ if (key === 'month') return posMonthText(env);
+ return 'พิมพ์หรือกดเมนู: สต๊อก · ยอดขาย · ของหมด · หมดอายุ · ลูกหนี้ · เดือน';
+}
+async function lineSigOk(env, raw, sig) {
+ if (!env.LINE_SECRET || !sig) return false;
+ const k = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.LINE_SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+ const mac = new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(raw)));
+ let s = ''; for (const b of mac) s += String.fromCharCode(b);
+ const a = btoa(s); if (a.length !== sig.length) return false;
+ let d = 0; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ sig.charCodeAt(i); return d === 0;
+}
+async function lineReply(env, token, text) {
+ try { await fetch('https://api.line.me/v2/bot/message/reply', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + env.LINE_TOKEN }, body: JSON.stringify({ replyToken: token, messages: [{ type: 'text', text: String(text).slice(0, 4900) }] }) }); } catch (e) { /* ข้าม */ }
+}
+/* webhook ของ LINE: กดเมนูในแชต/พิมพ์คำ → ตอบรายงานทันที (ตอบเฉพาะ userId/groupId ที่อยู่ใน LINE_TO) */
+async function lineWebhook(request, env) {
+ if (request.method !== 'POST') return new Response('LINE webhook พร้อมใช้งาน', { status: 200 });
+ if (!env.LINE_SECRET || !env.LINE_TOKEN) return new Response('ยังไม่ได้ตั้ง LINE_SECRET / LINE_TOKEN', { status: 503 });
+ const raw = await request.text();
+ if (!(await lineSigOk(env, raw, request.headers.get('x-line-signature')))) return new Response('bad signature', { status: 401 });
+ let body = {}; try { body = JSON.parse(raw); } catch (e) { return new Response('bad json', { status: 400 }); }
+ const allow = String(env.LINE_TO || '').split(',').map(x => x.trim()).filter(Boolean);
+ for (const ev of (body.events || []).slice(0, 5)) {
+  if (!ev.replyToken || (ev.type !== 'message' && ev.type !== 'postback')) continue;
+  const src = ev.source || {}, ids = [src.userId, src.groupId, src.roomId].filter(Boolean);
+  if (!ids.some(i => allow.includes(i))) { await lineReply(env, ev.replyToken, 'ยังไม่ได้รับสิทธิ์ใช้เมนูร้านนี้\nรหัสของคุณ: ' + (ids[0] || '-') + '\n(ให้เจ้าของร้านเพิ่มรหัสนี้ใน LINE_TO ที่ Cloudflare)'); continue; }
+  let key = '';
+  if (ev.type === 'postback') { const m = /(?:^|&)k=([a-z]+)/.exec(String((ev.postback || {}).data || '')); key = m ? m[1] : ''; }
+  else if (ev.message && ev.message.type === 'text') { if (/^(id|รหัส)$/i.test(ev.message.text.trim())) { await lineReply(env, ev.replyToken, 'รหัสของคุณ: ' + ids[0]); continue; } key = lineKey(ev.message.text); }
+  else continue;
+  try { await ensureSchema(env); await lineReply(env, ev.replyToken, LINE_KEYS[key] ? await lineAnswer(env, key) : await lineAnswer(env, '')); }
+  catch (e) { await lineReply(env, ev.replyToken, 'ขออภัย ดึงข้อมูลไม่สำเร็จ ลองใหม่อีกครั้ง'); }
+ }
+ return new Response('ok', { status: 200 });
+}
+/* ติดตั้งเมนูรูปภาพ (Rich menu) ใน LINE: สร้าง → อัปโหลดรูป → ตั้งเป็นค่าเริ่มต้น → ลบเมนูเก่าชื่อเดียวกัน */
+async function posLineMenu(env, b) {
+ if (!env.LINE_TOKEN) throw fail('ยังไม่ได้ตั้ง LINE_TOKEN ใน Cloudflare');
+ const origin = str(b.origin).trim().replace(/\/+$/, '');
+ if (!/^https:\/\/[A-Za-z0-9.\-:]+$/.test(origin)) throw fail('ที่อยู่เว็บไม่ถูกต้อง (ต้องเป็น https)');
+ const H = { authorization: 'Bearer ' + env.LINE_TOKEN }, J = { ...H, 'content-type': 'application/json' }, NAME = 'POS-menu-v1';
+ const area = (x, y, w, h, action) => ({ bounds: { x, y, width: w, height: h }, action });
+ const pb = k => ({ type: 'postback', data: 'k=' + k });
+ const menu = { size: { width: 2500, height: 1686 }, selected: true, name: NAME, chatBarText: 'เมนูร้าน', areas: [
+  area(0, 0, 833, 720, pb('stock')), area(833, 0, 834, 720, pb('sales')), area(1667, 0, 833, 720, pb('low')),
+  area(0, 720, 833, 660, pb('exp')), area(833, 720, 834, 660, pb('debt')), area(1667, 720, 833, 660, pb('month')),
+  area(0, 1380, 2500, 306, { type: 'uri', uri: origin + '/' })] };
+ const img = await (env.ASSETS ? env.ASSETS.fetch(new Request(origin + '/richmenu.jpg')) : null);
+ if (!img || !img.ok) throw fail('ไม่พบไฟล์รูปเมนู richmenu.jpg บนเว็บ (ต้องอัปโหลดไฟล์ richmenu.jpg ขึ้น GitHub ด้วย)');
+ const bytes = await img.arrayBuffer();
+ if (bytes.byteLength > 1000000) throw fail('รูปเมนูใหญ่เกิน 1MB');
+ const say = async (r, what) => { if (!r.ok) { let t = ''; try { t = (await r.text()).slice(0, 200); } catch (e) { /* ข้าม */ } throw fail('LINE ตอบข้อผิดพลาดตอน' + what + ' (' + r.status + ') ' + t); } return r; };
+ const cr = await (await say(await fetch('https://api.line.me/v2/bot/richmenu', { method: 'POST', headers: J, body: JSON.stringify(menu) }), 'สร้างเมนู')).json();
+ const id = cr.richMenuId;
+ await say(await fetch('https://api-data.line.me/v2/bot/richmenu/' + id + '/content', { method: 'POST', headers: { ...H, 'content-type': 'image/jpeg' }, body: bytes }), 'อัปโหลดรูป');
+ await say(await fetch('https://api.line.me/v2/bot/user/all/richmenu/' + id, { method: 'POST', headers: H }), 'ตั้งเป็นเมนูหลัก');
+ let removed = 0;
+ try { const ls = await (await fetch('https://api.line.me/v2/bot/richmenu/list', { headers: H })).json(); for (const m of (ls.richmenus || [])) if (m.richMenuId !== id && m.name === NAME) { const d = await fetch('https://api.line.me/v2/bot/richmenu/' + m.richMenuId, { method: 'DELETE', headers: H }); if (d.ok) removed++; } } catch (e) { /* ข้าม */ }
+ return { ok: true, richMenuId: id, removed, webhook: origin + '/api/line', secretSet: !!env.LINE_SECRET };
 }
 async function posReset(env, b) {
  if (str(b.confirm).trim() !== 'ล้างข้อมูล') throw fail('ต้องพิมพ์คำว่า ล้างข้อมูล เพื่อยืนยัน');
@@ -985,6 +1081,7 @@ async function posApi(env, action, b) {
  switch (action) {
   case 'posInit': return posInit(env);
   case 'posSaveCfg': return posSaveCfg(env, b);
+  case 'posLineMenu': return posLineMenu(env, b);
   case 'posSaveItem': return posSaveItem(env, b);
   case 'posDelete': return posDelete(env, b);
   case 'posReceive': return posReceive(env, b);
@@ -1018,6 +1115,7 @@ export default {
  async fetch(request, env, ctx) {
   const url = new URL(request.url);
   if (!url.pathname.startsWith('/api')) return env.ASSETS ? env.ASSETS.fetch(request) : new Response('Not found', { status: 404 });
+  if (url.pathname === '/api/line') { try { return await lineWebhook(request, env); } catch (e) { return new Response('error', { status: 500 }); } }
   try {
    if (url.pathname.startsWith('/api/img/')) {
     if (!env.DB) return new Response('Not found', { status: 404 });

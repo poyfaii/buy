@@ -506,6 +506,9 @@ function setView(){
  <label class="fld"><span class="lbl">เตือนเมื่อสต๊อกเหลือไม่เกิน (ใช้กับสินค้าที่ไม่ได้ตั้งเกณฑ์เอง ใส่ 0 = ปิด)</span><input id="s_low" class="inp" inputmode="decimal" value="${cfg.lowDefault||0}"></label>
  <div class="acts2" style="margin-top:8px"><button class="btn" onclick="testNoti('stock')">ส่งสรุปสต๊อกตอนนี้</button><button class="btn" onclick="testNoti('sales')">ส่งสรุปยอดขายตอนนี้</button></div>
  <div class="note2">ต้องตั้งให้ระบบรันทุกชั่วโมงใน Cloudflare (ดูในคู่มือ) ถึงจะส่งตามเวลาที่เลือก กดปุ่มทดสอบได้เลยโดยไม่ต้องรอ เกณฑ์เตือนของสินค้าแต่ละชิ้นตั้งได้ในหน้าแก้ไขสินค้า (ช่อง “เตือนเมื่อเหลือไม่เกิน”)</div></section>
+ <section class="sec"><h3>เมนูรูปภาพในไลน์</h3><p class="sub">ปุ่มลัดในแชต LINE ของร้าน กดแล้วบอทตอบรายงานทันที: สต๊อก · ยอดขายวันนี้ · ของหมด · ใกล้หมดอายุ · ลูกหนี้ · สรุปเดือน และปุ่มเปิดระบบ POS</p>
+ <ol class="sub" style="padding-left:20px;line-height:1.7"><li>ที่ Cloudflare เพิ่ม Secret ชื่อ <b>LINE_SECRET</b> (Channel secret จาก LINE Developers)</li><li>ที่ LINE Developers ใส่ Webhook URL: <b id="whu">${location.origin}/api/line</b> แล้วเปิด Use webhook</li><li>กดปุ่มด้านล่างเพื่อติดตั้งเมนู</li></ol>
+ <div class="acts2"><button class="btn" onclick="navigator.clipboard&&navigator.clipboard.writeText(location.origin+'/api/line').then(()=>toast('คัดลอก Webhook URL แล้ว'))">คัดลอก Webhook URL</button><button class="btn pri" id="lmb" onclick="lineMenuSetup()">ติดตั้ง/อัปเดตเมนูใน LINE</button></div><div id="lmr" class="sub"></div></section>
  <section class="sec"><h3>เครื่องพิมพ์ใบเสร็จ</h3><p class="sub">เลือกขนาดกระดาษให้ตรงกับเครื่อง แล้วกด “พิมพ์ใบเสร็จ” ในหน้าบิล ระบบจะส่งเข้าเครื่องพิมพ์ที่เลือกในหน้าต่างพิมพ์</p>
  <label class="fld"><span class="lbl">ขนาดกระดาษ</span><select id="s_paper" class="inp"><option value="80"${cfg.paper==='80'?' selected':''}>เครื่องพิมพ์สลิป 80 มม. (ทั่วไป)</option><option value="58"${cfg.paper==='58'?' selected':''}>เครื่องพิมพ์สลิป 58 มม.</option><option value="a4"${cfg.paper==='a4'?' selected':''}>A4 / เครื่องพิมพ์ทั่วไป</option></select></label>
  <label class="chk" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="s_auto"${cfg.autoPrint?' checked':''}> <span>พิมพ์ใบเสร็จอัตโนมัติหลังบันทึกบิล</span></label>
@@ -516,6 +519,12 @@ function setView(){
 const hourOpts=h=>Array.from({length:24},(_,i)=>`<option value="${i}"${i===Number(h)?' selected':''}>${String(i).padStart(2,'0')}:00 น.</option>`).join('');
 async function testNoti(kind){
  try{const j=await api({action:'posNotify',kind});toast(j.ok?'ส่งเข้า LINE แล้ว':(j.error||'ส่งไม่สำเร็จ'))}catch(e){toast(e.message)}
+}
+async function lineMenuSetup(){
+ const b=$('#lmb'),r=$('#lmr');b.disabled=true;b.textContent='กำลังติดตั้ง…';r.textContent='';
+ try{const j=await api({action:'posLineMenu',origin:location.origin});r.innerHTML=`✅ ติดตั้งเมนูแล้ว${j.removed?` (ลบเมนูเก่า ${j.removed})`:''}. เปิดแชต LINE ของร้านดูได้เลย${j.secretSet?'':'<br>⚠️ ยังไม่ได้ตั้ง LINE_SECRET ปุ่มจะยังไม่ตอบ'}`}
+ catch(e){r.innerHTML='❌ '+esc(e.message)}
+ b.disabled=false;b.textContent='ติดตั้ง/อัปเดตเมนูใน LINE'
 }
 async function saveCfg(){
  const g=i=>$('#'+i).value.trim();
