@@ -925,9 +925,9 @@ async function posLineMenu(env, b) {
  if (!env.LINE_TOKEN) throw fail('ยังไม่ได้ตั้ง LINE_TOKEN ใน Cloudflare');
  const origin = str(b.origin).trim().replace(/\/+$/, '');
  if (!/^https:\/\/[A-Za-z0-9.\-:]+$/.test(origin)) throw fail('ที่อยู่เว็บไม่ถูกต้อง (ต้องเป็น https)');
- const H = { authorization: 'Bearer ' + env.LINE_TOKEN }, J = { ...H, 'content-type': 'application/json' }, NAME = 'POS-menu-v1';
+ const H = { authorization: 'Bearer ' + env.LINE_TOKEN }, J = { ...H, 'content-type': 'application/json' }, NAME = 'POS-menu-v2';
  const area = (x, y, w, h, action) => ({ bounds: { x, y, width: w, height: h }, action });
- const pb = k => ({ type: 'postback', data: 'k=' + k });
+ const pb = k => ({ type: 'message', label: ({ stock: 'สต๊อก', sales: 'ยอดขาย', low: 'ของหมด', exp: 'ใกล้หมดอายุ', debt: 'ลูกหนี้', month: 'สรุปเดือน' })[k], text: ({ stock: 'สต๊อก', sales: 'ยอดขาย', low: 'ของหมด', exp: 'ใกล้หมดอายุ', debt: 'ลูกหนี้', month: 'สรุปเดือน' })[k] });
  const menu = { size: { width: 2500, height: 1686 }, selected: true, name: NAME, chatBarText: 'เมนูร้าน', areas: [
   area(0, 0, 833, 720, pb('stock')), area(833, 0, 834, 720, pb('sales')), area(1667, 0, 833, 720, pb('low')),
   area(0, 720, 833, 660, pb('exp')), area(833, 720, 834, 660, pb('debt')), area(1667, 720, 833, 660, pb('month')),
@@ -942,7 +942,7 @@ async function posLineMenu(env, b) {
  await say(await fetch('https://api-data.line.me/v2/bot/richmenu/' + id + '/content', { method: 'POST', headers: { ...H, 'content-type': 'image/jpeg' }, body: bytes }), 'อัปโหลดรูป');
  await say(await fetch('https://api.line.me/v2/bot/user/all/richmenu/' + id, { method: 'POST', headers: H }), 'ตั้งเป็นเมนูหลัก');
  let removed = 0;
- try { const ls = await (await fetch('https://api.line.me/v2/bot/richmenu/list', { headers: H })).json(); for (const m of (ls.richmenus || [])) if (m.richMenuId !== id && m.name === NAME) { const d = await fetch('https://api.line.me/v2/bot/richmenu/' + m.richMenuId, { method: 'DELETE', headers: H }); if (d.ok) removed++; } } catch (e) { /* ข้าม */ }
+ try { const ls = await (await fetch('https://api.line.me/v2/bot/richmenu/list', { headers: H })).json(); for (const m of (ls.richmenus || [])) if (m.richMenuId !== id && (m.name === NAME || m.name === 'POS-menu-v1')) { const d = await fetch('https://api.line.me/v2/bot/richmenu/' + m.richMenuId, { method: 'DELETE', headers: H }); if (d.ok) removed++; } } catch (e) { /* ข้าม */ }
  return { ok: true, richMenuId: id, removed, webhook: origin + '/api/line', secretSet: !!env.LINE_SECRET };
 }
 async function posReset(env, b) {
