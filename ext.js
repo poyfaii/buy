@@ -66,14 +66,14 @@ function sellExtras(){
 
 /* ----- หมวดหมู่ / ผู้ขาย / ปุ่มลัด ในฟอร์มสินค้า ----- */
 function catFields(x){
- return `<div class="row2"><label class="fld"><span class="lbl">หมวดหมู่</span><input id="f_cat" class="inp" list="dl_cat" value="${esc(x.cat||'')}" placeholder="เช่น ขนม เครื่องดื่ม"><datalist id="dl_cat">${allCats().map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>
+ return `<div class="row2"><label class="fld"><span class="lbl">หมวดหมู่</span><input id="f_cat" class="inp" list="dl_cat" value="${esc(x.cat||'')}" placeholder="จัดอัตโนมัติจากชื่อ" ${x.cat?'data-t="1"':''} oninput="this.dataset.t=1;var h=document.getElementById('f_cath');if(h)h.textContent=''"><datalist id="dl_cat">${allCats().map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label>
  <label class="fld"><span class="lbl">ผู้ขาย / ร้านที่สั่ง</span><input id="f_sup" class="inp" list="dl_sup" value="${esc(x.sup||'')}" placeholder="ไม่บังคับ"><datalist id="dl_sup">${allSups().map(c=>`<option value="${esc(c)}">`).join('')}</datalist></label></div>
  <label class="chk" style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" id="f_fav" ${x.fav?'checked':''}> <span>★ ปักเป็นปุ่มลัดบนหน้าขาย (ของที่ขายบ่อย หรือไม่มีบาร์โค้ด)</span></label>`;
 }
 function itemsTools(){
- const cs=allCats(),has=items.some(i=>!i.cat),chip=(k,t)=>`<button class="cat" aria-pressed="${icat===k}" onclick="setCat(decodeURIComponent('${encodeURIComponent(k)}'))">${esc(t)}</button>`;
- return `${cs.length?`<div class="chips" aria-label="หมวดหมู่">${chip('','ทุกหมวด')}${cs.map(c=>`<button class="cat" style="--tc:${catColor(c)}" aria-pressed="${icat===c}" onclick="setCat(decodeURIComponent('${encodeURIComponent(c)}'))"><i class="dot"></i>${esc(c)}</button>`).join('')}${has?chip('ไม่ระบุหมวด','ไม่ระบุหมวด'):''}</div>`:''}
- <div class="chips"><button class="cat tl t-cnt" onclick="countDlg()"><i></i>ตรวจนับสต๊อก</button><button class="cat tl t-po" onclick="poDlg()"><i></i>ใบสั่งซื้อ</button><button class="cat tl t-exp" onclick="expDlg()"><i></i>ใกล้หมดอายุ (${expL.length})</button></div>`;
+ const cs=allCats(),unc=items.filter(i=>!i.cat).length,chip=(k,t)=>`<button class="cat" aria-pressed="${icat===k}" onclick="setCat(decodeURIComponent('${encodeURIComponent(k)}'))">${esc(t)}</button>`;
+ return `${cs.length?`<div class="chips hs" aria-label="หมวดหมู่">${chip('','ทุกหมวด')}${cs.map(c=>`<button class="cat" style="--tc:${catColor(c)}" aria-pressed="${icat===c}" onclick="setCat(decodeURIComponent('${encodeURIComponent(c)}'))"><i class="dot"></i>${esc(c)}</button>`).join('')}${unc?chip('ไม่ระบุหมวด','ไม่ระบุหมวด'):''}</div>`:''}
+ <div class="chips hs"><button class="cat tl t-cnt" onclick="countDlg()"><i></i>ตรวจนับสต๊อก</button><button class="cat tl t-po" onclick="poDlg()"><i></i>ใบสั่งซื้อ</button><button class="cat tl t-exp" onclick="expDlg()"><i></i>ใกล้หมดอายุ (${expL.length})</button><button class="cat" onclick="lbDlg()">พิมพ์ป้ายบาร์โค้ด</button><button class="cat" onclick="exportItems()">ส่งออก CSV</button><button class="cat" onclick="autoCatAll()">จัดหมวดอัตโนมัติ${unc?` (${unc})`:''}</button></div>`;
 }
 function setCat(c){icat=c;render()}
 
@@ -304,3 +304,26 @@ async function setFx(v){await saveLook({fx:v});render()}
 
 (function(){const o=window.render;if(typeof o==='function')window.render=function(){const r=o.apply(this,arguments);try{festDecor()}catch(x){}return r}})();
 (function(){const o=window.showReceipt;if(typeof o==='function')window.showReceipt=function(s,fresh){const r=o.apply(this,arguments);try{const f=festInfo(),d=document.querySelector('.dlg');if(fresh&&f&&d)d.insertAdjacentHTML('afterbegin',`<div class="fest"><span class="fe">${f.e}</span><b>${f.m}</b><span class="fe">${f.e}</span></div>`)}catch(x){}return r}})();
+
+/* ----- จัดหมวดอัตโนมัติจากชื่อสินค้า (กฎชุดเดียวกับฝั่งเซิร์ฟเวอร์) ----- */
+const CATRULES=[["เหล้า/บุหรี่",["บุหรี่","เบียร์","สุรา","เหล้า","ไวน์","วิสกี้","ยาเส้น","มวนยา","beer","whisky","wine"]],["ยา/สุขภาพ",["ยาแก้","ยาดม","ยาหม่อง","พาราเซตามอล","พลาสเตอร์","แอลกอฮอล์","วิตามิน","ยาธาตุ","ยาลม","ยาอม","ยาน้ำ","เกลือแร่","ผ้าก๊อซ","เจลล้างมือ","หน้ากากอนามัย","ไทเลนอล","ซาลอนพาส","ยาสามัญ","ยาทา"]],["ของใช้ส่วนตัว",["ยาสีฟัน","แปรงสีฟัน","แชมพู","ยาสระผม","สบู่","ครีมอาบน้ำ","โลชั่น","ผ้าอนามัย","ผ้าอ้อม","โรลออน","มีดโกน","สำลี","โฟมล้างหน้า","น้ำยาบ้วนปาก","แป้งเด็ก","แป้งฝุ่น","ครีมนวด","ครีมกันแดด","ลิปสติก","ลิปมัน","ทิชชู่เปียก","ที่ตัดเล็บ","ไหมขัดฟัน","ย้อมผม","น้ำหอม","เจลอาบน้ำ","ผ้าเย็น"]],["ของใช้ในบ้าน",["ผงซักฟอก","ผงซัก","น้ำยาล้างจาน","น้ำยาปรับผ้านุ่ม","น้ำยาถูพื้น","น้ำยาซักผ้า","น้ำยาล้างห้องน้ำ","ถุงขยะ","ทิชชู่","กระดาษชำระ","กระดาษเช็ด","ไฟแช็ก","ถ่านไฟฉาย","แบตเตอรี่","ถ่าน","ธูป","เทียน","ไม้ขีด","ฟองน้ำ","สก๊อตช์","ยาฆ่ายุง","ยาจุดกันยุง","ไม้กวาด","ถุงพลาสติก","ถุงร้อน","ถุงหิ้ว","กล่องโฟม","แก้วพลาสติก","หลอดไฟ","ปลั๊ก","ผ้าเช็ด","น้ำยา"]],["สัตว์เลี้ยง",["อาหารสุนัข","อาหารแมว","อาหารสัตว์","อาหารปลา","เพ็ดดิกรี","วิสกัส","ทรายแมว"]],["เครื่องเขียน",["ปากกา","ดินสอ","สมุด","ยางลบ","เทปใส","กรรไกร","ไม้บรรทัด","ซองจดหมาย"]],["ของแช่แข็ง",["ไอศกรีม","ไอติม","วอลล์","แช่แข็ง","ลูกชิ้น","ไส้กรอก","นักเก็ต","เฟรนช์ฟราย","เกี๊ยว","ขนมจีบ","ซาลาเปา"]],["เครื่องปรุง",["น้ำปลา","ซีอิ๊ว","ซอส","น้ำตาล","เกลือ","ผงชูรส","รสดี","น้ำมัน","กะทิ","น้ำพริก","น้ำส้มสายชู","ผงปรุง","มายองเนส","ครีมเทียม","นมข้น","พริกป่น","พริกไทย","ซุปก้อน","เครื่องปรุง","แป้ง","ผงฟู","ปลาร้า","กะปิ","ผงกะหรี่","น้ำจิ้ม","เต้าเจี้ยว","ผงนัว","คนอร์"]],["ขนม",["ขนม","เลย์","ปาปริก้า","ทาโร่","มันฝรั่ง","ช็อกโกแลต","ช็อกโก","ลูกอม","หมากฝรั่ง","เยลลี่","คุกกี้","บิสกิต","เวเฟอร์","ข้าวเกรียบ","สาหร่าย","ป๊อปคอร์น","เค้ก","ลูกชุบ","โดนัท","ถั่วอบ","ขบเคี้ยว","แครกเกอร์","ท็อฟฟี่","ทวิสตี้","จัมโบ้","ฮานามิ","โอรีโอ","ปอกกี้","พอคกี้","สแน็ค","snack","chocolate"]],["นม/โยเกิร์ต",["นม","โยเกิร์ต","ดัชมิลล์","ดูเม็กซ์","โฟร์โมสต์","เมจิ","ไวตามิลค์","ยาคูลท์","ดัชชี่","milk","yogurt"]],["เครื่องดื่ม",["น้ำดื่ม","น้ำแร่","น้ำเปล่า","โซดา","โค้ก","เป๊ปซี่","เป็ปซี่","สไปรท์","แฟนต้า","เซเว่นอัพ","มิรินด้า","น้ำอัดลม","น้ำส้ม","น้ำผลไม้","น้ำมะพร้าว","น้ำเก๊กฮวย","น้ำหวาน","น้ำสมุนไพร","น้ำองุ่น","น้ำแอปเปิ้ล","ชาเขียว","ชานม","ชาไทย","ชาดำ","ชามะนาว","กาแฟ","เนสกาแฟ","โกโก้","ไมโล","โอวัลติน","ลิปตัน","โออิชิ","อิชิตัน","กระทิงแดง","เอ็ม150","เอ็ม 150","m-150","คาราบาว","ลิโพ","เรดบูล","สปอนเซอร์","เกเตอเรด","เครื่องดื่ม","แดงโซดา","คริสตัล","cocomax","coke","pepsi","sprite","fanta","water","coffee","tea"]],["อาหารแห้ง",["มาม่า","ไวไว","ยำยำ","บะหมี่","โจ๊ก","ข้าวสาร","ข้าว","เส้น","ปลากระป๋อง","ซาร์ดีน","แมคเคอเรล","กระป๋อง","ถั่ว","งาดำ","งาขาว","สาคู","ทูน่า","ธัญพืช","ซีเรียล","ปลาแห้ง","กุ้งแห้ง","พาสต้า","สปาเก็ตตี้","มักกะโรนี","ข้าวโอ๊ต","คอร์นเฟลก","ลูกเดือย","เห็ดแห้ง","หมูหยอง","ปลาเส้น","เม็ดบัว"]],["ของสด",["ไข่","ผัก","เนื้อ","หมู","ไก่","ปลา","กุ้ง","น้ำแข็ง","ผลไม้","เต้าหู้","มะนาว","หอม","กระเทียม","พริก","มะเขือ","เห็ด","กล้วย","ส้ม","แอปเปิ้ล","มะม่วง","แตงโม","ข้าวโพด","ขิง","ข่า","ตะไคร้","ใบเตย","กะเพรา","ถั่วงอก","หอย","ปลาหมึก"]]];
+function guessCat(n){n=String(n||'').toLowerCase();for(const r of CATRULES)for(const k of r[1])if(n.includes(k))return r[0];return /^น้ำ/.test(n)?'เครื่องดื่ม':'อื่นๆ'}
+
+function catAuto(){
+ const c=$('#f_cat'),n=$('#f_nm');if(!c||!n||c.dataset.t==='1')return;
+ const v=n.value.trim(),g=v.length>=2?guessCat(v):'';c.value=g;
+ let h=$('#f_cath');if(!h){h=document.createElement('span');h.id='f_cath';h.className='hint';c.parentNode.appendChild(h)}
+ h.textContent=g?'จัดให้อัตโนมัติจากชื่อ (พิมพ์เปลี่ยนเองได้)':'';
+}
+(function(){
+ for(const k of ['newItemDlg']){const o=window[k];if(typeof o==='function')window[k]=function(){const r=o.apply(this,arguments);setTimeout(catAuto,0);return r}}
+})();
+let autoCatTried=false;
+async function autoCatBoot(){
+ if(autoCatTried)return;autoCatTried=true;
+ if(!items.some(i=>!i.cat))return;
+ try{const j=await api({action:'posAutoCat'});if(j.updated){const p=await api({action:'posInit'});items=p.items;render()}}catch(e){}
+}
+async function autoCatAll(){
+ try{const j=await api({action:'posAutoCat',again:true});const p=await api({action:'posInit'});items=p.items;render();toast(j.updated?`จัดหมวดให้ ${j.updated} รายการแล้ว`:'ไม่มีรายการที่ต้องจัดหมวด')}catch(e){toast(e.message)}
+}

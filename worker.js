@@ -1,7 +1,7 @@
 // worker/index.js — หลังบ้านเว็บสั่งซื้อ "แม่ดอนรุ่งเรืองฟู้ดส์" บน Cloudflare Workers + D1
 // - ก่อนกดย้ายข้อมูล: ส่งต่อทุกคำขอ /api ไปที่ Apps Script (Google Sheets) เหมือนเดิม
 // - หลังกดย้ายข้อมูล: ใช้ฐานข้อมูล D1 (ตาราง SQLite) แทน — กดกลับไป Sheets ได้ในหน้าแอดมิน > ตั้งค่า
-const VERSION = 'd1-v31-2026-11-09';
+const VERSION = 'd1-v32-2026-11-13';
 const ST_WAIT = 'รอจัดเตรียมและจัดส่ง', ST_SHIP = 'จัดส่งแล้ว', ST_CANCEL = 'ยกเลิก';
 const ST_UNPAID = 'รอชำระเงิน', ST_PAID = 'ชำระแล้ว';
 const TRACK_DAYS = 3, MAX_ITEMS = 80, SALES_TTL = 60000;
@@ -665,7 +665,7 @@ async function proxy(env, request, url, text) {
 const POS_CFG0 = { shop: '', addr: '', tel: '', mk: 30, note: 'ขอบคุณที่อุดหนุน', paper: '80', autoPrint: false, notiStock: true, stockHour: 8, notiSales: true, salesHour: 20, lowDefault: 0, expDays: 14, banks: [], theme: '', festMode: 'auto', festAdj: {}, fx: 'on' };
 const r2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const posNum = (v, name, min = 0, max = 1e9) => { const n = Number(v); if (!isFinite(n) || n < min || n > max) throw fail(name + ' ไม่ถูกต้อง'); return n; };
-const posIt = r => r && ({ id: r.id, barcode: r.barcode || '', name: r.name, unit: r.unit || '', cost: r.cost || 0, price: r.price || 0, maxPrice: r.maxPrice || 0, mk: r.mk == null ? '' : r.mk, stock: r.stock || 0, minStock: r.minStock || 0, cat: r.cat || '', fav: r.fav ? 1 : 0, sup: r.sup || '' });
+const posIt = r => r && ({ id: r.id, barcode: r.barcode || '', name: r.name, unit: r.unit || '', cost: r.cost || 0, price: r.price || 0, maxPrice: r.maxPrice || 0, mk: r.mk == null ? '' : r.mk, stock: r.stock || 0, minStock: r.minStock || 0, cat: r.cat || '', fav: r.fav ? 1 : 0, sup: r.sup || '', ts: r.updatedAt || r.createdAt || '' });
 async function posCfg(env) { let c = {}; try { c = JSON.parse((await metaGet(env, 'pos.cfg')) || '{}'); } catch (e) { /* ใช้ค่าเริ่มต้น */ } return { ...POS_CFG0, ...c }; }
 async function posSaveCfg(env, b) {
  const c = b.cfg || {}, old = await posCfg(env), FK = ['ny', 'cny', 'val', 'song', 'mom', 'loy', 'dad', 'xmas'], o = {
@@ -688,6 +688,8 @@ async function posInit(env) {
  const cfg = await posCfg(env), td = nowStr().slice(0, 10), tr = await one(env, "SELECT COALESCE(SUM(total),0) t, COALESCE(SUM(cost),0) c, COALESCE(SUM(CASE WHEN COALESCE(refNo,'')='' THEN 1 ELSE 0 END),0) n FROM pos_sales WHERE day=? AND status='ปกติ'", td);
  return { ok: true, items, cfg, custs: await posCusts(env), exp: await posExpiryList(env, cfg.expDays), today: { total: r2(tr.t), profit: r2(tr.t - tr.c), bills: tr.n }, version: VERSION };
 }
+const CATRULES=[["เหล้า/บุหรี่",["บุหรี่","เบียร์","สุรา","เหล้า","ไวน์","วิสกี้","ยาเส้น","มวนยา","beer","whisky","wine"]],["ยา/สุขภาพ",["ยาแก้","ยาดม","ยาหม่อง","พาราเซตามอล","พลาสเตอร์","แอลกอฮอล์","วิตามิน","ยาธาตุ","ยาลม","ยาอม","ยาน้ำ","เกลือแร่","ผ้าก๊อซ","เจลล้างมือ","หน้ากากอนามัย","ไทเลนอล","ซาลอนพาส","ยาสามัญ","ยาทา"]],["ของใช้ส่วนตัว",["ยาสีฟัน","แปรงสีฟัน","แชมพู","ยาสระผม","สบู่","ครีมอาบน้ำ","โลชั่น","ผ้าอนามัย","ผ้าอ้อม","โรลออน","มีดโกน","สำลี","โฟมล้างหน้า","น้ำยาบ้วนปาก","แป้งเด็ก","แป้งฝุ่น","ครีมนวด","ครีมกันแดด","ลิปสติก","ลิปมัน","ทิชชู่เปียก","ที่ตัดเล็บ","ไหมขัดฟัน","ย้อมผม","น้ำหอม","เจลอาบน้ำ","ผ้าเย็น"]],["ของใช้ในบ้าน",["ผงซักฟอก","ผงซัก","น้ำยาล้างจาน","น้ำยาปรับผ้านุ่ม","น้ำยาถูพื้น","น้ำยาซักผ้า","น้ำยาล้างห้องน้ำ","ถุงขยะ","ทิชชู่","กระดาษชำระ","กระดาษเช็ด","ไฟแช็ก","ถ่านไฟฉาย","แบตเตอรี่","ถ่าน","ธูป","เทียน","ไม้ขีด","ฟองน้ำ","สก๊อตช์","ยาฆ่ายุง","ยาจุดกันยุง","ไม้กวาด","ถุงพลาสติก","ถุงร้อน","ถุงหิ้ว","กล่องโฟม","แก้วพลาสติก","หลอดไฟ","ปลั๊ก","ผ้าเช็ด","น้ำยา"]],["สัตว์เลี้ยง",["อาหารสุนัข","อาหารแมว","อาหารสัตว์","อาหารปลา","เพ็ดดิกรี","วิสกัส","ทรายแมว"]],["เครื่องเขียน",["ปากกา","ดินสอ","สมุด","ยางลบ","เทปใส","กรรไกร","ไม้บรรทัด","ซองจดหมาย"]],["ของแช่แข็ง",["ไอศกรีม","ไอติม","วอลล์","แช่แข็ง","ลูกชิ้น","ไส้กรอก","นักเก็ต","เฟรนช์ฟราย","เกี๊ยว","ขนมจีบ","ซาลาเปา"]],["เครื่องปรุง",["น้ำปลา","ซีอิ๊ว","ซอส","น้ำตาล","เกลือ","ผงชูรส","รสดี","น้ำมัน","กะทิ","น้ำพริก","น้ำส้มสายชู","ผงปรุง","มายองเนส","ครีมเทียม","นมข้น","พริกป่น","พริกไทย","ซุปก้อน","เครื่องปรุง","แป้ง","ผงฟู","ปลาร้า","กะปิ","ผงกะหรี่","น้ำจิ้ม","เต้าเจี้ยว","ผงนัว","คนอร์"]],["ขนม",["ขนม","เลย์","ปาปริก้า","ทาโร่","มันฝรั่ง","ช็อกโกแลต","ช็อกโก","ลูกอม","หมากฝรั่ง","เยลลี่","คุกกี้","บิสกิต","เวเฟอร์","ข้าวเกรียบ","สาหร่าย","ป๊อปคอร์น","เค้ก","ลูกชุบ","โดนัท","ถั่วอบ","ขบเคี้ยว","แครกเกอร์","ท็อฟฟี่","ทวิสตี้","จัมโบ้","ฮานามิ","โอรีโอ","ปอกกี้","พอคกี้","สแน็ค","snack","chocolate"]],["นม/โยเกิร์ต",["นม","โยเกิร์ต","ดัชมิลล์","ดูเม็กซ์","โฟร์โมสต์","เมจิ","ไวตามิลค์","ยาคูลท์","ดัชชี่","milk","yogurt"]],["เครื่องดื่ม",["น้ำดื่ม","น้ำแร่","น้ำเปล่า","โซดา","โค้ก","เป๊ปซี่","เป็ปซี่","สไปรท์","แฟนต้า","เซเว่นอัพ","มิรินด้า","น้ำอัดลม","น้ำส้ม","น้ำผลไม้","น้ำมะพร้าว","น้ำเก๊กฮวย","น้ำหวาน","น้ำสมุนไพร","น้ำองุ่น","น้ำแอปเปิ้ล","ชาเขียว","ชานม","ชาไทย","ชาดำ","ชามะนาว","กาแฟ","เนสกาแฟ","โกโก้","ไมโล","โอวัลติน","ลิปตัน","โออิชิ","อิชิตัน","กระทิงแดง","เอ็ม150","เอ็ม 150","m-150","คาราบาว","ลิโพ","เรดบูล","สปอนเซอร์","เกเตอเรด","เครื่องดื่ม","แดงโซดา","คริสตัล","cocomax","coke","pepsi","sprite","fanta","water","coffee","tea"]],["อาหารแห้ง",["มาม่า","ไวไว","ยำยำ","บะหมี่","โจ๊ก","ข้าวสาร","ข้าว","เส้น","ปลากระป๋อง","ซาร์ดีน","แมคเคอเรล","กระป๋อง","ถั่ว","งาดำ","งาขาว","สาคู","ทูน่า","ธัญพืช","ซีเรียล","ปลาแห้ง","กุ้งแห้ง","พาสต้า","สปาเก็ตตี้","มักกะโรนี","ข้าวโอ๊ต","คอร์นเฟลก","ลูกเดือย","เห็ดแห้ง","หมูหยอง","ปลาเส้น","เม็ดบัว"]],["ของสด",["ไข่","ผัก","เนื้อ","หมู","ไก่","ปลา","กุ้ง","น้ำแข็ง","ผลไม้","เต้าหู้","มะนาว","หอม","กระเทียม","พริก","มะเขือ","เห็ด","กล้วย","ส้ม","แอปเปิ้ล","มะม่วง","แตงโม","ข้าวโพด","ขิง","ข่า","ตะไคร้","ใบเตย","กะเพรา","ถั่วงอก","หอย","ปลาหมึก"]]];
+function guessCat(n){n=String(n||'').toLowerCase();for(const r of CATRULES)for(const k of r[1])if(n.includes(k))return r[0];return /^น้ำ/.test(n)?'เครื่องดื่ม':'อื่นๆ'}
 async function posSaveItem(env, b) {
  const x = b.item || {}, t = nowStr();
  const name = str(x.name).trim().slice(0, 120); if (!name) throw fail('กรุณากรอกชื่อสินค้า');
@@ -695,7 +697,7 @@ async function posSaveItem(env, b) {
  const cost = posNum(x.cost || 0, 'ต้นทุน'), price = posNum(x.price, 'ราคาขาย'), maxPrice = posNum(x.maxPrice || 0, 'ราคาสูงสุด'), minStock = posNum(x.minStock || 0, 'สต๊อกขั้นต่ำ');
  if (maxPrice > 0 && price > maxPrice) throw fail('ราคาขายเกินราคาสูงสุดที่ตั้งไว้ (' + maxPrice + ' บาท)');
  const mk = (x.mk === undefined || x.mk === null || x.mk === '') ? null : posNum(x.mk, 'กำไรของสินค้า', 0, 1000);
- const cat = str(x.cat).trim().slice(0, 40), sup = str(x.sup).trim().slice(0, 80), fav = x.fav ? 1 : 0, id = str(x.id);
+ const cat = str(x.cat).trim().slice(0, 40) || guessCat(name), sup = str(x.sup).trim().slice(0, 80), fav = x.fav ? 1 : 0, id = str(x.id);
  if (barcode) { const d = await one(env, 'SELECT id,name FROM pos_items WHERE barcode=? AND id<>?', barcode, id); if (d) throw fail('บาร์โค้ดนี้ใช้กับสินค้าอื่นแล้ว: ' + d.name); }
  if (id) {
   const old = await one(env, 'SELECT id FROM pos_items WHERE id=? AND active=1', id); if (!old) throw fail('ไม่พบสินค้า');
@@ -707,6 +709,12 @@ async function posSaveItem(env, b) {
  if (stock0) ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'in',?,?,'','ยอดตั้งต้น')", t, nid, stock0, cost));
  await env.DB.batch(ops);
  return { ok: true, item: posIt(await one(env, 'SELECT * FROM pos_items WHERE id=?', nid)) };
+}
+async function posAutoCat(env, b) {
+ const rows = await all(env, "SELECT id,name,cat FROM pos_items WHERE active=1 AND (COALESCE(cat,'')='' OR (?=1 AND cat='อื่นๆ'))", b && b.again ? 1 : 0), ops = []; let n = 0;
+ for (const r of rows) { const c = guessCat(r.name); if (c !== r.cat) { ops.push(stmt(env, 'UPDATE pos_items SET cat=? WHERE id=?', c, r.id)); n++; } }
+ for (let i = 0; i < ops.length; i += 80) await env.DB.batch(ops.slice(i, i + 80));
+ return { ok: true, updated: n, checked: rows.length };
 }
 async function posDelete(env, b) {
  const r = await stmt(env, "UPDATE pos_items SET active=0,barcode='',updatedAt=? WHERE id=? AND active=1", nowStr(), str(b.id)).run();
@@ -1082,6 +1090,7 @@ async function posApi(env, action, b) {
   case 'posInit': return posInit(env);
   case 'posSaveCfg': return posSaveCfg(env, b);
   case 'posLineMenu': return posLineMenu(env, b);
+  case 'posAutoCat': return posAutoCat(env, b);
   case 'posSaveItem': return posSaveItem(env, b);
   case 'posDelete': return posDelete(env, b);
   case 'posReceive': return posReceive(env, b);

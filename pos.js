@@ -47,7 +47,7 @@ async function doLogin(e){
  logging=false;render();return false;
 }
 function logout(){CRED=null;try{sessionStorage.removeItem(CRK)}catch(e){}render()}
-async function boot(){const j=await api({action:'posInit'});items=j.items;cfg=j.cfg;try{applyLook()}catch(e){}custs=j.custs||[];stats=j.today||{};expL=j.exp||[];view=view||'sell'}
+async function boot(){const j=await api({action:'posInit'});items=j.items;cfg=j.cfg;try{applyLook()}catch(e){}setTimeout(()=>{try{autoCatBoot()}catch(e){}},400);custs=j.custs||[];stats=j.today||{};expL=j.exp||[];view=view||'sell'}
 function render(){
  document.querySelectorAll('body > .paybar').forEach(e=>e.remove());
  if(!CRED){$('#app').innerHTML=loginView();return}
@@ -55,7 +55,7 @@ function render(){
  $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.svg" alt=""><h1 class="brand"><b>${esc(cfg.shop||'ร้านชำ')}</b></h1><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div></header>
  <main class="pwrap"><nav class="tabs" aria-label="เมนู">${tab('sell','ขาย')}${tab('rcv','รับของ')}${tab('items','สินค้า')}${tab('rep','รายงาน')}${tab('acc','บัญชี')}${tab('set','ตั้งค่า')}</nav>
  <div id="pv">${view==='sell'?sellView():view==='items'?itemsView():view==='rep'?repView():view==='acc'?accView():view==='rcv'?rcvView():setView()}</div></main>${view==='sell'?payBar():''}`;
- if(view==='sell')focusScan();if(view==='rcv')rcvFocus();
+ if(view==='sell')focusScan();if(view==='rcv')rcvFocus();if(view==='items')iList();
 }
 function nav(k){view=k;q='';render();if(k==='rep'&&!report)loadReport();if(k==='acc')accLoad();window.scrollTo(0,0);return false}
 
@@ -290,7 +290,7 @@ function printRcpt(){printStyle();document.body.classList.add('printing');setTim
 function itemForm(it,bc,nm){
  const x=it||{barcode:bc,name:nm,unit:'',cost:'',price:'',maxPrice:'',stock:'',minStock:''},pn=it?1:(lastPn||1);
  const top=`<label class="fld"><span class="lbl">บาร์โค้ด</span><input id="f_bc" class="inp" value="${esc(x.barcode)}" ${bc?'readonly':''} placeholder="ไม่มีก็เว้นว่างได้">${bc?'':'<button type="button" class="btn" style="margin-top:6px" onclick="genOwnCode()">สร้างบาร์โค้ดของร้าน (สำหรับสินค้าที่ไม่มีบาร์โค้ด)</button>'}</label>
- <label class="fld"><span class="lbl">ชื่อสินค้า <span class="req">*</span></span><input id="f_nm" class="inp" value="${esc(x.name)}" onkeydown="if(event.key==='Enter'){event.preventDefault();$('#f_cost').focus()}"><span id="f_nmh" class="hint"></span></label>`;
+ <label class="fld"><span class="lbl">ชื่อสินค้า <span class="req">*</span></span><input id="f_nm" class="inp" value="${esc(x.name)}" oninput="if(window.catAuto)catAuto()" onkeydown="if(event.key==='Enter'){event.preventDefault();$('#f_cost').focus()}"><span id="f_nmh" class="hint"></span></label>`;
  const mkf=`<label class="fld"><span class="lbl">กำไรสินค้านี้ (%)</span><input id="f_mk2" class="inp" inputmode="decimal" value="${x.mk===''||x.mk==null?'':x.mk}" placeholder="${cfg.mk} (ค่ากลาง)" oninput="fCost()"></label>`;
  const pack=it?`<div class="row2"><label class="fld"><span class="lbl">ราคาทุนต่อห่อ (บาท)</span><input id="f_cost" class="inp" inputmode="decimal" value="${x.cost===''?'':x.cost}" oninput="fCost()"></label>${mkf}</div>
  <label class="fld"><span class="lbl">ราคาขายต่อห่อ <span class="req">*</span></span><input id="f_price" class="inp" inputmode="decimal" value="${x.price===''?'':x.price}" oninput="fMk()" onkeydown="if(event.key==='Enter'){event.preventDefault();saveItemDlg()}"></label>
@@ -408,26 +408,41 @@ async function doAdj(id){
 }
 
 /* ---------- หน้าสินค้า / สต๊อก ---------- */
-function itemsView(){
+let isort=(()=>{try{return localStorage.getItem('posSort')||'name'}catch(e){return 'name'}})(),iopen='',ilim=80;
+const iSt=i=>i.stock<=0?'out':(i.minStock>0&&i.stock<=i.minStock)||(cfg.lowDefault>0&&i.minStock<=0&&i.stock<=cfg.lowDefault)?'low':'ok';
+function iFiltered(){
  const t=q.trim().toLowerCase();
- let l=items.filter(i=>(!t||i.name.toLowerCase().includes(t)||(i.barcode||'').includes(t))&&catOk(i));
- if(flt==='low')l=l.filter(i=>i.stock<=0||(i.minStock>0&&i.stock<=i.minStock));
- const nlow=items.filter(i=>i.stock<=0||(i.minStock>0&&i.stock<=i.minStock)).length,val=r2(items.reduce((a,i)=>a+Math.max(0,i.stock)*i.cost,0));
- return `<div class="lhead"><h2 class="h2">สินค้า / สต๊อก</h2><button class="btn pri" onclick="newItemDlg('','')">+ เพิ่มสินค้า</button></div>
- <div class="sc"><div><small>จำนวนสินค้า</small><b>${fm(items.length)}</b></div><div><small>มูลค่าสต๊อก (ต้นทุน)</small><b>${fm(val)}</b></div><div><small>ใกล้หมด / หมด</small><b style="color:${nlow?'#c0261a':'inherit'}">${fm(nlow)}</b></div></div>
- <input id="isearch" class="inp" placeholder="ค้นหาชื่อ หรือยิงบาร์โค้ด" value="${esc(q)}" oninput="q=this.value;iList()" onkeydown="if(event.key==='Enter')itemScan(this.value)">
- <div class="chips"><button class="cat" aria-pressed="${flt!=='low'}" onclick="flt='';render()">ทั้งหมด</button><button class="cat" aria-pressed="${flt==='low'}" onclick="flt='low';render()">ใกล้หมด (${nlow})</button><button class="cat" onclick="lbDlg()">พิมพ์ป้ายบาร์โค้ด</button><button class="cat" onclick="exportItems()">ส่งออก CSV</button></div>
- ${itemsTools()}
- <div id="ilist">${iRows(l)}</div>`;
+ let l=items.filter(i=>(!t||i.name.toLowerCase().includes(t)||(i.barcode||'').includes(t)||(i.cat||'').toLowerCase().includes(t))&&catOk(i));
+ if(flt==='low')l=l.filter(i=>iSt(i)!=='ok');else if(flt==='warn')l=l.filter(i=>iSt(i)==='low');else if(flt==='out')l=l.filter(i=>iSt(i)==='out');
+ const th=(a,b)=>a.name.localeCompare(b.name,'th'),R={out:0,low:1,ok:2};
+ if(isort==='low')l.sort((a,b)=>R[iSt(a)]-R[iSt(b)]||a.stock-b.stock||th(a,b));
+ else if(isort==='stock')l.sort((a,b)=>b.stock-a.stock||th(a,b));
+ else if(isort==='new')l.sort((a,b)=>String(b.ts||'').localeCompare(String(a.ts||''))||th(a,b));
+ else l.sort(th);
+ return l;
 }
-function iList(){const t=q.trim().toLowerCase();let l=items.filter(i=>(!t||i.name.toLowerCase().includes(t)||(i.barcode||'').includes(t))&&catOk(i));if(flt==='low')l=l.filter(i=>i.stock<=0||(i.minStock>0&&i.stock<=i.minStock));$('#ilist').innerHTML=iRows(l)}
+function itemsView(){
+ const nlow=items.filter(i=>iSt(i)==='low').length,nout=items.filter(i=>iSt(i)==='out').length,val=r2(items.reduce((a,i)=>a+Math.max(0,i.stock)*i.cost,0));
+ const fc=(k,t,n,c)=>`<button class="cat fc" ${c?`style="--tc:${c}"`:''} aria-pressed="${flt===k}" onclick="flt='${k}';ilim=80;render()">${c?'<i class="dot"></i>':''}${t}<b>${fm(n)}</b></button>`;
+ return `<div class="lhead"><h2 class="h2">สินค้า / สต๊อก</h2><button class="btn pri" onclick="newItemDlg('','')">+ เพิ่มสินค้า</button></div>
+ <p class="isum">สินค้า <b>${fm(items.length)}</b> รายการ · มูลค่าสต๊อก (ทุน) <b>${fm(val)}</b> บาท</p>
+ <input id="isearch" class="inp" placeholder="ค้นชื่อ / บาร์โค้ด / หมวด หรือยิงบาร์โค้ด" value="${esc(q)}" oninput="q=this.value;ilim=80;iList()" onkeydown="if(event.key==='Enter')itemScan(this.value)">
+ <div class="chips hs">${fc('','ทั้งหมด',items.length)}${fc('warn','เหลือน้อย',nlow,'#f59e0b')}${fc('out','หมด',nout,'#f43f5e')}${flt==='low'?fc('low','ต้องสั่งของ',nlow+nout,'#f59e0b'):''}</div>
+ ${itemsTools()}
+ <div class="ihd"><span id="icnt"></span><label class="isort">เรียง <select onchange="isort=this.value;try{localStorage.setItem('posSort',isort)}catch(e){}iList()"><option value="name"${isort==='name'?' selected':''}>ชื่อ ก–ฮ</option><option value="low"${isort==='low'?' selected':''}>ต้องสั่งของก่อน</option><option value="stock"${isort==='stock'?' selected':''}>สต๊อกมาก→น้อย</option><option value="new"${isort==='new'?' selected':''}>เพิ่ม/แก้ล่าสุด</option></select></label></div>
+ <div id="ilist"></div>`;
+}
+function iList(){const l=iFiltered(),el=$('#ilist');if(!el)return;el.innerHTML=iRows(l);const c=$('#icnt');if(c)c.textContent=`แสดง ${fm(Math.min(l.length,ilim))} จาก ${fm(l.length)} รายการ`}
 function itemScan(v){v=v.trim();const it=items.find(i=>i.barcode&&i.barcode===v);if(it){editItemDlg(it.id);return}if(/^\d{6,}$/.test(v))newItemDlg(v,'')}
+function iTog(id){iopen=iopen===id?'':id;iList()}
+function iMore(){ilim+=80;iList()}
 function iRows(l){
  if(!l.length)return `<div class="empty2">${items.length?'ไม่พบสินค้า':'ยังไม่มีสินค้า — ยิงบาร์โค้ดในหน้าขายเพื่อเพิ่มทีละชิ้น หรือกด “เพิ่มสินค้า”'}</div>`;
- return l.slice(0,300).map(i=>{const low=i.stock<=0||(i.minStock>0&&i.stock<=i.minStock);
-  return `<div class="it"><b>${esc(i.name)}</b><div class="stk${low?' low':''}">${fm(i.stock)}<small>${esc(i.unit||'คงเหลือ')}</small></div>
-  <div class="meta">${i.cat?`<span class="ctag" style="--tc:${catColor(i.cat)}">${esc(i.cat)}</span> `:''}${i.fav?'★ ':''}${i.barcode?esc(i.barcode)+' · ':''}ขาย ${fm(i.price)}${i.cost?' · ทุน '+fm(r2(i.cost))+' '+mkTag(i.cost,i.price):''}${i.mk!==''&&i.mk!=null?' · <span class="mk">ตั้งกำไรเอง '+i.mk+'%</span>':''}${i.maxPrice?' · สูงสุด '+fm(i.maxPrice):''}</div>
-  <div class="acts"><button class="btn" onclick="recvDlg('${i.id}')">รับเข้า</button><button class="btn" onclick="adjDlg('${i.id}')">ปรับยอด</button><button class="btn" onclick="editItemDlg('${i.id}')">แก้ไข</button><button class="btn" onclick="lbDlg(['${i.id}'])">ป้าย</button></div></div>`}).join('');
+ const TG={low:'<span class="tg">เหลือน้อย</span>',out:'<span class="tg o">หมด</span>',ok:''};
+ return l.slice(0,ilim).map(i=>{const k=iSt(i),open=iopen===i.id;
+  let h=`<div class="ir ${k}${open?' op':''}" onclick="iTog('${i.id}')"><i class="sb"></i><div class="in"><b>${i.fav?'★ ':''}${esc(i.name)}${TG[k]}</b><small>${i.cat?`<span class="ctag" style="--tc:${catColor(i.cat)}">${esc(i.cat)}</span>`:''}${i.barcode?esc(i.barcode)+' · ':''}ทุน ${fm(r2(i.cost))}</small></div><div class="ip"><div class="stk">${fm(i.stock)}<em>${esc(i.unit||'')}</em></div><small>฿${fm(i.price)}</small></div></div>`;
+  if(open)h+=`<div class="io"><div class="im">ขาย ${fm(i.price)}${i.cost?' · ทุน '+fm(r2(i.cost))+' '+mkTag(i.cost,i.price):''}${i.mk!==''&&i.mk!=null?' · <span class="mk">ตั้งกำไรเอง '+i.mk+'%</span>':''}${i.maxPrice?' · สูงสุด '+fm(i.maxPrice):''}${i.sup?' · ผู้ขาย '+esc(i.sup):''}</div><div class="acts"><button class="btn" onclick="recvDlg('${i.id}')">รับเข้า</button><button class="btn" onclick="adjDlg('${i.id}')">ปรับยอด</button><button class="btn" onclick="editItemDlg('${i.id}')">แก้ไข</button><button class="btn" onclick="lbDlg(['${i.id}'])">ป้าย</button></div></div>`;
+  return h}).join('')+(l.length>ilim?`<button class="btn w imore" onclick="iMore()">แสดงเพิ่มอีก ${fm(Math.min(80,l.length-ilim))} รายการ</button>`:'');
 }
 function csvDl(name,rows){
  const c=v=>{v=String(v==null?'':v);return /[",\n\r]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
