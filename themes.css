@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600;700&display=swap');
 /* ธีมสี — เปลี่ยนเฉพาะตัวแปรสี รูปทรงปุ่มนูน/ช่องกรอกจมเหมือนเดิม  ใช้: <body data-theme="mint|peach|lav|night"> (ไม่ใส่ = น้ำเงินเดิม) */
 body.neu[data-theme="mint"]{--nbg:#e3eee8;--nsh:#b9ccc2;--nhi:#fbfffd;--nav:#1d4a3a;--blue:#2f8f6b;--blue2:#217555;--slate:#5b7a6c;--rose:#e5603a;--g1:#3fa67f;--g2:#237a58;--line:rgba(29,74,58,.1);--soft:rgba(29,74,58,.06);--accs:rgba(47,143,107,.1);--gline:rgba(47,143,107,.35);--gl:rgba(47,143,107,.12)}
 body.neu[data-theme="peach"]{--nbg:#f1e7df;--nsh:#d4c2b4;--nhi:#fffaf6;--nav:#5a3326;--blue:#d9622b;--blue2:#b84e1c;--slate:#8a6b5c;--rose:#c0392b;--g1:#ec7a42;--g2:#c9531f;--line:rgba(90,51,38,.1);--soft:rgba(90,51,38,.06);--accs:rgba(217,98,43,.1);--gline:rgba(217,98,43,.35);--gl:rgba(217,98,43,.12)}
@@ -19,7 +18,7 @@ body.neu[data-theme="night"] .rcpt{background:#fff;color:#111;--nav:#111;--slate
 body.neu[data-theme="night"] #toast{background:#0d1018;color:#fff}
 
 /* ================= SKIN "Soft Dock" — ดีไซน์ใหม่ (ยังเป็นปุ่มนูน/ช่องกรอกจมเหมือนเดิม) ================= */
-body.neu.pos{font-family:'Prompt','IBM Plex Sans Thai',system-ui,sans-serif;--r1:22px;--r2:18px;--raise-l:9px 9px 20px var(--nsh),-9px -9px 20px var(--nhi);
+body.neu.pos{--r1:22px;--r2:18px;--raise-l:9px 9px 20px var(--nsh),-9px -9px 20px var(--nhi);
  --inset-d:inset 4px 4px 10px var(--nsh),inset -4px -4px 10px var(--nhi);--cash1:#3cc283;--cash2:#1f9a5e;
  background:var(--nbg);letter-spacing:.005em}
 body.neu.pos::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(900px 520px at 0% -8%,var(--nhi),transparent 62%)}
@@ -243,7 +242,7 @@ body.neu[data-theme="prem"] #toast{background:#000}
 /* ===== เทศกาล ===== */
 body.neu[data-fest]{--blue:hsl(var(--fh) 72% 52%);--blue2:hsl(var(--fh) 72% 38%);--g1:hsl(var(--fh) 75% 58%);--g2:hsl(var(--fh) 78% 42%);--accs:hsl(var(--fh) 70% 50%/.12);--gline:hsl(var(--fh) 70% 50%/.4);--gl:hsl(var(--fh) 70% 50%/.14)}
 body.neu[data-fest][data-theme="prem"]{--blue2:hsl(var(--fh) 95% 78%)}
-body.neu[data-fest]::before{background:radial-gradient(760px 520px at 0% -6%,hsl(var(--fh) 80% 55%/.16),transparent 62%),radial-gradient(640px 460px at 100% 104%,hsl(calc(var(--fh) + 40) 80% 55%/.10),transparent 62%)}
+body.neu[data-fest][data-fx]::before{background:radial-gradient(760px 520px at 0% -6%,hsl(var(--fh) 80% 55%/.16),transparent 62%),radial-gradient(640px 460px at 100% 104%,hsl(calc(var(--fh) + 40) 80% 55%/.10),transparent 62%)}
 .fest{display:flex;align-items:center;justify-content:center;gap:10px;margin:12px 0 0;padding:9px 14px;border-radius:18px;color:#fff;font-weight:700;text-align:center;background:linear-gradient(110deg,hsl(var(--fh) 75% 56%),hsl(calc(var(--fh) + 28) 80% 46%));box-shadow:0 8px 20px -8px hsl(var(--fh) 80% 40%/.7)}
 .fest .fe{font-size:1.25rem}
 .fdet{margin-top:10px}.fdet summary{cursor:pointer;font-weight:600;padding:8px 0}
@@ -259,19 +258,19 @@ body.neu[data-fest]::before{background:radial-gradient(760px 520px at 0% -6%,hsl
 @media(prefers-reduced-motion:reduce){.fxmas{display:none}}
 
 /* ===== สกินเทศกาล: ไอคอนเมนู/ปุ่ม/หัวเว็บ/พื้นหลัง เปลี่ยนตามเทศกาล ===== */
-body.neu.pos[data-fest] .tabs a::before{display:grid;place-items:center;font-size:19px;line-height:1;background:linear-gradient(145deg,hsl(calc(var(--fh) + var(--ho,0)) 88% 62%),hsl(calc(var(--fh) + var(--ho,0)) 80% 44%))}
-body.neu.pos[data-fest] .tabs a:nth-child(1){--ho:0}body.neu.pos[data-fest] .tabs a:nth-child(2){--ho:22}body.neu.pos[data-fest] .tabs a:nth-child(3){--ho:-22}body.neu.pos[data-fest] .tabs a:nth-child(4){--ho:44}body.neu.pos[data-fest] .tabs a:nth-child(5){--ho:-44}body.neu.pos[data-fest] .tabs a:nth-child(6){--ho:12}
-body.neu.pos[data-fest] .tabs a:nth-child(1)::before{content:var(--e1)}body.neu.pos[data-fest] .tabs a:nth-child(2)::before{content:var(--e2)}body.neu.pos[data-fest] .tabs a:nth-child(3)::before{content:var(--e3)}body.neu.pos[data-fest] .tabs a:nth-child(4)::before{content:var(--e4)}body.neu.pos[data-fest] .tabs a:nth-child(5)::before{content:var(--e5)}body.neu.pos[data-fest] .tabs a:nth-child(6)::before{content:var(--e6)}
-body.neu.pos[data-fest] .tabs a.on::before{box-shadow:0 0 0 2px var(--nbg),0 0 0 4px hsl(calc(var(--fh) + var(--ho,0)) 85% 58%),0 8px 16px -6px hsl(var(--fh) 80% 40%)}
-body.neu.pos[data-fest] .qa i{display:grid;place-items:center;background:linear-gradient(145deg,hsl(calc(var(--fh) + var(--ho,0)) 88% 62%),hsl(calc(var(--fh) + var(--ho,0)) 80% 44%))}
-body.neu.pos[data-fest] .qa i::after{font-size:21px;line-height:1}
-body.neu.pos[data-fest] .qacts .qa:nth-child(1){--ho:0}body.neu.pos[data-fest] .qacts .qa:nth-child(2){--ho:22}body.neu.pos[data-fest] .qacts .qa:nth-child(3){--ho:-22}body.neu.pos[data-fest] .qacts .qa:nth-child(4){--ho:44}body.neu.pos[data-fest] .qacts .qa:nth-child(5){--ho:-44}
-body.neu.pos[data-fest] .qacts .qa:nth-child(1) i::after{content:var(--q1)}body.neu.pos[data-fest] .qacts .qa:nth-child(2) i::after{content:var(--q2)}body.neu.pos[data-fest] .qacts .qa:nth-child(3) i::after{content:var(--q3)}body.neu.pos[data-fest] .qacts .qa:nth-child(4) i::after{content:var(--q4)}body.neu.pos[data-fest] .qacts .qa:nth-child(5) i::after{content:var(--q5)}
-body.neu.pos[data-fest] .today .t1{background:linear-gradient(145deg,hsl(var(--fh) 85% 58%),hsl(calc(var(--fh) + 25) 85% 40%))}
-body.neu.pos[data-fest] .today .t2{background:linear-gradient(145deg,hsl(calc(var(--fh) + 30) 85% 58%),hsl(calc(var(--fh) + 55) 80% 42%))}
-body.neu.pos[data-fest] .today .t3{background:linear-gradient(145deg,hsl(calc(var(--fh) - 25) 90% 60%),hsl(calc(var(--fh) - 45) 85% 44%))}
-body.neu.pos[data-fest] .top .brand b::before{content:var(--eb) ' '}body.neu.pos[data-fest] .top .brand b::after{content:' ' var(--eb)}
-body.neu.pos[data-fest]::before{background:var(--pat),radial-gradient(760px 520px at 0% -6%,hsl(var(--fh) 80% 55%/.16),transparent 62%),radial-gradient(640px 460px at 100% 104%,hsl(calc(var(--fh) + 40) 80% 55%/.10),transparent 62%);background-size:150px 150px,auto,auto}
+body.neu.pos[data-fest][data-fx] .tabs a::before{display:grid;place-items:center;font-size:19px;line-height:1;background:linear-gradient(145deg,hsl(calc(var(--fh) + var(--ho,0)) 88% 62%),hsl(calc(var(--fh) + var(--ho,0)) 80% 44%))}
+body.neu.pos[data-fest][data-fx] .tabs a:nth-child(1){--ho:0}body.neu.pos[data-fest][data-fx] .tabs a:nth-child(2){--ho:22}body.neu.pos[data-fest][data-fx] .tabs a:nth-child(3){--ho:-22}body.neu.pos[data-fest][data-fx] .tabs a:nth-child(4){--ho:44}body.neu.pos[data-fest][data-fx] .tabs a:nth-child(5){--ho:-44}body.neu.pos[data-fest][data-fx] .tabs a:nth-child(6){--ho:12}
+body.neu.pos[data-fest][data-fx] .tabs a:nth-child(1)::before{content:var(--e1)}body.neu.pos[data-fest][data-fx] .tabs a:nth-child(2)::before{content:var(--e2)}body.neu.pos[data-fest][data-fx] .tabs a:nth-child(3)::before{content:var(--e3)}body.neu.pos[data-fest][data-fx] .tabs a:nth-child(4)::before{content:var(--e4)}body.neu.pos[data-fest][data-fx] .tabs a:nth-child(5)::before{content:var(--e5)}body.neu.pos[data-fest][data-fx] .tabs a:nth-child(6)::before{content:var(--e6)}
+body.neu.pos[data-fest][data-fx] .tabs a.on::before{box-shadow:0 0 0 2px var(--nbg),0 0 0 4px hsl(calc(var(--fh) + var(--ho,0)) 85% 58%),0 8px 16px -6px hsl(var(--fh) 80% 40%)}
+body.neu.pos[data-fest][data-fx] .qa i{display:grid;place-items:center;background:linear-gradient(145deg,hsl(calc(var(--fh) + var(--ho,0)) 88% 62%),hsl(calc(var(--fh) + var(--ho,0)) 80% 44%))}
+body.neu.pos[data-fest][data-fx] .qa i::after{font-size:21px;line-height:1}
+body.neu.pos[data-fest][data-fx] .qacts .qa:nth-child(1){--ho:0}body.neu.pos[data-fest][data-fx] .qacts .qa:nth-child(2){--ho:22}body.neu.pos[data-fest][data-fx] .qacts .qa:nth-child(3){--ho:-22}body.neu.pos[data-fest][data-fx] .qacts .qa:nth-child(4){--ho:44}body.neu.pos[data-fest][data-fx] .qacts .qa:nth-child(5){--ho:-44}
+body.neu.pos[data-fest][data-fx] .qacts .qa:nth-child(1) i::after{content:var(--q1)}body.neu.pos[data-fest][data-fx] .qacts .qa:nth-child(2) i::after{content:var(--q2)}body.neu.pos[data-fest][data-fx] .qacts .qa:nth-child(3) i::after{content:var(--q3)}body.neu.pos[data-fest][data-fx] .qacts .qa:nth-child(4) i::after{content:var(--q4)}body.neu.pos[data-fest][data-fx] .qacts .qa:nth-child(5) i::after{content:var(--q5)}
+body.neu.pos[data-fest][data-fx] .today .t1{background:linear-gradient(145deg,hsl(var(--fh) 85% 58%),hsl(calc(var(--fh) + 25) 85% 40%))}
+body.neu.pos[data-fest][data-fx] .today .t2{background:linear-gradient(145deg,hsl(calc(var(--fh) + 30) 85% 58%),hsl(calc(var(--fh) + 55) 80% 42%))}
+body.neu.pos[data-fest][data-fx] .today .t3{background:linear-gradient(145deg,hsl(calc(var(--fh) - 25) 90% 60%),hsl(calc(var(--fh) - 45) 85% 44%))}
+body.neu.pos[data-fest][data-fx] .top .brand b::before{content:var(--eb) ' '}body.neu.pos[data-fest][data-fx] .top .brand b::after{content:' ' var(--eb)}
+body.neu.pos[data-fest][data-fx]::before{background:var(--pat),radial-gradient(760px 520px at 0% -6%,hsl(var(--fh) 80% 55%/.16),transparent 62%),radial-gradient(640px 460px at 100% 104%,hsl(calc(var(--fh) + 40) 80% 55%/.10),transparent 62%);background-size:150px 150px,auto,auto}
 .garland{position:relative;display:flex;justify-content:space-around;align-items:flex-start;height:34px;margin:0 6px;pointer-events:none;overflow:hidden}
 .garland .gl-line{position:absolute;left:0;right:0;top:0;height:2px;border-radius:2px;background:linear-gradient(90deg,hsl(var(--fh) 80% 50%/.0),hsl(var(--fh) 80% 55%/.7),hsl(var(--fh) 80% 50%/.0))}
 .garland span{position:relative;display:block;padding-top:var(--len);font-size:22px;line-height:1;transform-origin:50% 0;animation:fxswing 2.8s ease-in-out var(--dl) infinite alternate}

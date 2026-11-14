@@ -218,11 +218,12 @@ function applyFest(){
  if(f){b.dataset.fest=f.k;st.setProperty('--fh',f.h);f.t.forEach((x,i)=>st.setProperty('--e'+(i+1),`'${x}'`));f.q.forEach((x,i)=>st.setProperty('--q'+(i+1),`'${x}'`));st.setProperty('--eb',`'${f.eb}'`);
   const svg=`<svg xmlns='http://www.w3.org/2000/svg' width='150' height='150'><text x='20' y='48' font-size='30' opacity='.10'>${f.pt}</text><text x='92' y='122' font-size='26' opacity='.08'>${f.eb}</text></svg>`;st.setProperty('--pat',`url("data:image/svg+xml;utf8,${encodeURIComponent(svg)}")`)}
  else{delete b.dataset.fest;names.forEach(n=>st.removeProperty(n))}
+ if(cfg.fx==='on')b.dataset.fx='on';else delete b.dataset.fx;
  festDecor();
 }
 function festDecor(){
  document.querySelectorAll('.garland').forEach(x=>x.remove());const f=festInfo(),top=document.querySelector('header.top');
- if(!f||!top||document.body.dataset.fest===undefined)return;
+ if(!f||!top||document.body.dataset.fest===undefined||cfg.fx!=='on')return;
  const g=document.createElement('div');g.className='garland';g.setAttribute('aria-hidden','true');
  g.innerHTML='<i class="gl-line"></i>'+f.g.map((x,i)=>`<span style="--len:${[6,16,4,20,8,14,5][i%7]}px;--dl:${(i*.37).toFixed(2)}s">${x}</span>`).join('');
  top.insertBefore(g,top.firstChild);
@@ -235,7 +236,7 @@ function festPicker(){
  const rows=FEST.map(x=>{let w=festWin(x.k,y);if(w&&w[1].getTime()<cur)w=festWin(x.k,y+1);const a=festAdj(x.k);
   return `<div class="fadj"><div><b>${x.e} ${x.n}</b><small>${w?`ตรงกับ ${TH_D(w[2])} · แสดง ${TH_D(w[0])} – ${TH_D(w[1])}`:''}</small></div><label>เลื่อน<input type="number" inputmode="numeric" id="fa_s_${x.k}" value="${a.shift}"></label><label>ก่อน<input type="number" inputmode="numeric" id="fa_b_${x.k}" value="${a.before}"></label><label>หลัง<input type="number" inputmode="numeric" id="fa_a_${x.k}" value="${a.after}"></label></div>`}).join('');
  return `<h3 style="margin-top:16px">ธีมตามเทศกาล</h3><p class="sub">เปลี่ยนสีเด่นและขึ้นข้อความอวยพรตามเทศกาล วันที่คำนวณจากปฏิทินจันทรคติ (ตรุษจีน ลอยกระทง) และปฏิทินสากล ซิงค์ทุกเครื่อง${f?` · ตอนนี้: ${f.e} ${f.n}`:''}</p><label class="fld"><select class="inp" onchange="setFest(this.value)"><option value="auto"${s==='auto'?' selected':''}>อัตโนมัติ (เปลี่ยนเองตามวัน)</option><option value="off"${s==='off'?' selected':''}>ปิด</option>${FEST.map(x=>`<option value="${x.k}"${s===x.k?' selected':''}>ล็อกไว้: ${x.e} ${x.n}</option>`).join('')}</select></label>
- <label class="fld"><span class="lbl">เอฟเฟกต์เคลื่อนไหว (พลุ ของตกลงมา ตัวการ์ตูนวิ่ง)</span><select class="inp" onchange="setFx(this.value)"><option value="on"${cfg.fx!=='off'?' selected':''}>เปิด (เฉพาะวันเทศกาล)</option><option value="off"${cfg.fx==='off'?' selected':''}>ปิด</option></select></label><button class="btn w" onclick="fxPreview()" style="margin-top:8px">ดูตัวอย่างพลุ/เอฟเฟกต์</button>
+ <label class="fld"><span class="lbl">เอฟเฟกต์ตกแต่งเทศกาล (ไอคอนอีโมจิ พลุ ของตกลงมา ตัวการ์ตูนวิ่ง)</span><select class="inp" onchange="setFx(this.value)"><option value="off"${cfg.fx!=='on'?' selected':''}>ปิด (แนะนำ — โหมดมืออาชีพ)</option><option value="on"${cfg.fx==='on'?' selected':''}>เปิด (เฉพาะวันเทศกาล)</option></select></label><button class="btn w" onclick="fxPreview()" style="margin-top:8px">ดูตัวอย่างพลุ/เอฟเฟกต์</button>
  <details class="fdet"><summary>ปรับวัน บวก/ลบ ของแต่ละเทศกาล</summary><p class="sub">เลื่อน = ขยับวันตรงเทศกาล (+/− วัน) · ก่อน/หลัง = แสดงธีมก่อนและหลังวันนั้นกี่วัน</p>${rows}<button class="btn pri w" onclick="saveFestAdj()">บันทึกการปรับวัน</button></details>`;
 }
 async function setFest(v){await saveLook({festMode:v});render()}
@@ -255,7 +256,7 @@ const FX={
 };
 let fxC=null,fxX=null,fxP=[],fxS=[],fxRun=false,fxLast=0,fxNext=0,fxKey='',fxMas=null,fxMasT=0,fxForce=0;
 const fxReduce=()=>window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
-function fxOn(){const f=festInfo();return !!f&&cfg.fx!=='off'&&!fxReduce()}
+function fxOn(){const f=festInfo();return !!f&&cfg.fx==='on'&&!fxReduce()}
 function fxEnsure(){
  if(fxC)return;fxC=document.createElement('canvas');fxC.id='fxc';fxC.setAttribute('aria-hidden','true');
  fxC.style.cssText='position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9000';document.body.appendChild(fxC);fxX=fxC.getContext('2d');fxSize();addEventListener('resize',fxSize);
@@ -271,7 +272,7 @@ function fxBoom(x,y,h){
  for(let i=0;i<n;i++){const a=i/n*6.283+Math.random()*.2,sp=70+Math.random()*130;fxS.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,l:1,hu:hue+(Math.random()*50-25)})}
 }
 function fxBurst(){if(!fxOn())return;fxEnsure();const f=festInfo(),W=innerWidth,H=innerHeight;fxBoom(W*.3,H*.28,f.h);setTimeout(()=>fxBoom(W*.7,H*.22,f.h+40),180);setTimeout(()=>fxBoom(W*.5,H*.34,f.h+80),380);fxStart()}
-function fxPreview(){const f=festInfo()||FEST[1],W=innerWidth,H=innerHeight;if(cfg.fx==='off'){toast('เอฟเฟกต์ปิดอยู่');return}if(fxReduce()){toast('เครื่องตั้งไว้ลดการเคลื่อนไหว');return}fxForce=Date.now()+9000;fxKey=f.k;fxEnsure();fxP=[];const c=FX[f.k];for(let i=0;i<c.n;i++)fxP.push(fxSpawn(c,false));fxBoom(W*.3,H*.28,f.h);setTimeout(()=>fxBoom(W*.7,H*.22,f.h+40),250);setTimeout(()=>fxBoom(W*.5,H*.34,f.h+80),500);fxMascot(true);fxStart()}
+function fxPreview(){const f=festInfo()||FEST[1],W=innerWidth,H=innerHeight;if(cfg.fx!=='on'){toast('เอฟเฟกต์ปิดอยู่');return}if(fxReduce()){toast('เครื่องตั้งไว้ลดการเคลื่อนไหว');return}fxForce=Date.now()+9000;fxKey=f.k;fxEnsure();fxP=[];const c=FX[f.k];for(let i=0;i<c.n;i++)fxP.push(fxSpawn(c,false));fxBoom(W*.3,H*.28,f.h);setTimeout(()=>fxBoom(W*.7,H*.22,f.h+40),250);setTimeout(()=>fxBoom(W*.5,H*.34,f.h+80),500);fxMascot(true);fxStart()}
 function fxMascot(now){
  const f=festInfo()||FEST.find(x=>x.k===fxKey);if(!f||fxMas)return;const c=FX[f.k];
  const m=document.createElement('div');const dir=Math.random()<.5?1:-1;m.className='fxmas '+(dir>0?'fr':'fl');m.innerHTML=`<span>${c.mas}</span>`;m.onclick=()=>{fxBoom(m.getBoundingClientRect().left+20,innerHeight-160,f.h);fxStart()};

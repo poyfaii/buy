@@ -52,9 +52,9 @@ function render(){
  document.querySelectorAll('body > .paybar').forEach(e=>e.remove());
  if(!CRED){$('#app').innerHTML=loginView();return}
  const tab=(k,t)=>`<a href="#" class="${view===k?'on':''}" onclick="return nav('${k}')">${t}</a>`;
- $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.svg" alt=""><h1 class="brand"><b>${esc(cfg.shop||'ร้านชำ')}</b></h1><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div></header>
- <main class="pwrap"><nav class="tabs" aria-label="เมนู">${tab('sell','ขาย')}${tab('rcv','รับของ')}${tab('items','สินค้า')}${tab('rep','รายงาน')}${tab('acc','บัญชี')}${tab('set','ตั้งค่า')}</nav>
- <div id="pv">${view==='sell'?sellView():view==='items'?itemsView():view==='rep'?repView():view==='acc'?accView():view==='rcv'?rcvView():setView()}</div></main>${view==='sell'?payBar():''}`;
+ $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.svg" alt=""><h1 class="brand"><b>${esc(cfg.shop||'ร้านชำ')}</b></h1><span class="pgt">${{sell:'ขายสินค้า',rcv:'รับของเข้าร้าน',items:'สินค้า',rep:'รายงาน',acc:'บัญชี',set:'ตั้งค่า'}[view]||''}</span><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div></header>
+ <main class="pwrap"><nav class="tabs" aria-label="เมนู"><div class="sbr"><img src="logo.svg" alt=""><b>${esc(cfg.shop||'ร้านชำ')}</b><small>ระบบขายหน้าร้าน</small></div>${tab('sell','ขาย')}${tab('rcv','รับของ')}${tab('items','สินค้า')}${tab('rep','รายงาน')}${tab('acc','บัญชี')}${tab('set','ตั้งค่า')}</nav>
+ <div id="pv" data-v="${view}">${view==='sell'?sellView():view==='items'?itemsView():view==='rep'?repView():view==='acc'?accView():view==='rcv'?rcvView():setView()}</div></main>${view==='sell'?payBar():''}`;
  if(view==='sell')focusScan();if(view==='rcv')rcvFocus();if(view==='items')iList();
 }
 function nav(k){view=k;q='';render();if(k==='rep'&&!report)loadReport();if(k==='acc')accLoad();window.scrollTo(0,0);return false}
@@ -65,15 +65,15 @@ const total=()=>r2(Math.max(0,subtotal()-discBaht()));
 const find=id=>items.find(i=>i.id===id);
 function sellView(){
  const t=total(),n=cart.reduce((a,l)=>a+l.qty,0);
- return `<div class="scan"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M7 8v8M11 8v8M15 8v8M18 8v8"/></svg>
+ return `<div class="sellw"><div class="sl"><div class="scan"><svg class="ic" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7V5a1 1 0 0 1 1-1h2M17 4h2a1 1 0 0 1 1 1v2M20 17v2a1 1 0 0 1-1 1h-2M7 20H5a1 1 0 0 1-1-1v-2M7 8v8M11 8v8M15 8v8M18 8v8"/></svg>
  <input id="scan" class="inp" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" placeholder="ยิงบาร์โค้ด หรือพิมพ์ชื่อสินค้า แล้วกด Enter" value="${esc(q)}" oninput="onScan(this.value)" onkeydown="scanKey(event)"><button type="button" class="camb" onclick="camDlg()" aria-label="สแกนด้วยกล้องมือถือ">กล้อง</button></div>
  <p class="hint">พิมพ์ <b>3*บาร์โค้ด</b> เพื่อใส่ 3 ชิ้นในครั้งเดียว · คอมพิวเตอร์: <b>F4</b> เงินสด · <b>F8</b> โอน · ยิงสินค้าที่ยังไม่เคยมี ระบบให้ใส่ชื่อ ราคาทุน และจำนวนรับเข้าครั้งแรกครั้งเดียว</p>
  ${sellExtras()}
  <div id="sres" class="sres">${sresHtml()}</div>
- <div class="grid2"><section class="sec cartbox" aria-label="รายการในบิล">${cart.length?cart.map(lineHtml).join(''):`<div class="empty2">ยังไม่มีสินค้าในบิล<br><small>ยิงบาร์โค้ดสินค้าได้เลย</small></div>`}</section>
+ </div><div class="cartcol"><section class="sec cartbox" aria-label="รายการในบิล">${cart.length?cart.map(lineHtml).join(''):`<div class="empty2">ยังไม่มีสินค้าในบิล<br><small>ยิงบาร์โค้ดสินค้าได้เลย</small></div>`}</section>
  <aside class="side"><section class="sec">${discLine()}<div class="tot"><span>รวม ${fm(n)} ชิ้น</span><b>${fm(t)}</b></div>
  <div class="payrow"><button class="btn pri" onclick="payCash()"${cart.length?'':' disabled'}>เงินสด</button><button class="btn pri" onclick="payTransfer()"${cart.length?'':' disabled'}>โอน</button></div>
- ${cart.length?`<button class="btn w" style="margin-top:10px" onclick="clearCart()">ล้างบิล</button>`:''}</section></aside></div>`;
+ ${cart.length?`<button class="btn w" style="margin-top:10px" onclick="clearCart()">ล้างบิล</button>`:''}</section></aside></div></div>`;
 }
 const payBar=()=>cart.length?`<div class="paybar">${discLine()}<div class="tot" style="padding:0 4px 8px"><span>รวม</span><b style="font-size:30px">${fm(total())}</b></div><div class="payrow"><button class="btn pri" onclick="payCash()">เงินสด</button><button class="btn pri" onclick="payTransfer()">โอน</button><button class="btn" onclick="payCredit()">ติดไว้</button></div></div>`:'';
 function lineHtml(l,i){
@@ -426,10 +426,12 @@ function itemsView(){
  const fc=(k,t,n,c)=>`<button class="cat fc" ${c?`style="--tc:${c}"`:''} aria-pressed="${flt===k}" onclick="flt='${k}';ilim=80;render()">${c?'<i class="dot"></i>':''}${t}<b>${fm(n)}</b></button>`;
  return `<div class="lhead"><h2 class="h2">สินค้า / สต๊อก</h2><button class="btn pri" onclick="newItemDlg('','')">+ เพิ่มสินค้า</button></div>
  <p class="isum">สินค้า <b>${fm(items.length)}</b> รายการ · มูลค่าสต๊อก (ทุน) <b>${fm(val)}</b> บาท</p>
+ <div class="kp"><div><small>สินค้าทั้งหมด</small><b>${fm(items.length)}</b></div><div><small>มูลค่าสต๊อก (ต้นทุน)</small><b>฿${fm(val)}</b></div><div class="w"><small>เหลือน้อย</small><b>${fm(nlow)}</b></div><div class="e"><small>หมดสต๊อก</small><b>${fm(nout)}</b></div></div>
  <input id="isearch" class="inp" placeholder="ค้นชื่อ / บาร์โค้ด / หมวด หรือยิงบาร์โค้ด" value="${esc(q)}" oninput="q=this.value;ilim=80;iList()" onkeydown="if(event.key==='Enter')itemScan(this.value)">
  <div class="chips hs">${fc('','ทั้งหมด',items.length)}${fc('warn','เหลือน้อย',nlow,'#f59e0b')}${fc('out','หมด',nout,'#f43f5e')}${flt==='low'?fc('low','ต้องสั่งของ',nlow+nout,'#f59e0b'):''}</div>
  ${itemsTools()}
  <div class="ihd"><span id="icnt"></span><label class="isort">เรียง <select onchange="isort=this.value;try{localStorage.setItem('posSort',isort)}catch(e){}iList()"><option value="name"${isort==='name'?' selected':''}>ชื่อ ก–ฮ</option><option value="low"${isort==='low'?' selected':''}>ต้องสั่งของก่อน</option><option value="stock"${isort==='stock'?' selected':''}>สต๊อกมาก→น้อย</option><option value="new"${isort==='new'?' selected':''}>เพิ่ม/แก้ล่าสุด</option></select></label></div>
+ <div class="ith"><span></span><span>สินค้า</span><span>หมวดหมู่</span><span>คงเหลือ</span><span class="r">ต้นทุน</span><span class="r">ราคาขาย</span><span class="r">กำไร</span><span></span></div>
  <div id="ilist"></div>`;
 }
 function iList(){const l=iFiltered(),el=$('#ilist');if(!el)return;el.innerHTML=iRows(l);const c=$('#icnt');if(c)c.textContent=`แสดง ${fm(Math.min(l.length,ilim))} จาก ${fm(l.length)} รายการ`}
@@ -439,8 +441,8 @@ function iMore(){ilim+=80;iList()}
 function iRows(l){
  if(!l.length)return `<div class="empty2">${items.length?'ไม่พบสินค้า':'ยังไม่มีสินค้า — ยิงบาร์โค้ดในหน้าขายเพื่อเพิ่มทีละชิ้น หรือกด “เพิ่มสินค้า”'}</div>`;
  const TG={low:'<span class="tg">เหลือน้อย</span>',out:'<span class="tg o">หมด</span>',ok:''};
- return l.slice(0,ilim).map(i=>{const k=iSt(i),open=iopen===i.id;
-  let h=`<div class="ir ${k}${open?' op':''}" onclick="iTog('${i.id}')"><i class="sb"></i><div class="in"><b>${i.fav?'★ ':''}${esc(i.name)}${TG[k]}</b><small>${i.cat?`<span class="ctag" style="--tc:${catColor(i.cat)}">${esc(i.cat)}</span>`:''}${i.barcode?esc(i.barcode)+' · ':''}ทุน ${fm(r2(i.cost))}</small></div><div class="ip"><div class="stk">${fm(i.stock)}<em>${esc(i.unit||'')}</em></div><small>฿${fm(i.price)}</small></div></div>`;
+  return l.slice(0,ilim).map(i=>{const k=iSt(i),open=iopen===i.id,mkp=i.price>0&&i.cost>0?Math.round((i.price-i.cost)/i.price*100):null,cc=i.cat?`<span class="ctag" style="--tc:${catColor(i.cat)}"><i class="cdot"></i>${esc(i.cat)}</span>`:'';
+  let h=`<div class="ir ${k}${open?' op':''}" onclick="iTog('${i.id}')"><i class="sb"></i><div class="in"><b>${i.fav?'★ ':''}${esc(i.name)}${TG[k]}</b><small>${i.cat?`<span class="m-only">${cc}</span>`:''}${i.barcode?esc(i.barcode):''}<span class="m-only"> · ทุน ${fm(r2(i.cost))}</span></small></div><div class="c-c">${cc}</div><div class="c-s"><span class="stk">${fm(i.stock)}<em>${esc(i.unit||'')}</em></span><span class="sbd ${k}">${{ok:'ปกติ',low:'เหลือน้อย',out:'หมด'}[k]}</span></div><div class="c-t">${fm(r2(i.cost))}</div><div class="c-p"><b>${fm(i.price)}</b></div><div class="c-m">${mkp==null?'':mkp+'%'}</div><div class="c-a" onclick="event.stopPropagation()"><button class="btn sm" onclick="recvDlg('${i.id}')">รับเข้า</button><button class="btn sm" onclick="adjDlg('${i.id}')">ปรับยอด</button><button class="btn sm" onclick="editItemDlg('${i.id}')">แก้ไข</button><button class="btn sm" onclick="lbDlg(['${i.id}'])">ป้าย</button></div></div>`;
   if(open)h+=`<div class="io"><div class="im">ขาย ${fm(i.price)}${i.cost?' · ทุน '+fm(r2(i.cost))+' '+mkTag(i.cost,i.price):''}${i.mk!==''&&i.mk!=null?' · <span class="mk">ตั้งกำไรเอง '+i.mk+'%</span>':''}${i.maxPrice?' · สูงสุด '+fm(i.maxPrice):''}${i.sup?' · ผู้ขาย '+esc(i.sup):''}</div><div class="acts"><button class="btn" onclick="recvDlg('${i.id}')">รับเข้า</button><button class="btn" onclick="adjDlg('${i.id}')">ปรับยอด</button><button class="btn" onclick="editItemDlg('${i.id}')">แก้ไข</button><button class="btn" onclick="lbDlg(['${i.id}'])">ป้าย</button></div></div>`;
   return h}).join('')+(l.length>ilim?`<button class="btn w imore" onclick="iMore()">แสดงเพิ่มอีก ${fm(Math.min(80,l.length-ilim))} รายการ</button>`:'');
 }
