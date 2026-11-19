@@ -58,7 +58,7 @@ function openItemOk(){const n=$('#o_n').value.trim(),p=Number($('#o_p').value),q
 function sellExtras(){
  const st=stats||{},nl=lowItems().length;
  const ban=`<div class="today"><div class="t1"><small>ยอดขายวันนี้</small><b>${fm(st.total||0)}</b></div><div class="t2"><small>บิล</small><b>${fm(st.bills||0)}</b></div><div class="t3"><small>กำไร</small><b>${fm(st.profit||0)}</b></div></div>`;
- const al=(nl?`<button class="alc w1" onclick="icat='';flt='low';nav('items')"><i></i>สต๊อกต่ำ/หมด ${fm(nl)} รายการ</button>`:'')+(expL.length?`<button class="alc w2" onclick="expDlg()"><i></i>ใกล้หมดอายุ ${fm(expL.length)} รายการ</button>`:'');
+ const al=(nl?`<button class="alc w1" onclick="icat='';flt='low';nav('items')"><i></i>สต๊อกต่ำ/หมด ${fm(nl)} รายการ</button>`:'')+(bkWarn()?`<button class="alc w2" onclick="nav('set')"><i></i>${bkWarn()}</button>`:'')+(expL.length?`<button class="alc w2" onclick="expDlg()"><i></i>ใกล้หมดอายุ ${fm(expL.length)} รายการ</button>`:'');
  const acts=`<div class="qacts"><button class="qa c-hold" onclick="holdBill()"${cart.length?'':' disabled'}><i></i><span>พักบิล</span></button><button class="qa c-recall" onclick="heldDlg()"><i></i><span>เรียกบิล${held.length?` (${held.length})`:''}</span></button><button class="qa c-disc" onclick="discDlg()"${cart.length?'':' disabled'}><i></i><span>ส่วนลด</span></button><button class="qa c-open" onclick="openItemDlg()"><i></i><span>สินค้าทั่วไป</span></button><button class="qa c-pay" onclick="xferDlg()"><i></i><span>รับโอน</span></button></div>`;
  const fv=items.filter(i=>i.fav),grid=fv.length?`<div class="qgrid">${fv.map(i=>`<button class="qk" style="--h:${catHue(i.cat||i.name)}" onclick="addById('${i.id}',1)"><span class="qi">${esc(chIcon(i.name))}</span><b>${esc(i.name)}</b><small>${fm(i.price)}</small></button>`).join('')}</div>`:'';
  return festBanner()+ban+(al?`<div class="alcs">${al}</div>`:'')+acts+grid;
@@ -73,7 +73,7 @@ function catFields(x){
 function itemsTools(){
  const cs=allCats(),unc=items.filter(i=>!i.cat).length,chip=(k,t)=>`<button class="cat" aria-pressed="${icat===k}" onclick="setCat(decodeURIComponent('${encodeURIComponent(k)}'))">${esc(t)}</button>`;
  return `${cs.length?`<div class="chips hs" aria-label="หมวดหมู่">${chip('','ทุกหมวด')}${cs.map(c=>`<button class="cat" style="--tc:${catColor(c)}" aria-pressed="${icat===c}" onclick="setCat(decodeURIComponent('${encodeURIComponent(c)}'))"><i class="dot"></i>${esc(c)}</button>`).join('')}${unc?chip('ไม่ระบุหมวด','ไม่ระบุหมวด'):''}</div>`:''}
- <div class="chips hs"><button class="cat tl t-cnt" onclick="countDlg()"><i></i>ตรวจนับสต๊อก</button><button class="cat tl t-po" onclick="poDlg()"><i></i>ใบสั่งซื้อ</button><button class="cat tl t-exp" onclick="expDlg()"><i></i>ใกล้หมดอายุ (${expL.length})</button><button class="cat" onclick="lbDlg()">พิมพ์ป้ายบาร์โค้ด</button><button class="cat" onclick="exportItems()">ส่งออก CSV</button><button class="cat" onclick="autoCatAll()">จัดหมวดอัตโนมัติ${unc?` (${unc})`:''}</button></div>`;
+ <div class="chips hs"><button class="cat tl t-cnt" onclick="countDlg()"><i></i>ตรวจนับสต๊อก</button><button class="cat tl t-po" onclick="poDlg()"><i></i>ใบสั่งซื้อ</button><button class="cat tl t-exp" onclick="expDlg()"><i></i>ใกล้หมดอายุ (${expL.length})</button><button class="cat" onclick="lbDlg()">พิมพ์ป้ายบาร์โค้ด</button><button class="cat" onclick="importDlg()">นำเข้า/ส่งออก Excel</button><button class="cat" onclick="exportItems()">ส่งออก CSV</button><button class="cat" onclick="autoCatAll()">จัดหมวดอัตโนมัติ${unc?` (${unc})`:''}</button></div>`;
 }
 function setCat(c){icat=c;render()}
 
@@ -109,11 +109,11 @@ async function poDlg(){
  dlg(`<h3>ใบสั่งซื้อ</h3><div class="empty2">กำลังคำนวณจากยอดขาย 30 วันล่าสุด…</div>`);
  try{
   const r=await api({action:'posReport',from:daysAgo(30),to:today()}),by={},seen={};
-  const put=(it,need,why)=>{if(seen[it.id]||!(need>0))return;seen[it.id]=1;const k=it.sup||'ไม่ระบุผู้ขาย';(by[k]=by[k]||[]).push({n:it.name,u:it.unit||'ชิ้น',q:Math.ceil(need),why})};
+  const put=(it,need,why)=>{if(seen[it.id]||!(need>0))return;seen[it.id]=1;const k=it.sup||'ไม่ระบุผู้ขาย';(by[k]=by[k]||[]).push({id:it.id,bc:it.barcode||'',cat:it.cat||'',st:it.stock,cost:it.cost||0,n:it.name,u:it.unit||'ชิ้น',q:Math.ceil(need),why})};
   (r.reorder||[]).forEach(x=>{const it=find(x.id);if(it)put(it,x.need,'ขายดี เหลือไม่พอ 7 วัน')});
   items.filter(i=>i.stock<=0||(i.minStock>0&&i.stock<=i.minStock)).forEach(i=>put(i,Math.max(1,(i.minStock||0)*2-i.stock),i.stock<=0?'หมดแล้ว':'ถึงเกณฑ์เตือน'));
   window.__po=by;const ks=Object.keys(by).sort((a,b)=>a.localeCompare(b,'th'));
-  dlg(`<h3>ใบสั่งซื้อ</h3><p class="sub">คำนวณจากยอดขาย 30 วันล่าสุด + สินค้าที่หมด/ถึงเกณฑ์เตือน จัดกลุ่มตามผู้ขาย กดคัดลอกแล้ววางส่ง LINE ได้เลย</p>${ks.length?ks.map((k,i)=>`<section class="sec po"><h3>${esc(k)} <small>${by[k].length} รายการ</small></h3><table class="t">${by[k].map(x=>`<tr><td>${esc(x.n)}<br><small>${esc(x.why)}</small></td><td class="r"><b>${fm(x.q)}</b> ${esc(x.u)}</td></tr>`).join('')}</table><button class="btn" onclick="poCopy(${i})">คัดลอกข้อความสั่งของ</button></section>`).join(''):'<div class="empty2">ตอนนี้ยังไม่มีสินค้าที่ต้องสั่งเพิ่ม 🎉</div>'}<div class="acts2">${ks.length?'<button class="btn" onclick="poCsv()">ส่งออก CSV</button>':''}<button class="btn" onclick="closeDlg()">ปิด</button></div>`);
+  dlg(`<h3>ใบสั่งซื้อ</h3><p class="sub">คำนวณจากยอดขาย 30 วันล่าสุด + สินค้าที่หมด/ถึงเกณฑ์เตือน จัดกลุ่มตามผู้ขาย กดคัดลอกแล้ววางส่ง LINE ได้เลย</p>${ks.length?ks.map((k,i)=>`<section class="sec po"><h3>${esc(k)} <small>${by[k].length} รายการ</small></h3><table class="t">${by[k].map(x=>`<tr><td>${esc(x.n)}<br><small>${esc(x.why)}</small></td><td class="r"><b>${fm(x.q)}</b> ${esc(x.u)}</td></tr>`).join('')}</table><button class="btn" onclick="poCopy(${i})">คัดลอกข้อความสั่งของ</button></section>`).join(''):'<div class="empty2">ตอนนี้ยังไม่มีสินค้าที่ต้องสั่งเพิ่ม 🎉</div>'}<div class="acts2">${ks.length?'<button class="btn pri" onclick="poXlsx()">ดาวน์โหลด Excel (พิมพ์ไปซื้อของ)</button><button class="btn" onclick="importDlg()">ซื้อเสร็จแล้ว → นำเข้าไฟล์</button><button class="btn" onclick="poCsv()">ส่งออก CSV</button>':''}<button class="btn" onclick="closeDlg()">ปิด</button></div>`);
   window.__pok=ks;
  }catch(e){dlg(`<h3>ใบสั่งซื้อ</h3><div class="err">${esc(e.message)}</div><div class="acts2"><button class="btn" onclick="closeDlg()">ปิด</button></div>`)}
 }
@@ -160,8 +160,8 @@ function repExtra(r){
 /* ----- สำรองข้อมูลทั้งหมด ----- */
 async function backupDl(){
  try{toast('กำลังเตรียมไฟล์สำรอง…');const j=await api({action:'posBackup'}),blob=new Blob([JSON.stringify(j,null,1)],{type:'application/json'}),a=document.createElement('a');
-  a.href=URL.createObjectURL(blob);a.download=`สำรองข้อมูลร้านชำ-${today()}.json`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);toast('ดาวน์โหลดไฟล์สำรองแล้ว ('+j.sales.length+' บิล, '+j.items.length+' สินค้า)')}
- catch(e){toast(e.message)}
+  a.href=URL.createObjectURL(blob);a.download=`สำรองข้อมูลร้านชำ-${today()}.json`;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);lastBk=bkkNow().toISOString().slice(0,19).replace('T',' ');toast('ดาวน์โหลดไฟล์สำรองแล้ว ('+j.sales.length+' บิล, '+j.items.length+' สินค้า)');return true}
+ catch(e){toast(e.message);return false}
 }
 
 

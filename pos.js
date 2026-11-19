@@ -9,7 +9,7 @@ const bkkNow=()=>new Date(Date.now()+7*3600e3);
 const today=()=>bkkNow().toISOString().slice(0,10);
 const dthai=s=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(s||'');return m?`${m[3]}/${m[2]}/${Number(m[1])+543}`:s||''};
 const tthai=s=>dthai(s)+' '+String(s||'').slice(11,16);
-let CRED=null,items=[],cfg={mk:30,shop:'',addr:'',tel:'',note:''},cart=[],view='sell',q='',busy=false,lerr='',logging=false,report=null,rng='today',rfrom='',rto='',flt='',istk='';
+let CRED=null,items=[],cfg={mk:30,shop:'',addr:'',tel:'',note:''},cart=[],view='sell',q='',busy=false,lerr='',logging=false,lastBk='',report=null,rng='today',rfrom='',rto='',flt='',istk='';
 try{CRED=JSON.parse(sessionStorage.getItem(CRK))}catch(e){}
 try{cart=JSON.parse(localStorage.getItem(CARTK))||[]}catch(e){}
 const saveCart=()=>{try{localStorage.setItem(CARTK,JSON.stringify(cart))}catch(e){}};
@@ -36,21 +36,20 @@ function mkTag(cost,price){const m=mkPct(cost,price);if(m===null)return '';const
 /* ---------- โครงหน้า ---------- */
 function loginView(){
  return `<main class="login"><section class="sec"><img class="logo-img" src="logo.svg" alt="" style="width:72px;height:72px;margin-bottom:12px"><h1 class="h2" style="margin:0 0 2px">ร้านชำ · ขายหน้าร้าน</h1><p class="sub">เข้าสู่ระบบเพื่อเริ่มขาย</p>
- <form onsubmit="return doLogin(event)"><div class="fld"><label class="lbl" for="lu">ชื่อผู้ใช้</label><input id="lu" class="inp" autocomplete="username" autocapitalize="off" spellcheck="false"></div>
- <div class="fld"><label class="lbl" for="lp">รหัสผ่าน</label><input id="lp" class="inp" type="password" autocomplete="current-password"></div>
+ <form onsubmit="return doLogin(event)"><div class="fld"><label class="lbl" for="lp">รหัสเข้าใช้งาน</label><input id="lp" class="inp" type="password" inputmode="numeric" autocomplete="current-password" autofocus style="text-align:center;font-size:22px;letter-spacing:.3em"></div>
  ${lerr?`<div class="err" role="alert">${esc(lerr)}</div>`:''}<button class="btn pri lg w" style="margin-top:16px" type="submit"${logging?' disabled':''}>${logging?'กำลังตรวจสอบ…':'เข้าสู่ระบบ'}</button></form></section></main>`;
 }
 async function doLogin(e){
  e.preventDefault();if(logging)return false;
- const u=$('#lu').value.trim(),p=$('#lp').value;logging=true;lerr='';render();
- try{CRED={user:u,pass:p};await api({action:'login'});try{sessionStorage.setItem(CRK,JSON.stringify(CRED))}catch(x){}await boot()}catch(x){CRED=null;lerr=x.message==='unauthorized'?'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง':x.message}
+ const u='',p=$('#lp').value;logging=true;lerr='';render();
+ try{CRED={user:u,pass:p};await api({action:'login'});try{sessionStorage.setItem(CRK,JSON.stringify(CRED))}catch(x){}await boot()}catch(x){CRED=null;lerr=x.message==='unauthorized'?'รหัสไม่ถูกต้อง':x.message}
  logging=false;render();return false;
 }
 function logout(){CRED=null;try{sessionStorage.removeItem(CRK)}catch(e){}render()}
-async function boot(){const j=await api({action:'posInit'});items=j.items;cfg=j.cfg;try{applyLook()}catch(e){}setTimeout(()=>{try{autoCatBoot()}catch(e){}},400);custs=j.custs||[];stats=j.today||{};expL=j.exp||[];view=view||'sell'}
+async function boot(){const j=await api({action:'posInit'});items=j.items;cfg=j.cfg;lastBk=j.lastBackup||'';try{applyLook()}catch(e){}setTimeout(()=>{try{autoCatBoot()}catch(e){}},400);custs=j.custs||[];stats=j.today||{};expL=j.exp||[];view=view||'sell'}
 function render(){
  document.querySelectorAll('body > .paybar').forEach(e=>e.remove());
- if(!CRED){$('#app').innerHTML=loginView();return}
+ if(!CRED){$('#app').innerHTML=loginView();setTimeout(()=>{const x=$('#lp');if(x)x.focus()},50);return}
  const tab=(k,t)=>`<a href="#" class="${view===k?'on':''}" onclick="return nav('${k}')">${t}</a>`;
  $('#app').innerHTML=`<header class="top"><div class="bar"><img class="logo-img" src="logo.svg" alt=""><h1 class="brand"><b>${esc(cfg.shop||'ร้านชำ')}</b></h1><span class="pgt">${{sell:'ขายสินค้า',rcv:'รับของเข้าร้าน',items:'สินค้า',rep:'รายงาน',acc:'บัญชี',set:'ตั้งค่า'}[view]||''}</span><button class="iconbtn" onclick="logout()" aria-label="ออกจากระบบ" title="ออกจากระบบ"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg></button></div></header>
  <main class="pwrap"><nav class="tabs" aria-label="เมนู"><div class="sbr"><img src="logo.svg" alt=""><b>${esc(cfg.shop||'ร้านชำ')}</b><small>ระบบขายหน้าร้าน</small></div>${tab('sell','ขาย')}${tab('rcv','รับของ')}${tab('items','สินค้า')}${tab('rep','รายงาน')}${tab('acc','บัญชี')}${tab('set','ตั้งค่า')}</nav>
@@ -514,7 +513,7 @@ function setView(){
  <section class="sec"><h3>กำไร</h3><p class="sub">ใส่ราคาทุนแล้วระบบบวกกำไรตามนี้ ปัดขึ้นเป็นบาทเต็ม ไม่มีเศษทศนิยม เช่น ทุน 7 บวก 30% ได้ 9.1 ขาย 10 บาท</p>
  ${f('s_mk','กำไร (%) ของทุกรายการ',cfg.mk,'30','inputmode="decimal"')}</section>
  <section class="sec"><h3>วันหมดอายุ และสำรองข้อมูล</h3><label class="fld"><span class="lbl">เตือนสินค้าใกล้หมดอายุล่วงหน้า (วัน)</span><input id="s_exp" class="inp" inputmode="numeric" value="${cfg.expDays==null?14:cfg.expDays}"></label><p class="sub">ใส่วันหมดอายุได้ตอนรับของเข้า ระบบเตือนในหน้าสินค้าและ LINE ตอนเช้า</p>
- <div class="acts2"><button class="btn" onclick="backupDl()">ดาวน์โหลดสำรองข้อมูลทั้งหมด (JSON)</button></div></section>
+ <p class="sub" id="bkinfo">${bkInfo()}</p><div class="acts2"><button class="btn pri" onclick="backupDl()">ดาวน์โหลดสำรองข้อมูลทั้งหมด (JSON)</button><button class="btn" onclick="restoreDlg()">กู้คืนจากไฟล์สำรอง</button></div></section>
  <section class="sec"><h3>แจ้งเตือนเข้า LINE</h3><p class="sub">ใช้ LINE กลุ่มเดียวกับแจ้งเตือนออเดอร์ (โควตาฟรีประมาณ 300 ข้อความต่อเดือน ข้อความนี้ใช้วันละไม่เกิน 2 ข้อความ)</p>
  <label class="chk" style="display:flex;gap:8px;align-items:center;margin-top:8px"><input type="checkbox" id="s_nst"${cfg.notiStock!==false?' checked':''}> <span>แจ้งสต๊อกตอนเช้า (สินค้าหมด และสินค้าเหลือน้อย)</span></label>
  <label class="fld"><span class="lbl">เวลาแจ้งสต๊อก</span><select id="s_sth" class="inp">${hourOpts(cfg.stockHour==null?8:cfg.stockHour)}</select></label>

@@ -1,7 +1,7 @@
 // worker/index.js — หลังบ้านเว็บสั่งซื้อ "แม่ดอนรุ่งเรืองฟู้ดส์" บน Cloudflare Workers + D1
 // - ก่อนกดย้ายข้อมูล: ส่งต่อทุกคำขอ /api ไปที่ Apps Script (Google Sheets) เหมือนเดิม
 // - หลังกดย้ายข้อมูล: ใช้ฐานข้อมูล D1 (ตาราง SQLite) แทน — กดกลับไป Sheets ได้ในหน้าแอดมิน > ตั้งค่า
-const VERSION = 'd1-v33-2026-11-14';
+const VERSION = 'd1-v35-2026-11-19';
 const ST_WAIT = 'รอจัดเตรียมและจัดส่ง', ST_SHIP = 'จัดส่งแล้ว', ST_CANCEL = 'ยกเลิก';
 const ST_UNPAID = 'รอชำระเงิน', ST_PAID = 'ชำระแล้ว';
 const TRACK_DAYS = 3, MAX_ITEMS = 80, SALES_TTL = 60000;
@@ -119,10 +119,12 @@ async function sha(text) {
 }
 async function credOk(env, b) {
  if (!b || typeof b.user !== 'string' || typeof b.pass !== 'string') return false;
- if (env.ADMIN_USER && env.ADMIN_PASS) return b.user === env.ADMIN_USER && b.pass === env.ADMIN_PASS;
+ const pinOnly = b.user === ''; /* หน้าขายหน้าร้านกรอกแค่รหัส: ใช้ชื่อผู้ใช้ที่ตั้งไว้แทน */
+ if (env.ADMIN_USER && env.ADMIN_PASS) return (pinOnly || b.user === env.ADMIN_USER) && b.pass === env.ADMIN_PASS;
  const [u, salt, h] = await Promise.all([metaGet(env, 'admin_user'), metaGet(env, 'admin_salt'), metaGet(env, 'admin_hash')]);
  if (!u || !salt || !h) return false;
- return b.user === u && (await sha(salt + ':' + b.user + ':' + b.pass)) === h;
+ const uu = pinOnly ? u : b.user;
+ return uu === u && (await sha(salt + ':' + uu + ':' + b.pass)) === h;
 }
 async function checkAuth(env, b) {
  const t = Math.floor(Date.now() / 1000);
@@ -686,7 +688,7 @@ async function posSaveCfg(env, b) {
 async function posInit(env) {
  const items = (await all(env, 'SELECT * FROM pos_items WHERE active=1 ORDER BY name')).map(posIt);
  const cfg = await posCfg(env), td = nowStr().slice(0, 10), tr = await one(env, "SELECT COALESCE(SUM(total),0) t, COALESCE(SUM(cost),0) c, COALESCE(SUM(CASE WHEN COALESCE(refNo,'')='' THEN 1 ELSE 0 END),0) n FROM pos_sales WHERE day=? AND status='ปกติ'", td);
- return { ok: true, items, cfg, custs: await posCusts(env), exp: await posExpiryList(env, cfg.expDays), today: { total: r2(tr.t), profit: r2(tr.t - tr.c), bills: tr.n }, version: VERSION };
+ return { ok: true, items, cfg, custs: await posCusts(env), exp: await posExpiryList(env, cfg.expDays), today: { total: r2(tr.t), profit: r2(tr.t - tr.c), bills: tr.n }, lastBackup: await metaGet(env, 'pos.lastBackup'), version: VERSION };
 }
 const CATRULES=[["เหล้า/บุหรี่",["บุหรี่","เบียร์","สุรา","เหล้า","ไวน์","วิสกี้","ยาเส้น","มวนยา","beer","whisky","wine"]],["ยา/สุขภาพ",["ยาแก้","ยาดม","ยาหม่อง","พาราเซตามอล","พลาสเตอร์","แอลกอฮอล์","วิตามิน","ยาธาตุ","ยาลม","ยาอม","ยาน้ำ","เกลือแร่","ผ้าก๊อซ","เจลล้างมือ","หน้ากากอนามัย","ไทเลนอล","ซาลอนพาส","ยาสามัญ","ยาทา"]],["ของใช้ส่วนตัว",["ยาสีฟัน","แปรงสีฟัน","แชมพู","ยาสระผม","สบู่","ครีมอาบน้ำ","โลชั่น","ผ้าอนามัย","ผ้าอ้อม","โรลออน","มีดโกน","สำลี","โฟมล้างหน้า","น้ำยาบ้วนปาก","แป้งเด็ก","แป้งฝุ่น","ครีมนวด","ครีมกันแดด","ลิปสติก","ลิปมัน","ทิชชู่เปียก","ที่ตัดเล็บ","ไหมขัดฟัน","ย้อมผม","น้ำหอม","เจลอาบน้ำ","ผ้าเย็น"]],["ของใช้ในบ้าน",["ผงซักฟอก","ผงซัก","น้ำยาล้างจาน","น้ำยาปรับผ้านุ่ม","น้ำยาถูพื้น","น้ำยาซักผ้า","น้ำยาล้างห้องน้ำ","ถุงขยะ","ทิชชู่","กระดาษชำระ","กระดาษเช็ด","ไฟแช็ก","ถ่านไฟฉาย","แบตเตอรี่","ถ่าน","ธูป","เทียน","ไม้ขีด","ฟองน้ำ","สก๊อตช์","ยาฆ่ายุง","ยาจุดกันยุง","ไม้กวาด","ถุงพลาสติก","ถุงร้อน","ถุงหิ้ว","กล่องโฟม","แก้วพลาสติก","หลอดไฟ","ปลั๊ก","ผ้าเช็ด","น้ำยา"]],["สัตว์เลี้ยง",["อาหารสุนัข","อาหารแมว","อาหารสัตว์","อาหารปลา","เพ็ดดิกรี","วิสกัส","ทรายแมว"]],["เครื่องเขียน",["ปากกา","ดินสอ","สมุด","ยางลบ","เทปใส","กรรไกร","ไม้บรรทัด","ซองจดหมาย"]],["ของแช่แข็ง",["ไอศกรีม","ไอติม","วอลล์","แช่แข็ง","ลูกชิ้น","ไส้กรอก","นักเก็ต","เฟรนช์ฟราย","เกี๊ยว","ขนมจีบ","ซาลาเปา"]],["เครื่องปรุง",["น้ำปลา","ซีอิ๊ว","ซอส","น้ำตาล","เกลือ","ผงชูรส","รสดี","น้ำมัน","กะทิ","น้ำพริก","น้ำส้มสายชู","ผงปรุง","มายองเนส","ครีมเทียม","นมข้น","พริกป่น","พริกไทย","ซุปก้อน","เครื่องปรุง","แป้ง","ผงฟู","ปลาร้า","กะปิ","ผงกะหรี่","น้ำจิ้ม","เต้าเจี้ยว","ผงนัว","คนอร์"]],["ขนม",["ขนม","เลย์","ปาปริก้า","ทาโร่","มันฝรั่ง","ช็อกโกแลต","ช็อกโก","ลูกอม","หมากฝรั่ง","เยลลี่","คุกกี้","บิสกิต","เวเฟอร์","ข้าวเกรียบ","สาหร่าย","ป๊อปคอร์น","เค้ก","ลูกชุบ","โดนัท","ถั่วอบ","ขบเคี้ยว","แครกเกอร์","ท็อฟฟี่","ทวิสตี้","จัมโบ้","ฮานามิ","โอรีโอ","ปอกกี้","พอคกี้","สแน็ค","snack","chocolate"]],["นม/โยเกิร์ต",["นม","โยเกิร์ต","ดัชมิลล์","ดูเม็กซ์","โฟร์โมสต์","เมจิ","ไวตามิลค์","ยาคูลท์","ดัชชี่","milk","yogurt"]],["เครื่องดื่ม",["น้ำดื่ม","น้ำแร่","น้ำเปล่า","โซดา","โค้ก","เป๊ปซี่","เป็ปซี่","สไปรท์","แฟนต้า","เซเว่นอัพ","มิรินด้า","น้ำอัดลม","น้ำส้ม","น้ำผลไม้","น้ำมะพร้าว","น้ำเก๊กฮวย","น้ำหวาน","น้ำสมุนไพร","น้ำองุ่น","น้ำแอปเปิ้ล","ชาเขียว","ชานม","ชาไทย","ชาดำ","ชามะนาว","กาแฟ","เนสกาแฟ","โกโก้","ไมโล","โอวัลติน","ลิปตัน","โออิชิ","อิชิตัน","กระทิงแดง","เอ็ม150","เอ็ม 150","m-150","คาราบาว","ลิโพ","เรดบูล","สปอนเซอร์","เกเตอเรด","เครื่องดื่ม","แดงโซดา","คริสตัล","cocomax","coke","pepsi","sprite","fanta","water","coffee","tea"]],["อาหารแห้ง",["มาม่า","ไวไว","ยำยำ","บะหมี่","โจ๊ก","ข้าวสาร","ข้าว","เส้น","ปลากระป๋อง","ซาร์ดีน","แมคเคอเรล","กระป๋อง","ถั่ว","งาดำ","งาขาว","สาคู","ทูน่า","ธัญพืช","ซีเรียล","ปลาแห้ง","กุ้งแห้ง","พาสต้า","สปาเก็ตตี้","มักกะโรนี","ข้าวโอ๊ต","คอร์นเฟลก","ลูกเดือย","เห็ดแห้ง","หมูหยอง","ปลาเส้น","เม็ดบัว"]],["ของสด",["ไข่","ผัก","เนื้อ","หมู","ไก่","ปลา","กุ้ง","น้ำแข็ง","ผลไม้","เต้าหู้","มะนาว","หอม","กระเทียม","พริก","มะเขือ","เห็ด","กล้วย","ส้ม","แอปเปิ้ล","มะม่วง","แตงโม","ข้าวโพด","ขิง","ข่า","ตะไคร้","ใบเตย","กะเพรา","ถั่วงอก","หอย","ปลาหมึก"]]];
 function guessCat(n){n=String(n||'').toLowerCase();for(const r of CATRULES)for(const k of r[1])if(n.includes(k))return r[0];return /^น้ำ/.test(n)?'เครื่องดื่ม':'อื่นๆ'}
@@ -1082,8 +1084,70 @@ async function posExpiryList(env, days) {
  return out.sort((a, c) => a.expiry < c.expiry ? -1 : a.expiry > c.expiry ? 1 : 0);
 }
 async function posBackup(env) {
+ await stmt(env, "INSERT OR REPLACE INTO meta(key,value) VALUES('pos.lastBackup',?)", nowStr()).run();
  const g = sql => all(env, sql);
  return { ok: true, app: 'pos', at: nowStr(), version: VERSION, cfg: await posCfg(env), items: await g('SELECT * FROM pos_items'), sales: await g('SELECT * FROM pos_sales ORDER BY at'), moves: await g('SELECT * FROM pos_moves ORDER BY id'), custs: await g('SELECT * FROM pos_cust'), debt: await g('SELECT * FROM pos_debt ORDER BY id'), expenses: await g('SELECT * FROM pos_exp ORDER BY id'), buys: await g('SELECT * FROM pos_buys ORDER BY id'), lots: await g('SELECT * FROM pos_lots ORDER BY id'), closes: await g('SELECT * FROM pos_close ORDER BY day') };
+}
+/* ---- กู้คืนจากไฟล์สำรอง ---- */
+const RESTORE_MAP = { items: 'pos_items', sales: 'pos_sales', moves: 'pos_moves', custs: 'pos_cust', debt: 'pos_debt', expenses: 'pos_exp', buys: 'pos_buys', lots: 'pos_lots', closes: 'pos_close' };
+async function posRestore(env, b) {
+ const d = b.data;
+ if (str(b.confirm) !== 'กู้คืน') throw fail('ต้องพิมพ์คำว่า กู้คืน เพื่อยืนยัน');
+ if (!d || d.app !== 'pos' || !Array.isArray(d.items)) throw fail('ไฟล์นี้ไม่ใช่ไฟล์สำรองของระบบขายหน้าร้าน');
+ const ops = [], n = {};
+ for (const [k, tb] of Object.entries(RESTORE_MAP)) {
+  const rows = Array.isArray(d[k]) ? d[k].filter(r => r && typeof r === 'object') : [];
+  const real = (await all(env, `PRAGMA table_info(${tb})`)).map(c => c.name), keys = new Set();
+  for (const r of rows) for (const c of Object.keys(r)) if (real.includes(c)) keys.add(c);
+  const cols = real.filter(c => keys.has(c)); n[k] = rows.length;
+  ops.push(stmt(env, `DELETE FROM ${tb}`));
+  if (!rows.length || !cols.length) continue;
+  let cur = [], size = 0;
+  const flush = () => { if (cur.length) { ops.push(stmt(env, `INSERT OR REPLACE INTO ${tb}(${cols.join(',')}) SELECT ${cols.map(c => `json_extract(value,'$.${c}')`).join(',')} FROM json_each(?1)`, JSON.stringify(cur))); cur = []; size = 0; } };
+  for (const r of rows) { const s = JSON.stringify(r).length * 3; if (size + s > 60000) flush(); cur.push(r); size += s; }
+  flush();
+ }
+ if (d.cfg && typeof d.cfg === 'object') ops.push(stmt(env, "INSERT OR REPLACE INTO meta(key,value) VALUES('pos.cfg',?)", JSON.stringify(d.cfg)));
+ ops.push(stmt(env, "DELETE FROM meta WHERE key='sales'"));
+ await env.DB.batch(ops);
+ return { ok: true, restored: n };
+}
+
+/* ---- นำเข้ารายการสินค้าจากไฟล์ (เพิ่มใหม่ / อัปเดตตามบาร์โค้ดหรือชื่อ) ---- */
+async function posImport(env, b) {
+ const rows = Array.isArray(b.rows) ? b.rows : []; if (!rows.length) throw fail('ไม่มีรายการในไฟล์'); if (rows.length > 600) throw fail('นำเข้าได้ครั้งละไม่เกิน 600 รายการ แบ่งไฟล์แล้วนำเข้าทีละส่วน');
+ const setStock = !!b.setStock, t = nowStr(), cfg = await posCfg(env), have = x => x !== undefined && x !== null && x !== '';
+ const cur = await all(env, 'SELECT * FROM pos_items WHERE active=1'), byBc = new Map(), byNm = new Map();
+ for (const i of cur) { if (i.barcode) byBc.set(i.barcode, i); byNm.set(String(i.name).trim().toLowerCase(), i); }
+ const ops = [], skipped = [], seenBc = new Set(); let created = 0, updated = 0, k = 0;
+ for (let ix = 0; ix < rows.length; ix++) {
+  const r = rows[ix], line = r.line || ix + 2;
+  try {
+   const name = str(r.name).trim().slice(0, 120), barcode = str(r.barcode).trim().slice(0, 40);
+   if (barcode) { if (seenBc.has(barcode)) throw fail('บาร์โค้ดซ้ำในไฟล์'); seenBc.add(barcode); }
+   const ex = (barcode && byBc.get(barcode)) || (name && byNm.get(name.toLowerCase())) || null;
+   if (!ex && !name) throw fail('ไม่มีชื่อสินค้า');
+   const cost = have(r.cost) ? posNum(r.cost, 'ต้นทุน') : null, price = have(r.price) ? posNum(r.price, 'ราคาขาย') : null, minS = have(r.minStock) ? posNum(r.minStock, 'จุดสั่งซื้อ') : null;
+   const stock = have(r.stock) ? posNum(r.stock, 'คงเหลือ', -1e6, 1e7) : null, unit = str(r.unit).trim().slice(0, 20), cat = str(r.cat).trim().slice(0, 40), sup = str(r.sup).trim().slice(0, 80);
+   if (ex) {
+    const nc = cost === null ? ex.cost : cost, np = price === null ? ex.price : price;
+    if (barcode && ex.barcode && ex.barcode !== barcode) throw fail('บาร์โค้ดไม่ตรงกับสินค้าเดิม');
+    ops.push(stmt(env, 'UPDATE pos_items SET barcode=?,unit=?,cost=?,price=?,minStock=?,cat=?,sup=?,updatedAt=? WHERE id=?', ex.barcode || barcode, unit || ex.unit || '', nc, np, minS === null ? ex.minStock : minS, cat || ex.cat || guessCat(ex.name), sup || ex.sup || '', t, ex.id));
+    if (setStock && stock !== null) { const d = r2(stock - (ex.stock || 0)); if (Math.abs(d) > 1e-9) { ops.push(stmt(env, 'UPDATE pos_items SET stock=? WHERE id=?', stock, ex.id)); ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'adjust',?,?,'','นำเข้าจากไฟล์')", t, ex.id, d, nc)); } }
+    updated++;
+   } else {
+    const c0 = cost === null ? 0 : cost, p0 = price !== null ? price : (c0 > 0 ? Math.ceil(c0 * (1 + (cfg.mk || 30) / 100)) : null);
+    if (p0 === null) throw fail('ไม่มีราคาขาย/ต้นทุน');
+    const nid = 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5) + (k++).toString(36), s0 = stock === null ? 0 : stock;
+    ops.push(stmt(env, 'INSERT INTO pos_items(id,barcode,name,unit,cost,price,maxPrice,stock,minStock,mk,cat,fav,sup,active,createdAt,updatedAt) VALUES(?,?,?,?,?,?,0,?,?,NULL,?,0,?,1,?,?)', nid, barcode, name, unit, c0, p0, s0, minS === null ? 0 : minS, cat || guessCat(name), sup, t, t));
+    if (s0) ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'in',?,?,'','ยอดตั้งต้น (นำเข้าจากไฟล์)')", t, nid, s0, c0));
+    if (barcode) byBc.set(barcode, { id: nid, barcode, name, stock: s0 }); byNm.set(name.toLowerCase(), { id: nid, barcode, name, stock: s0 });
+    created++;
+   }
+  } catch (e) { skipped.push({ line, name: str(r.name).trim().slice(0, 60), why: e.message || 'ข้อมูลไม่ถูกต้อง' }); }
+ }
+ for (let i = 0; i < ops.length; i += 90) await env.DB.batch(ops.slice(i, i + 90));
+ return { ok: true, created, updated, skipped, items: (await all(env, 'SELECT * FROM pos_items WHERE active=1 ORDER BY name')).map(posIt) };
 }
 async function posApi(env, action, b) {
  switch (action) {
@@ -1106,6 +1170,8 @@ async function posApi(env, action, b) {
   case 'posReceiveBatch': return posReceiveBatch(env, b);
   case 'posAdjustBatch': return posAdjustBatch(env, b);
   case 'posBackup': return posBackup(env);
+  case 'posRestore': return posRestore(env, b);
+  case 'posImport': return posImport(env, b);
   case 'posExpiry': return { ok: true, list: await posExpiryList(env, b.days) };
   case 'posCustSave': return posCustSave(env, b);
   case 'posCustDelete': return posCustDelete(env, b);
