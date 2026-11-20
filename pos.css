@@ -128,6 +128,12 @@ body.pos .cbl .xbtn{grid-column:3;justify-self:end}
  body.lblprint .lbl1 .pr{font-size:15pt;font-weight:700;margin:1mm 0}
  body.lblprint .lbl1 .bcsvg{width:100%;max-height:26mm}
  body.lblprint .lbl1 .bcsvg.qr{width:26mm;height:26mm}
+ body.lblprint #lblsheet.big{grid-template-columns:1fr 1fr;gap:6mm}
+ body.lblprint #lblsheet.big .lbl1{padding:7mm 4mm;border:.4mm dashed #666}
+ body.lblprint #lblsheet.big .lbl1 b{font-size:22pt}
+ body.lblprint #lblsheet.big .lbl1 .pr{font-size:32pt;margin:3mm 0}
+ body.lblprint #lblsheet.big .lbl1 .bcsvg{max-height:36mm;width:80%}
+ body.lblprint #lblsheet.big .lbl1 .bcsvg.qr{width:75mm;height:75mm;max-height:none}
 }
 .newc{margin:10px 0}.newc summary{cursor:pointer;font-weight:600;padding:6px 0}
 body.pos .payrow .btn:nth-child(3){grid-column:1/-1;min-height:48px;font-size:16px}
