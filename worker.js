@@ -1,7 +1,7 @@
 // worker/index.js — หลังบ้านเว็บสั่งซื้อ "แม่ดอนรุ่งเรืองฟู้ดส์" บน Cloudflare Workers + D1
 // - ก่อนกดย้ายข้อมูล: ส่งต่อทุกคำขอ /api ไปที่ Apps Script (Google Sheets) เหมือนเดิม
 // - หลังกดย้ายข้อมูล: ใช้ฐานข้อมูล D1 (ตาราง SQLite) แทน — กดกลับไป Sheets ได้ในหน้าแอดมิน > ตั้งค่า
-const VERSION = 'd1-v35-2026-11-19';
+const VERSION = 'd1-v36-2026-11-21';
 const ST_WAIT = 'รอจัดเตรียมและจัดส่ง', ST_SHIP = 'จัดส่งแล้ว', ST_CANCEL = 'ยกเลิก';
 const ST_UNPAID = 'รอชำระเงิน', ST_PAID = 'ชำระแล้ว';
 const TRACK_DAYS = 3, MAX_ITEMS = 80, SALES_TTL = 60000;
@@ -89,7 +89,7 @@ async function ensureSchema(env) {
  try { await env.DB.prepare("ALTER TABLE orders ADD COLUMN slipId TEXT DEFAULT ''").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
  try { await env.DB.prepare("ALTER TABLE pos_items ADD COLUMN mk REAL").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
  try { await env.DB.prepare("ALTER TABLE pos_sales ADD COLUMN custId TEXT").run(); } catch (e) { /* มีคอลัมน์แล้ว */ }
- for (const sql of ["ALTER TABLE pos_sales ADD COLUMN disc REAL", "ALTER TABLE pos_sales ADD COLUMN refNo TEXT", "ALTER TABLE pos_items ADD COLUMN cat TEXT", "ALTER TABLE pos_items ADD COLUMN fav INTEGER", "ALTER TABLE pos_items ADD COLUMN sup TEXT"]) { try { await env.DB.prepare(sql).run(); } catch (e) { /* มีคอลัมน์แล้ว */ } }
+ for (const sql of ["ALTER TABLE pos_sales ADD COLUMN disc REAL", "ALTER TABLE pos_sales ADD COLUMN refNo TEXT", "ALTER TABLE pos_items ADD COLUMN cat TEXT", "ALTER TABLE pos_items ADD COLUMN fav INTEGER", "ALTER TABLE pos_items ADD COLUMN sup TEXT", "ALTER TABLE pos_items ADD COLUMN packs TEXT"]) { try { await env.DB.prepare(sql).run(); } catch (e) { /* มีคอลัมน์แล้ว */ } }
  schemaOk = true;
 }
 async function metaGet(env, k) { const r = await one(env, 'SELECT value FROM meta WHERE key=?', k); return r ? r.value : null; }
@@ -667,7 +667,7 @@ async function proxy(env, request, url, text) {
 const POS_CFG0 = { shop: '', addr: '', tel: '', mk: 30, note: 'ขอบคุณที่อุดหนุน', paper: '80', autoPrint: false, notiStock: true, stockHour: 8, notiSales: true, salesHour: 20, lowDefault: 0, expDays: 14, banks: [], theme: '', festMode: 'auto', festAdj: {}, fx: 'off' };
 const r2 = n => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 const posNum = (v, name, min = 0, max = 1e9) => { const n = Number(v); if (!isFinite(n) || n < min || n > max) throw fail(name + ' ไม่ถูกต้อง'); return n; };
-const posIt = r => r && ({ id: r.id, barcode: r.barcode || '', name: r.name, unit: r.unit || '', cost: r.cost || 0, price: r.price || 0, maxPrice: r.maxPrice || 0, mk: r.mk == null ? '' : r.mk, stock: r.stock || 0, minStock: r.minStock || 0, cat: r.cat || '', fav: r.fav ? 1 : 0, sup: r.sup || '', ts: r.updatedAt || r.createdAt || '' });
+const posIt = r => r && ({ id: r.id, barcode: r.barcode || '', name: r.name, unit: r.unit || '', cost: r.cost || 0, price: r.price || 0, maxPrice: r.maxPrice || 0, mk: r.mk == null ? '' : r.mk, stock: r.stock || 0, minStock: r.minStock || 0, cat: r.cat || '', fav: r.fav ? 1 : 0, sup: r.sup || '', packs: posPacksParse(r.packs), ts: r.updatedAt || r.createdAt || '' });
 async function posCfg(env) { let c = {}; try { c = JSON.parse((await metaGet(env, 'pos.cfg')) || '{}'); } catch (e) { /* ใช้ค่าเริ่มต้น */ } return { ...POS_CFG0, ...c }; }
 async function posSaveCfg(env, b) {
  const c = b.cfg || {}, old = await posCfg(env), FK = ['ny', 'cny', 'val', 'song', 'mom', 'loy', 'dad', 'xmas'], o = {
@@ -692,6 +692,30 @@ async function posInit(env) {
 }
 const CATRULES=[["เหล้า/บุหรี่",["บุหรี่","เบียร์","สุรา","เหล้า","ไวน์","วิสกี้","ยาเส้น","มวนยา","beer","whisky","wine"]],["ยา/สุขภาพ",["ยาแก้","ยาดม","ยาหม่อง","พาราเซตามอล","พลาสเตอร์","แอลกอฮอล์","วิตามิน","ยาธาตุ","ยาลม","ยาอม","ยาน้ำ","เกลือแร่","ผ้าก๊อซ","เจลล้างมือ","หน้ากากอนามัย","ไทเลนอล","ซาลอนพาส","ยาสามัญ","ยาทา"]],["ของใช้ส่วนตัว",["ยาสีฟัน","แปรงสีฟัน","แชมพู","ยาสระผม","สบู่","ครีมอาบน้ำ","โลชั่น","ผ้าอนามัย","ผ้าอ้อม","โรลออน","มีดโกน","สำลี","โฟมล้างหน้า","น้ำยาบ้วนปาก","แป้งเด็ก","แป้งฝุ่น","ครีมนวด","ครีมกันแดด","ลิปสติก","ลิปมัน","ทิชชู่เปียก","ที่ตัดเล็บ","ไหมขัดฟัน","ย้อมผม","น้ำหอม","เจลอาบน้ำ","ผ้าเย็น"]],["ของใช้ในบ้าน",["ผงซักฟอก","ผงซัก","น้ำยาล้างจาน","น้ำยาปรับผ้านุ่ม","น้ำยาถูพื้น","น้ำยาซักผ้า","น้ำยาล้างห้องน้ำ","ถุงขยะ","ทิชชู่","กระดาษชำระ","กระดาษเช็ด","ไฟแช็ก","ถ่านไฟฉาย","แบตเตอรี่","ถ่าน","ธูป","เทียน","ไม้ขีด","ฟองน้ำ","สก๊อตช์","ยาฆ่ายุง","ยาจุดกันยุง","ไม้กวาด","ถุงพลาสติก","ถุงร้อน","ถุงหิ้ว","กล่องโฟม","แก้วพลาสติก","หลอดไฟ","ปลั๊ก","ผ้าเช็ด","น้ำยา"]],["สัตว์เลี้ยง",["อาหารสุนัข","อาหารแมว","อาหารสัตว์","อาหารปลา","เพ็ดดิกรี","วิสกัส","ทรายแมว"]],["เครื่องเขียน",["ปากกา","ดินสอ","สมุด","ยางลบ","เทปใส","กรรไกร","ไม้บรรทัด","ซองจดหมาย"]],["ของแช่แข็ง",["ไอศกรีม","ไอติม","วอลล์","แช่แข็ง","ลูกชิ้น","ไส้กรอก","นักเก็ต","เฟรนช์ฟราย","เกี๊ยว","ขนมจีบ","ซาลาเปา"]],["เครื่องปรุง",["น้ำปลา","ซีอิ๊ว","ซอส","น้ำตาล","เกลือ","ผงชูรส","รสดี","น้ำมัน","กะทิ","น้ำพริก","น้ำส้มสายชู","ผงปรุง","มายองเนส","ครีมเทียม","นมข้น","พริกป่น","พริกไทย","ซุปก้อน","เครื่องปรุง","แป้ง","ผงฟู","ปลาร้า","กะปิ","ผงกะหรี่","น้ำจิ้ม","เต้าเจี้ยว","ผงนัว","คนอร์"]],["ขนม",["ขนม","เลย์","ปาปริก้า","ทาโร่","มันฝรั่ง","ช็อกโกแลต","ช็อกโก","ลูกอม","หมากฝรั่ง","เยลลี่","คุกกี้","บิสกิต","เวเฟอร์","ข้าวเกรียบ","สาหร่าย","ป๊อปคอร์น","เค้ก","ลูกชุบ","โดนัท","ถั่วอบ","ขบเคี้ยว","แครกเกอร์","ท็อฟฟี่","ทวิสตี้","จัมโบ้","ฮานามิ","โอรีโอ","ปอกกี้","พอคกี้","สแน็ค","snack","chocolate"]],["นม/โยเกิร์ต",["นม","โยเกิร์ต","ดัชมิลล์","ดูเม็กซ์","โฟร์โมสต์","เมจิ","ไวตามิลค์","ยาคูลท์","ดัชชี่","milk","yogurt"]],["เครื่องดื่ม",["น้ำดื่ม","น้ำแร่","น้ำเปล่า","โซดา","โค้ก","เป๊ปซี่","เป็ปซี่","สไปรท์","แฟนต้า","เซเว่นอัพ","มิรินด้า","น้ำอัดลม","น้ำส้ม","น้ำผลไม้","น้ำมะพร้าว","น้ำเก๊กฮวย","น้ำหวาน","น้ำสมุนไพร","น้ำองุ่น","น้ำแอปเปิ้ล","ชาเขียว","ชานม","ชาไทย","ชาดำ","ชามะนาว","กาแฟ","เนสกาแฟ","โกโก้","ไมโล","โอวัลติน","ลิปตัน","โออิชิ","อิชิตัน","กระทิงแดง","เอ็ม150","เอ็ม 150","m-150","คาราบาว","ลิโพ","เรดบูล","สปอนเซอร์","เกเตอเรด","เครื่องดื่ม","แดงโซดา","คริสตัล","cocomax","coke","pepsi","sprite","fanta","water","coffee","tea"]],["อาหารแห้ง",["มาม่า","ไวไว","ยำยำ","บะหมี่","โจ๊ก","ข้าวสาร","ข้าว","เส้น","ปลากระป๋อง","ซาร์ดีน","แมคเคอเรล","กระป๋อง","ถั่ว","งาดำ","งาขาว","สาคู","ทูน่า","ธัญพืช","ซีเรียล","ปลาแห้ง","กุ้งแห้ง","พาสต้า","สปาเก็ตตี้","มักกะโรนี","ข้าวโอ๊ต","คอร์นเฟลก","ลูกเดือย","เห็ดแห้ง","หมูหยอง","ปลาเส้น","เม็ดบัว"]],["ของสด",["ไข่","ผัก","เนื้อ","หมู","ไก่","ปลา","กุ้ง","น้ำแข็ง","ผลไม้","เต้าหู้","มะนาว","หอม","กระเทียม","พริก","มะเขือ","เห็ด","กล้วย","ส้ม","แอปเปิ้ล","มะม่วง","แตงโม","ข้าวโพด","ขิง","ข่า","ตะไคร้","ใบเตย","กะเพรา","ถั่วงอก","หอย","ปลาหมึก"]]];
 function guessCat(n){n=String(n||'').toLowerCase();for(const r of CATRULES)for(const k of r[1])if(n.includes(k))return r[0];return /^น้ำ/.test(n)?'เครื่องดื่ม':'อื่นๆ'}
+/* ---- หน่วยใหญ่ของสินค้า (ลัง/แพ็ค): [{u:'ลัง', m:24, bc:'บาร์โค้ดของลัง', p:ราคาขายต่อลัง(ว่าง=ราคา×จำนวน)}] ---- */
+function posPacksParse(s) { try { const a = JSON.parse(s || '[]'); return Array.isArray(a) ? a.filter(x => x && x.u && x.m > 1).map(x => ({ u: String(x.u), m: Number(x.m), bc: String(x.bc || ''), p: Number(x.p) > 0 ? Number(x.p) : 0 })) : []; } catch (e) { return []; } }
+function posPacksClean(arr, unit) {
+ if (arr === undefined || arr === null) return null;
+ if (!Array.isArray(arr)) throw fail('ข้อมูลหน่วยใหญ่ไม่ถูกต้อง');
+ if (arr.length > 4) throw fail('ตั้งหน่วยใหญ่ได้ไม่เกิน 4 แบบ');
+ const out = [], names = new Set([String(unit || '').trim() || 'ชิ้น']), bcs = new Set();
+ for (const x of arr) {
+  const u = str(x.u).trim().slice(0, 20), m = Number(x.m);
+  if (!u && !(m > 0)) continue;
+  if (!u) throw fail('หน่วยใหญ่ต้องมีชื่อ เช่น ลัง แพ็ค'); if (names.has(u)) throw fail('ชื่อหน่วย "' + u + '" ซ้ำกัน');
+  if (!isFinite(m) || m <= 1 || m > 100000) throw fail('หน่วย ' + u + ': จำนวนต่อหน่วยต้องมากกว่า 1'); names.add(u);
+  const bc = str(x.bc).trim().slice(0, 40); if (bc) { if (bcs.has(bc)) throw fail('บาร์โค้ดหน่วยใหญ่ซ้ำกัน'); bcs.add(bc); }
+  const p = (x.p === undefined || x.p === null || x.p === '') ? 0 : posNum(x.p, 'ราคาขายต่อ' + u, 0, 1e8);
+  out.push({ u, m, bc, p });
+ }
+ return out;
+}
+async function posBcTaken(env, code, exceptId) {
+ if (!code) return null;
+ const rows = await all(env, "SELECT id,name,barcode,packs FROM pos_items WHERE active=1 AND (barcode=? OR packs LIKE ?)", code, '%' + code.replace(/[%_]/g, '') + '%');
+ for (const r of rows) { if (r.id === exceptId) continue; if (r.barcode === code || posPacksParse(r.packs).some(p => p.bc === code)) return r; }
+ return null;
+}
 async function posSaveItem(env, b) {
  const x = b.item || {}, t = nowStr();
  const name = str(x.name).trim().slice(0, 120); if (!name) throw fail('กรุณากรอกชื่อสินค้า');
@@ -700,15 +724,19 @@ async function posSaveItem(env, b) {
  if (maxPrice > 0 && price > maxPrice) throw fail('ราคาขายเกินราคาสูงสุดที่ตั้งไว้ (' + maxPrice + ' บาท)');
  const mk = (x.mk === undefined || x.mk === null || x.mk === '') ? null : posNum(x.mk, 'กำไรของสินค้า', 0, 1000);
  const cat = str(x.cat).trim().slice(0, 40) || guessCat(name), sup = str(x.sup).trim().slice(0, 80), fav = x.fav ? 1 : 0, id = str(x.id);
- if (barcode) { const d = await one(env, 'SELECT id,name FROM pos_items WHERE barcode=? AND id<>?', barcode, id); if (d) throw fail('บาร์โค้ดนี้ใช้กับสินค้าอื่นแล้ว: ' + d.name); }
+ const packs = posPacksClean(x.packs, unit);
+ if (barcode) { const d = await posBcTaken(env, barcode, id); if (d) throw fail('บาร์โค้ดนี้ใช้กับสินค้าอื่นแล้ว: ' + d.name); if (packs && packs.some(p => p.bc === barcode)) throw fail('บาร์โค้ดหน่วยใหญ่ซ้ำกับบาร์โค้ดหน่วยปกติ'); }
+ for (const p of packs || []) { if (p.bc) { const d = await posBcTaken(env, p.bc, id); if (d) throw fail('บาร์โค้ดของ ' + p.u + ' ใช้กับสินค้าอื่นแล้ว: ' + d.name); } }
  if (id) {
   const old = await one(env, 'SELECT id FROM pos_items WHERE id=? AND active=1', id); if (!old) throw fail('ไม่พบสินค้า');
   await stmt(env, 'UPDATE pos_items SET barcode=?,name=?,unit=?,cost=?,price=?,maxPrice=?,minStock=?,mk=?,cat=?,fav=?,sup=?,updatedAt=? WHERE id=?', barcode, name, unit, cost, price, maxPrice, minStock, mk, cat, fav, sup, t, id).run();
+  if (packs) await stmt(env, 'UPDATE pos_items SET packs=? WHERE id=?', packs.length ? JSON.stringify(packs) : '', id).run();
   return { ok: true, item: posIt(await one(env, 'SELECT * FROM pos_items WHERE id=?', id)) };
  }
  const stock0 = posNum(x.stock || 0, 'จำนวนสต๊อก', -1e6, 1e7), nid = 'i' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
  const ops = [stmt(env, 'INSERT INTO pos_items(id,barcode,name,unit,cost,price,maxPrice,stock,minStock,mk,cat,fav,sup,active,createdAt,updatedAt) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,1,?,?)', nid, barcode, name, unit, cost, price, maxPrice, stock0, minStock, mk, cat, fav, sup, t, t)];
  if (stock0) ops.push(stmt(env, "INSERT INTO pos_moves(at,itemId,kind,qty,cost,ref,note) VALUES(?,?,'in',?,?,'','ยอดตั้งต้น')", t, nid, stock0, cost));
+ if (packs && packs.length) ops.push(stmt(env, 'UPDATE pos_items SET packs=? WHERE id=?', JSON.stringify(packs), nid));
  await env.DB.batch(ops);
  return { ok: true, item: posIt(await one(env, 'SELECT * FROM pos_items WHERE id=?', nid)) };
 }
@@ -755,7 +783,15 @@ async function posSale(env, b) {
    total = r2(total + a0); cost = r2(cost + c0 * q0); lines.push({ id: '', name: nm, barcode: '', unit: str(c.unit).slice(0, 20), qty: q0, price: p0, cost: c0, amt: a0, open: 1 }); continue;
   }
   const it = await one(env, 'SELECT * FROM pos_items WHERE id=? AND active=1', str(c.id)); if (!it) throw fail('มีสินค้าที่ถูกลบแล้วในบิล กรุณาสแกนใหม่');
-  const q = posNum(c.qty, 'จำนวน', 0.001, 99999), p = (c.price === undefined || c.price === null || c.price === '') ? (it.price || 0) : posNum(c.price, 'ราคา');
+  const q = posNum(c.qty, 'จำนวน', 0.001, 99999), pkName = str(c.pk).trim(), pk = pkName ? posPacksParse(it.packs).find(x => x.u === pkName) : null;
+  if (pkName && !pk) throw fail(it.name + ': ไม่พบหน่วย "' + pkName + '" (ตั้งหน่วยใหญ่ไว้หรือยัง)');
+  if (pk) { // ขายเป็นลัง/แพ็ค: ตัดสต๊อกเป็นหน่วยเล็ก qty×m, ราคาต่อหน่วยเล็ก = ราคาลัง÷m, ยอดเงินตามราคาลังเป๊ะ
+   const pp = (c.price === undefined || c.price === null || c.price === '') ? (pk.p > 0 ? pk.p : r2((it.price || 0) * pk.m)) : posNum(c.price, 'ราคา'), bq = r2(q * pk.m), amt = r2(pp * q), unitP = Math.round(pp / pk.m * 1e6) / 1e6;
+   if (it.maxPrice > 0 && unitP > it.maxPrice + 1e-9) throw fail(it.name + ' ราคาเกินราคาสูงสุด ' + it.maxPrice + ' บาท');
+   total = r2(total + amt); cost = r2(cost + (it.cost || 0) * bq);
+   lines.push({ id: it.id, name: it.name, barcode: it.barcode || '', unit: it.unit || '', qty: bq, price: unitP, cost: it.cost || 0, amt, pu: pk.u, pn: q, pp, pm: pk.m }); continue;
+  }
+  const p = (c.price === undefined || c.price === null || c.price === '') ? (it.price || 0) : posNum(c.price, 'ราคา');
   if (it.maxPrice > 0 && p > it.maxPrice) throw fail(it.name + ' ราคาเกินราคาสูงสุด ' + it.maxPrice + ' บาท');
   const amt = r2(p * q); total = r2(total + amt); cost = r2(cost + (it.cost || 0) * q);
   lines.push({ id: it.id, name: it.name, barcode: it.barcode || '', unit: it.unit || '', qty: q, price: p, cost: it.cost || 0, amt });
@@ -765,7 +801,9 @@ async function posSale(env, b) {
  let rec = total, chg = 0, cust = null;
  if (method === 'credit') { cust = await one(env, 'SELECT * FROM pos_cust WHERE id=? AND active=1', str(b.custId)); if (!cust) throw fail('กรุณาเลือกลูกค้าที่ติดเงิน'); rec = 0; }
  if (method === 'cash') { rec = posNum(b.received === undefined || b.received === '' ? total : b.received, 'เงินที่รับ', 0, 1e8); if (rec + 0.001 < total) throw fail('เงินที่รับน้อยกว่ายอดรวม'); chg = r2(rec - total); }
- const t = nowStr(), day = t.slice(0, 10), yy = String(Number(day.slice(0, 4)) + 543).slice(-2), ck = 'pos' + day.replace(/-/g, '');
+ let t = nowStr(); /* บิลที่ขายตอนเน็ตหลุด ส่งขึ้นทีหลัง: ใช้เวลาขายจริงจากเครื่อง (ไม่เกิน 14 วันย้อนหลัง ห้ามเป็นอนาคต) */
+ if (typeof b.at === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(b.at) && b.at <= t && b.at >= new Date(bkk().getTime() - 14 * 864e5).toISOString().slice(0, 19).replace('T', ' ')) t = b.at;
+ const day = t.slice(0, 10), yy = String(Number(day.slice(0, 4)) + 543).slice(-2), ck = 'pos' + day.replace(/-/g, '');
  await stmt(env, 'INSERT INTO counters(key,last) VALUES(?1,1) ON CONFLICT(key) DO UPDATE SET last=last+1', ck).run();
  const n = (await one(env, 'SELECT last FROM counters WHERE key=?', ck)).last, no = 'B' + yy + day.slice(5, 7) + day.slice(8, 10) + '-' + String(n).padStart(3, '0');
  const ops = [stmt(env, "INSERT INTO pos_sales(saleNo,clientId,at,day,total,cost,method,received,chg,status,voidedAt,voidReason,items) VALUES(?,?,?,?,?,?,?,?,?,'ปกติ','','',?)", no, cid, t, day, total, cost, method, rec, chg, JSON.stringify(lines))];
@@ -794,7 +832,7 @@ async function posNewCode(env, b) {
  for (let guard = 0; out.length < n && guard < 5000; guard++) {
   await stmt(env, "INSERT INTO counters(key,last) VALUES('posown',1) ON CONFLICT(key) DO UPDATE SET last=last+1").run();
   const last = (await one(env, "SELECT last FROM counters WHERE key='posown'")).last, code = ean13('20' + String(last).padStart(10, '0'));
-  if (!(await one(env, 'SELECT id FROM pos_items WHERE barcode=?', code))) out.push(code);
+  if (!(await posBcTaken(env, code, ''))) out.push(code);
  }
  return { ok: true, codes: out };
 }

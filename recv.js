@@ -44,7 +44,7 @@ function rKey(e){
 function rcvScan(v,n,cam){
  n=n>0?n:1;
  const add=it=>{if(rask&&!cam&&n===1)rcvQty(it.id);else rAdd(it.id,n,n>1?'× '+fm(n)+' ชิ้น':'ชิ้น');return 'add'};
- const it=items.find(i=>i.barcode&&i.barcode===v);if(it)return add(it);
+ const f=findCode(v);if(f){if(f.pk){rAdd(f.it.id,r2(f.pk.m*n),`${fm(n)} ${f.pk.u} × ${fm(f.pk.m)}`);return 'add'}return add(f.it)}
  if(/^[0-9A-Za-z\-._]{6,}$/.test(v)&&/\d/.test(v)){beep(false);rcvNew(v);return 'new'}
  const ms=items.filter(i=>i.name.toLowerCase().includes(v.toLowerCase()));
  if(ms.length===1)return add(ms[0]);
@@ -112,7 +112,7 @@ function rcamList(){
 function rcvHit(text){
  const v=String(text||'').trim(),now=Date.now();if(!v)return;
  if(v===camLast&&!(camNo>camAt+700))return;camLast=v;camAt=now;
- const it=items.find(i=>i.barcode===v);
+ const fc=findCode(v),it=fc&&fc.it;
  if(it){rcvScan(v,1,true);const m=$('#camm');if(m)m.innerHTML='เพิ่มแล้ว: <b>'+esc(it.name)+'</b>';rcamList();return}
  camStop(false).then(()=>rcvScan(v,1,true));
 }

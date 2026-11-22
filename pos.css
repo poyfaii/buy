@@ -138,3 +138,11 @@ body.pos .cbl .xbtn{grid-column:3;justify-self:end}
 .newc{margin:10px 0}.newc summary{cursor:pointer;font-weight:600;padding:6px 0}
 body.pos .payrow .btn:nth-child(3){grid-column:1/-1;min-height:48px;font-size:16px}
 .rcost{display:inline-flex;align-items:center;gap:6px;font-size:13px}.rcost input{width:90px;border:0;border-radius:10px;padding:6px 8px;background:var(--nbg);box-shadow:var(--inset);color:var(--nav);text-align:right;font:inherit}
+
+/* ฟอร์มหน่วยใหญ่ */
+body.pos .prow{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0;padding-bottom:8px;border-bottom:1px solid var(--line)}
+body.pos .prow .inp{min-height:40px;font-size:14.5px}
+body.pos .prow .btn{grid-column:1/-1}
+/* v71 offline chip */
+.qchip{border:0;border-radius:999px;padding:4px 10px;font:600 12px/1.2 inherit;font-family:inherit;cursor:pointer;margin-right:6px;white-space:nowrap}
+.qchip.off{background:#fde8c8;color:#8a4b00}.qchip.wait{background:#dbeafe;color:#1e40af}.qchip.bad{background:#fde2e0;color:#b42318}

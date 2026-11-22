@@ -34,7 +34,10 @@ async function genOwnCode(){
 
 /* ----- หน้าพิมพ์ป้าย ----- */
 let lbSel={},lbSize='s',lbFmt='ean',lbCopies=1,lbFlt='none',lbQ='';
-function lbList(){const t=lbQ.trim().toLowerCase();return items.filter(i=>(!t||i.name.toLowerCase().includes(t)||(i.barcode||'').includes(t))&&(lbFlt==='all'||(lbFlt==='none'?!i.barcode:(lbFlt==='own'?/^20\d{11}$/.test(i.barcode||''):true))))}
+function lbVirt(it){return (it.packs||[]).filter(k=>k.bc).map((k,x)=>({id:it.id+'#'+it.packs.indexOf(k),name:it.name+' ('+k.u+')',price:packPrice(it,k),barcode:k.bc,_v:1}))}
+function lbFind(id){const s=String(id),h=s.indexOf('#');if(h<0)return find(s);const it=find(s.slice(0,h)),k=it&&it.packs&&it.packs[+s.slice(h+1)];return k&&k.bc?{id:s,name:it.name+' ('+k.u+')',price:packPrice(it,k),barcode:k.bc,_v:1}:null}
+function lbList(){const t=lbQ.trim().toLowerCase(),ok=i=>(!t||i.name.toLowerCase().includes(t)||(i.barcode||'').includes(t))&&(lbFlt==='all'||(lbFlt==='none'?!i.barcode:(lbFlt==='own'?/^20\d{11}$/.test(i.barcode||''):true)));
+ const out=[];items.forEach(i=>{if(ok(i))out.push(i);if(lbFlt!=='none')lbVirt(i).forEach(v=>{if(ok(v))out.push(v)})});return out}
 function lbDlg(ids){
  lbSel={};(ids||[]).forEach(i=>lbSel[i]=1);if(ids&&ids.length)lbFlt='all';else lbFlt='none';lbQ='';
  dlg(`<h3>พิมพ์ป้ายบาร์โค้ด</h3><p class="sub">ใช้กับสินค้าที่ไม่มีบาร์โค้ด เช่น น้ำแข็ง 5 บาท / 10 บาท ขายผักผลไม้ ตั้งชื่อสินค้าตามราคาแต่ละแบบ แล้วพิมพ์ป้ายไปแปะหรือใส่ซอง ยิงได้เหมือนบาร์โค้ดปกติ (ถ้าสินค้ามีบาร์โค้ดอื่นที่ไม่ใช่ EAN-13 ระบบจะพิมพ์เป็น Code 128 ให้)</p>
@@ -58,14 +61,14 @@ function lbTog(id,on){if(on)lbSel[id]=1;else delete lbSel[id];lbCount()}
 function lbAll(on){lbList().forEach(i=>{if(on)lbSel[i.id]=1;else delete lbSel[i.id]});lbRows()}
 function lbCount(){const n=Object.keys(lbSel).length,e=$('#lb_cnt');if(e)e.textContent=n?'('+n+' รายการ)':''}
 async function lbPrint(){
- const ids=Object.keys(lbSel).filter(i=>find(i));if(!ids.length){$('#lb_err').textContent='เลือกสินค้าที่จะพิมพ์ก่อน';return}
+ const ids=Object.keys(lbSel).filter(i=>lbFind(i));if(!ids.length){$('#lb_err').textContent='เลือกสินค้าที่จะพิมพ์ก่อน';return}
  if(busy)return;busy=true;$('#lb_go').disabled=true;$('#lb_err').textContent='';
  try{
-  const need=ids.map(find).filter(i=>!i.barcode);
+  const need=ids.map(lbFind).filter(i=>!i.barcode&&!i._v);
   if(need.length){const j=await api({action:'posNewCode',n:need.length});
    for(let k=0;k<need.length;k++){const it=need[k],r=await api({action:'posSaveItem',item:Object.assign({},it,{barcode:j.codes[k]})});const x=items.findIndex(y=>y.id===it.id);if(x>=0)items[x]=r.item}}
   const fmt=lbFmt,n=lbCopies,cells=[];
-  ids.map(find).forEach(it=>{for(let k=0;k<n;k++)cells.push(`<div class="lbl1"><b>${esc(it.name)}</b><div class="pr">฿${fm(it.price)}</div>${codeSvg(it.barcode,fmt)}</div>`)});
+  ids.map(lbFind).forEach(it=>{for(let k=0;k<n;k++)cells.push(`<div class="lbl1"><b>${esc(it.name)}</b><div class="pr">฿${fm(it.price)}</div>${codeSvg(it.barcode,fmt)}</div>`)});
   let e=document.getElementById('lblsheet');if(!e){e=document.createElement('div');e.id='lblsheet';document.body.appendChild(e)}
   e.className=lbSize==='l'?'big':'';e.innerHTML=cells.join('');document.body.classList.add('lblprint');
   let st=document.getElementById('lbstyle');if(!st){st=document.createElement('style');st.id='lbstyle';document.head.appendChild(st)}

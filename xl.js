@@ -4,7 +4,7 @@ let xlP=null;
 function xlLoad(){
  return xlP||(xlP=new Promise((ok,no)=>{
   if(window.ExcelJS)return ok(window.ExcelJS);
-  const s=document.createElement('script');s.src='vendor/exceljs.min.js?v=70';
+  const s=document.createElement('script');s.src='vendor/exceljs.min.js?v=71';
   s.onload=()=>window.ExcelJS?ok(window.ExcelJS):(xlP=null,no(new Error('โหลดตัวอ่านไฟล์ Excel ไม่สำเร็จ')));
   s.onerror=()=>{xlP=null;no(new Error('โหลดตัวอ่านไฟล์ Excel ไม่ได้ (ต้องต่ออินเทอร์เน็ตครั้งแรก)'))};document.head.appendChild(s);
  }));
